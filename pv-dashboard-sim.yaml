@@ -1,0 +1,48 @@
+##############################################################################
+# Simulator: dieselbe Oberflaeche in einem Fenster auf dem Rechner
+#
+# Kein Drittanbieter-Tool noetig -- ESPHome bringt das selbst mit: die
+# host-Plattform kompiliert fuer den Rechner, das sdl-Display oeffnet ein
+# Fenster, der sdl-Touchscreen macht Mausklicks zu Beruehrungen.
+#
+#   esphome run pv-dashboard-sim.yaml
+#
+# Oberflaeche, Schriften und Farben kommen aus denselben Packages wie beim
+# echten Panel. Wer hier etwas aendert, aendert es dort mit.
+#
+# Was der Simulator NICHT zeigt: die tatsaechliche Bildrate auf dem P4 und
+# alles Hardwarenahe (Backlight, Audio, Modbus, BLE).
+##############################################################################
+
+substitutions:
+  upper_devicename: PV-Dashboard Simulator
+  devicename: pv-dashboard-sim
+  device_description: "Oberflaechen-Simulator für das 10,1-Zoll-Panel"
+
+esphome:
+  name: "${devicename}"
+  friendly_name: "${upper_devicename}"
+  comment: "${device_description}"
+  min_version: 2026.7.0
+
+host:
+
+logger:
+  level: DEBUG
+
+# Fenster statt Panel. Groesse exakt wie das Geraet im Querformat.
+display:
+  - platform: sdl
+    id: main_display
+    dimensions:
+      width: 1280
+      height: 800
+
+touchscreen:
+  - platform: sdl
+    id: main_touchscreen
+
+packages:
+  tokens: !include .pv-dashboard_tokens.yaml
+  fonts:  !include .pv-dashboard_fonts.yaml
+  ui:     !include .pv-dashboard_ui.yaml

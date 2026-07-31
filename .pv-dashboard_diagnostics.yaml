@@ -1,0 +1,52 @@
+##############################################################################
+# Package: Zeit und Diagnose
+#
+# Zeitquelle kommt von Home Assistant (kein eigener NTP-Server noetig) und ist
+# Voraussetzung fuer Uhr-Anzeigen und Voice-Timer.
+##############################################################################
+
+time:
+  - platform: homeassistant
+    id: ha_time
+    timezone: Europe/Berlin
+
+sensor:
+  - platform: wifi_signal
+    name: "WLAN-Signal"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: "Laufzeit"
+    id: device_uptime
+    update_interval: 60s
+    entity_category: diagnostic
+
+  # Der ESP32-P4 hat einen internen Temperatursensor. Der Messwert liegt
+  # typischerweise deutlich ueber der Raumtemperatur -- er beschreibt den Chip,
+  # nicht die Umgebung.
+  - platform: internal_temperature
+    name: "Chiptemperatur"
+    id: chip_temperature
+    update_interval: 60s
+    entity_category: diagnostic
+
+text_sensor:
+  # Bewusst keine "version"-Entity: die ESPHome-Version steht ohnehin im
+  # Boot-Log und im Geraeteeintrag von Home Assistant.
+  - platform: wifi_info
+    ip_address:
+      name: "IP-Adresse"
+      entity_category: diagnostic
+    ssid:
+      name: "Verbundenes WLAN"
+      entity_category: diagnostic
+    mac_address:
+      name: "MAC-Adresse"
+      entity_category: diagnostic
+
+button:
+  - platform: restart
+    name: "Neustart"
+    entity_category: diagnostic

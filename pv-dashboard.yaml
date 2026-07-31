@@ -1,0 +1,143 @@
+##############################################################################
+# Waveshare ESP32-P4-WIFI6-Touch-LCD-10.1  (SKU 33150, "X"-Serie)
+#
+#   SoC        : ESP32-P4 (RISC-V Dual-Core, kein eigenes Funkmodul)
+#   Funk       : ESP32-C6-MINI-1U als Co-Prozessor via SDIO  -> esp32_hosted
+#   Display    : 10.1" 800x1280 IPS, MIPI-DSI 2-Lane, JD9365
+#   Touch      : GT911 (kapazitiv, 10 Punkte) an I2C
+#   PSRAM      : 32 MB (im Chip-Package, HEX-Mode)
+#   Flash      : 32 MB NOR
+#
+# Basis-Config "Hello World". Weitere Funktionen kommen als Packages dazu.
+##############################################################################
+
+substitutions:
+  upper_devicename: PV-Dashboard
+  devicename: pv-dashboard
+  device_description: "Waveshare ESP32-P4-WIFI6-Touch-LCD-10.1"
+
+esphome:
+  name: "${devicename}"
+  friendly_name: "${upper_devicename}"
+  comment: "${device_description}"
+  min_version: 2026.7.0
+
+esp32:
+  # ACHTUNG: Dieses Board hat ECO2-Silizium, kein Serien-Silizium ab Rev. 3.00.
+  # Das Boot-ROM meldet sich mit "ESP-ROM:esp32p4-eco2-20240710".
+  # Mit board: esp32-p4_r3-evboard stuerzt bereits der Bootloader ab
+  # ("Illegal instruction" direkt am entry-Punkt, Dauerneustart).
+  board: esp32-p4-evboard
+  variant: esp32p4
+  # Pflicht fuer Silizium vor Rev. 3.00.
+  engineering_sample: true
+  flash_size: 32MB
+  # ESPHome warnt: 400MHz gilt auf dem P4 als experimentell und bootet
+  # moeglicherweise nicht (esphome/esphome#13425). Fuer den ersten Flash
+  # deshalb 360MHz. Laeuft das Board stabil, kann man 400MHz probieren.
+  cpu_frequency: 360MHz
+  # Native ESP-IDF-Toolchain (CMake + idf.py + Espressif-Compiler), kein
+  # PlatformIO. Das ist inzwischen der Default; 'platformio' ist abgekuendigt
+  # und faellt in ESPHome 2027.2.0 weg. Hier explizit gesetzt.
+  toolchain: esp-idf
+  framework:
+    type: esp-idf
+    # Neueste stabile 6.x. Ein 6.1.x gibt es noch nicht -- von 6.1 existiert
+    # bisher nur v6.1-beta1. ESPHome-"recommended" ist weiterhin 5.5.5;
+    # bei Build-Problemen ist das der schnellste Gegentest.
+    version: 6.0.2
+    advanced:
+      # Pflicht fuer 32 MB Flash zusammen mit OTA.
+      enable_idf_experimental_features: true
+
+# 32 MB PSRAM im Package - ohne PSRAM kein MIPI-DSI-Framebuffer.
+psram:
+  mode: hex
+  speed: 200MHz
+
+# LDO-Kanal 3 versorgt die MIPI-DSI-PHY (VDD_MIPI_DPHY, 2.5 V).
+# Pflicht-Abhaengigkeit der mipi_dsi-Komponente.
+esp_ldo:
+  - channel: 3
+    voltage: 2.5V
+
+# WLAN/BLE laufen nicht auf dem P4 selbst, sondern auf dem ESP32-C6 daneben.
+# Die Verbindung ist ein 4-Bit-SDIO-Bus.
+esp32_hosted:
+  variant: ESP32C6
+  reset_pin: GPIO54
+  clk_pin: GPIO18
+  cmd_pin: GPIO19
+  d0_pin: GPIO14
+  d1_pin: GPIO15
+  d2_pin: GPIO16
+  d3_pin: GPIO17
+  active_high: true
+  # SDIO-Puffer ins PSRAM statt in den knappen internen RAM.
+  use_psram: true
+
+# Die ESP-Hosted-Firmware des C6 kam ab Werk von Waveshare und ist zu alt:
+# Beim ersten Boot meldete ESPHome
+#   "Co-processor not responding; BLE disabled."
+# Der C6 macht WLAN, antwortet aber nicht auf die Abfrage der Bluetooth-
+# Firmwareversion.
+#
+# ESPHome pflegt dafuer ein eigenes Firmware-Verzeichnis. Der Baustein unten
+# vergleicht die Version auf dem C6 mit dem Manifest und bietet passende
+# Updates an -- als Update-Entity in Home Assistant, uebertragen ueber die
+# bestehende SDIO-Strecke. Der C6 muss dafuer nicht ausgebaut werden.
+#
+# Es wird automatisch die hoechste Version gewaehlt, die zur einkompilierten
+# esp_hosted-Bibliothek passt (aktuell 2.12.9).
+http_request:
+  verify_ssl: false
+
+update:
+  - platform: esp32_hosted
+    type: http
+    name: "Co-Prozessor-Firmware"
+    source: "https://esphome.github.io/esp-hosted-firmware/manifest/esp32c6.json"
+    update_interval: 6h
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${upper_devicename} Fallback"
+    password: !secret ap_password
+
+captive_portal:
+
+logger:
+  level: INFO
+  # P4: Log geht ueber den USB-UART-Port (Type-C, Beschriftung "UART").
+  hardware_uart: UART0
+
+api:
+  reboot_timeout: 9999 min
+  encryption:
+    key: !secret encryption_key
+  # Wakeword-Erkennung nur laufen lassen, solange HA erreichbar ist --
+  # ohne Gegenstelle waere eine Erkennung ohnehin wirkungslos.
+  on_client_connected:
+    - micro_wake_word.start:
+  on_client_disconnected:
+    - micro_wake_word.stop:
+    - voice_assistant.stop:
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+packages:
+  # Gemeinsam mit dem Simulator (pv-dashboard-sim.yaml) -- hier geaenderte
+  # Oberflaeche wirkt dort sofort mit.
+  tokens:      !include .pv-dashboard_tokens.yaml
+  fonts:       !include .pv-dashboard_fonts.yaml
+  ui:          !include .pv-dashboard_ui.yaml
+  # Nur auf dem Geraet
+  display:     !include .pv-dashboard_display.yaml
+  audio:       !include .pv-dashboard_audio.yaml
+  ble:         !include .pv-dashboard_ble.yaml
+  diagnostics: !include .pv-dashboard_diagnostics.yaml
+  serial:      !include .pv-dashboard_serial.yaml

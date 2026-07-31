@@ -1,0 +1,95 @@
+##############################################################################
+# Package: Serielle Schnittstellen ueber den USB-OTG-Port
+#
+# Statt Pegelwandler auf den 40-Pin-Header zu loeten, haengt ein fertiger
+# Mehrkanal-Converter am USB-OTG-Type-C-Port. Das kostet keinen einzigen GPIO.
+#
+#   Geraet : Waveshare "USB TO 4CH Serial Converter" (SKU 25790)
+#            ASIN B0CM68TPNR, Chip FT4232HL, VID 0x0403 / PID 0x6011
+#
+#   Port A : TTL                          -> ungenutzt
+#   Port B : TTL / RS485                  -> ungenutzt
+#   Port C : RS485 / RS422, isoliert      -> RS485 zur Batterie (Gobel PC200)
+#   Port D : RS232 / RS485, isoliert      -> RS232 zur Batterie (Gobel PC200)
+#
+# Anschluss am Converter ist USB Typ B -- Kabel USB-B auf USB-C noetig, der
+# OTG-Port des Panels ist Type-C.
+#
+# Ein einziges USB-Geraet mit vier Kanaelen -- deshalb kein Hub noetig und
+# keine VID/PID-Kollision. (ESPHome ordnet USB-Geraete ausschliesslich ueber
+# VID/PID zu; zwei baugleiche Einzeladapter waeren nicht unterscheidbar.)
+#
+# WICHTIG: Die Kanaele sind POSITIONSBASIERT. Der Index ergibt sich aus der
+# Reihenfolge in "channels:", also muessen auch die ungenutzten Ports A und B
+# deklariert werden, damit C und D auf den richtigen Indizes landen.
+#
+# Port C und D sind galvanisch getrennt. Das ist bei der BMS-Anbindung kein
+# Luxus: die Masse eines 16S-LiFePO4-Packs liegt auf anderem Potential als das
+# Panel.
+##############################################################################
+
+usb_host:
+  # Der Converter haengt direkt am OTG-Port. Fuer Geraete hinter einem
+  # USB-Hub muesste das auf true stehen.
+  enable_hubs: false
+
+usb_uart:
+  - type: FT4232
+    channels:
+      # --- Port A: TTL, aktuell ungenutzt --------------------------------
+      - id: uart_port_a
+        baud_rate: 9600
+
+      # --- Port B: TTL/RS485, aktuell ungenutzt --------------------------
+      - id: uart_port_b
+        baud_rate: 9600
+
+      # --- Port C: isoliertes RS485 zur Batterie -------------------------
+      # Gobel dokumentiert fuer RS485 am PC200 9600 Baud. Klemmen TA/TB.
+      # Sitzt das Panel am Ende des RS485-Strangs, den 120R-Abschluss-
+      # widerstand am Converter per Jumper zuschalten (ab Werk offen).
+      - id: uart_bms_rs485
+        baud_rate: 9600
+        data_bits: 8
+        parity: NONE
+        stop_bits: "1"
+        # Zum Mitlesen des Verkehrs beim Einrichten auf true stellen.
+        debug: false
+
+      # --- Port D: isoliertes RS232 zur Batterie -------------------------
+      # Gobel dokumentiert fuer den RS232-Port des PC200 115200 Baud.
+      # Meldet sich das BMS nicht, ist 9600 der naechste Versuch.
+      # Am BMS sitzt eine RJ11-Buchse -- Kabel RJ11 auf Schraubklemme:
+      #   RJ11 Pin 3 (RXD) <- Converter TXD
+      #   RJ11 Pin 4 (TXD) -> Converter RXD
+      #   RJ11 Pin 5 (GND) <> Converter GND
+      # RJ11-Pins 1 und 6 sind unbelegt, zaehlen beim Abzaehlen aber mit.
+      # Am Converter die 232-Klemmen benutzen, die 485-Klemmen von Port D
+      # bleiben frei.
+      - id: uart_bms_rs232
+        baud_rate: 115200
+        data_bits: 8
+        parity: NONE
+        stop_bits: "1"
+        debug: false
+
+# --- Naechster Schritt: PACE-BMS am RS232-Strang ----------------------------
+# Externe Komponente von nkinnan (paceic Protokoll v20 und v25). Erst
+# aktivieren, wenn das BMS angeschlossen ist -- sonst laufen nur Timeouts ins
+# Log. Die Protokollversion muss zum BMS passen.
+#
+# external_components:
+#   - source: github://nkinnan/esphome-pace-bms
+#
+# pace_bms:
+#   id: bms
+#   uart_id: uart_bms_rs232
+#   protocol_commandset: 0x25     # oder 0x20, je nach BMS
+#   update_interval: 5s
+#
+# Und/oder Modbus auf dem RS485-Strang der Batterie:
+#
+# modbus:
+#   uart_id: uart_bms_rs485
+#   id: modbus_bms
+#   send_wait_time: 200ms

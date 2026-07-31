@@ -1,0 +1,60 @@
+##############################################################################
+# Package: Design-Tokens
+#
+# Einzige Quelle fuer Farben, Groessen und Abstaende der Oberflaeche.
+# Wird sowohl vom Geraet (pv-dashboard.yaml) als auch vom Simulator
+# (pv-dashboard-sim.yaml) eingebunden -- Aenderungen wirken damit auf beiden.
+#
+# Regelwerk fuer Werte (aus dem Layoutentwurf):
+#   - Einheit steht IMMER unter dem Wert, nie dahinter
+#   - kein Wert ohne Einheit, auch nicht bei % und °C
+#   - Momentanwert gross, Tageswert klein darunter
+#   - alle Zahlen in Mono mit Tabellenziffern
+#   - Vorzeichen nur, wo die Richtung zaehlt (Batterie +/-)
+#   - Geld auf zwei, Energie auf eine Nachkommastelle
+##############################################################################
+
+substitutions:
+  # --- Flaechen ---------------------------------------------------------
+  col_bg: "0x0E141B"      # Panel-Hintergrund, blaustichiges Anthrazit
+  col_surface: "0x16202B" # Kacheln und Geraetekaesten
+  col_line: "0x3E5570"    # Rahmen, Haarlinien, ruhende Leitungen
+
+  # --- Schrift ----------------------------------------------------------
+  col_ink: "0xE8EEF4"     # Primaertext und grosse Werte
+  # Aufgehellt gegenueber dem Entwurf: auf dem Panel aus zwei Metern
+  # Entfernung waren die gedaempften Toene zu schwach.
+  col_ink2: "0xCBD6DF"    # Zweitzeilen
+  col_ink3: "0xA6B8C6"    # Beschriftungen, Einheiten
+
+  # --- Energiefarben ----------------------------------------------------
+  # Leitungen werden nach QUELLE eingefaerbt, nicht nach Ziel.
+  col_solar: "0xF5B33C"   # PV Eigenverbrauch (DEYE + Mini)
+  col_full: "0xE8A020"    # Sungrow, Volleinspeisung -- bewusst abgesetzt
+  col_batt: "0x45C6D6"    # Speicher, DC-Seite
+  col_feed: "0x5CC98A"    # Einspeisung ins Netz
+  col_draw: "0xE86A54"    # Netzbezug
+  col_warn: "0xE8B83C"    # Warnung
+  col_crit: "0xE8654F"    # Stoerung
+
+  # --- Abstaende und Radien --------------------------------------------
+  pad_page: "20"
+  pad_tile: "10"
+  gap_tile: "8"
+  radius_tile: "11"
+  radius_box: "10"
+
+  # --- Tarife fuer die Geldrechnung ------------------------------------
+  # Sungrow laeuft auf Volleinspeisung bis 2031.
+  tarif_sungrow_ct: "27.0"
+  tarif_ueberschuss_ct: "7.5"
+  tarif_bezug_ct: "22.5"
+
+  # --- Verhalten bei Untaetigkeit ---------------------------------------
+  # Ein Wert fuer zwei Reaktionen, die zusammen ausgeloest werden sollen:
+  # Abdunkeln (.pv-dashboard_display.yaml, nur Geraet) und Rueckfall auf die
+  # Uebersicht (.pv-dashboard_ui.yaml, auch im Simulator).
+  idle_timeout: "240s"
+  # Helligkeit im abgedunkelten Zustand. Prozentwert = Duty, siehe die
+  # Kalibrierung in .pv-dashboard_display.yaml.
+  idle_brightness: "30%"

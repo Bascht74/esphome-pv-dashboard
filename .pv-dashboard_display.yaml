@@ -1,0 +1,115 @@
+##############################################################################
+# Package: Display-HARDWARE (nur Geraet, nicht im Simulator)
+#
+#   Panel      : 10.1" 800x1280, MIPI-DSI 2-Lane, JD9365-Controller
+#   Touch      : GT911 an I2C (SDA GPIO7 / SCL GPIO8), kein INT/RST auf dem Board
+#   Backlight  : GPIO26, PWM ueber LEDC (nicht invertiert)
+#   LCD-Reset  : GPIO27
+#
+# Die Oberflaeche selbst steht in .pv-dashboard_ui.yaml und wird von Geraet und
+# Simulator gemeinsam benutzt. Schriften in .pv-dashboard_fonts.yaml.
+##############################################################################
+
+i2c:
+  - id: i2c_bus
+    sda: GPIO7
+    scl: GPIO8
+    frequency: 400kHz
+    # Beim ersten Flashen einschalten: listet gefundene Adressen im Log.
+    # Erwartet werden GT911 (0x5D oder 0x14), ES8311 (0x18), ES7210 (0x40).
+    scan: true
+
+# --- Hintergrundbeleuchtung -------------------------------------------------
+#
+# KALIBRIERT. Vorher war 24 % im Frontend faktisch aus. Ursache war nicht das
+# Panel, sondern die Gamma-Korrektur der light-Komponente (Default 2.8):
+#
+#   Prozent im Frontend  ->  tatsaechlicher Duty ohne die Korrekturen unten
+#      24 %              ->   1,8 %
+#      35 %              ->   5,3 %
+#      50 %              ->  14,4 %
+#
+# Gamma 2.8 ist fuer LEDs gedacht, deren wahrgenommene Helligkeit stark
+# nichtlinear zum Duty verlaeuft. Das Backlight haengt an einem Konstantstrom-
+# treiber und ist naeherungsweise linear -- die Korrektur ist hier falsch.
+output:
+  - platform: ledc
+    id: backlight_output
+    pin: GPIO26
+    frequency: 1000Hz
+    # Anlaufschwelle des Backlight-Treibers. 1 % im Frontend entspricht ab
+    # jetzt 15 % Duty, 100 % weiterhin 100 % -- dazwischen linear.
+    # Ist die dunkelste Stufe noch zu hell, diesen Wert senken.
+    min_power: 15%
+    max_power: 100%
+    # Aus ist trotzdem wirklich aus -- min_power gilt erst ab 1 %.
+    zero_means_zero: true
+
+light:
+  - platform: monochromatic
+    id: backlight
+    name: "Display Helligkeit"
+    output: backlight_output
+    restore_mode: RESTORE_DEFAULT_ON
+    default_transition_length: 250ms
+    # 1.0 = keine Korrektur. Prozentwert im Frontend == Duty (nach min_power).
+    gamma_correct: 1.0
+
+script:
+  # Volle Helligkeit -- wird bei jeder Beruehrung ausgeloest.
+  - id: display_wake
+    mode: restart
+    then:
+      - light.turn_on:
+          id: backlight
+          brightness: 100%
+          transition_length: 150ms
+
+# --- Display ----------------------------------------------------------------
+display:
+  - platform: mipi_dsi
+    id: main_display
+    # Preset fuer das 800x1280-JD9365-Panel dieser Waveshare-Serie:
+    # Timings, Lane-Bitrate (1.5 Gbps) und Init-Sequenz sind hinterlegt.
+    model: WAVESHARE-10.1-DSI-TOUCH-A
+    reset_pin: GPIO27
+    # ACHTUNG: Hier KEIN "rotation" setzen -- zusammen mit LVGL lehnt ESPHome
+    # das ab. Die Drehung steht im lvgl-Block (.pv-dashboard_ui.yaml).
+    update_interval: never
+    auto_clear_enabled: false
+
+# --- Touch ------------------------------------------------------------------
+touchscreen:
+  - platform: gt911
+    id: main_touchscreen
+    i2c_id: i2c_bus
+    display: main_display
+    update_interval: 50ms
+    # Laeuft unabhaengig von LVGL und weckt das Display daher zuverlaessig.
+    on_touch:
+      - script.execute: display_wake
+
+# --- Nur auf dem Geraet -----------------------------------------------------
+# Wird beim Bauen mit dem lvgl-Block aus .pv-dashboard_ui.yaml zusammengefuehrt.
+lvgl:
+  # Das Panel ist nativ 800x1280 (hochkant), die Oberflaeche ist fuer
+  # Querformat gebaut -- deshalb hier drehen. Der Simulator hat bereits ein
+  # quer liegendes Fenster und bekommt diesen Block nicht.
+  # Auf dem P4 ist das keine reine CPU-Rotation: ESPHome nutzt die PPA und
+  # meldet beim Kompilieren "LVGL will use software rotation (PPA accelerated)".
+  rotation: 90
+
+  # Nach Ruhe abdunkeln statt abschalten, damit der Anlagenzustand lesbar
+  # bleibt. Mit der Kalibrierung oben sind 30 % echte 40 % Duty -- deutlich
+  # gedimmt, aber quer durch den Raum noch ablesbar.
+  #
+  # Timeout und Helligkeit stehen in .pv-dashboard_tokens.yaml. Denselben
+  # $idle_timeout benutzt der Rueckfall auf die Uebersicht in
+  # .pv-dashboard_ui.yaml -- beides wird dadurch zusammen ausgeloest.
+  on_idle:
+    - timeout: $idle_timeout
+      then:
+        - light.turn_on:
+            id: backlight
+            brightness: $idle_brightness
+            transition_length: 3s

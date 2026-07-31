@@ -1,0 +1,218 @@
+##############################################################################
+# Package: Audio - Lautsprecher, Mikrofone, Voice Assistant
+#
+#   Codec (Wiedergabe)  : ES8311, I2C 0x18
+#   ADC (Aufnahme)      : ES7210, I2C 0x40, Dual-Mic-Array mit Echo-Unterdrueckung
+#   Verstaerker-Enable  : GPIO53
+#   I2S (gemeinsam)     : MCLK GPIO13, BCLK GPIO12, LRCLK GPIO10,
+#                         DOUT GPIO9 (zum Codec), DIN GPIO11 (vom ADC)
+#
+# Der I2C-Bus "i2c_bus" wird im Display-Package definiert.
+#
+# ACHTUNG -- UNGELOESTER KONFLIKT (Stand 2026-07-31):
+#
+# Ein frueherer Kommentar an dieser Stelle behauptete, Lautsprecher und
+# Mikrofon duerften unterschiedliche Taktraten fahren, weil ESPHome den Bus
+# per Mutex exklusiv vergibt und danach wieder freigibt. Das ist falsch: Der
+# Mutex wird gehalten, solange die Seite laeuft -- nicht nur zur Einrichtung.
+#
+# Folge im Betrieb (Log vom 2026-07-31): Sobald Home Assistant verbindet,
+# startet micro_wake_word das Mikrofon, das den Bus dauerhaft belegt. Der
+# mixer-Speaker will parallel dauerhaft senden, bekommt den Bus nicht und
+# meldet im Sekundentakt "Parent bus is busy" -- eine Endlosschleife.
+#
+# Der Konflikt ist auch physikalisch: beide Chips haengen an denselben
+# Leitungen (MCLK/BCLK/LRCLK). Ein BCLK kann nicht gleichzeitig 48 kHz und
+# 16 kHz takten, egal was die Software will.
+#
+#   Wiedergabe (ES8311) : 48 kHz  -> taugt fuer Musik
+#   Aufnahme   (ES7210) : 16 kHz  -> Norm fuer Sprachassistenten
+#
+# Zur Loesung muss entschieden werden, was Vorrang hat: dauerhaftes Wakeword
+# oder dauerhaft bereite Musikausgabe. Beides gleichzeitig gibt die
+# Verdrahtung nicht her.
+#
+# Es sind zwei getrennte Chips, also gibt es immerhin keinen Konflikt bei der
+# I2C-Konfiguration der Codecs.
+##############################################################################
+
+i2s_audio:
+  - id: i2s_bus
+    i2s_mclk_pin: GPIO13
+    i2s_bclk_pin: GPIO12
+    i2s_lrclk_pin: GPIO10
+
+# --- Wiedergabe -------------------------------------------------------------
+audio_dac:
+  - platform: es8311
+    id: es8311_dac
+    i2c_id: i2c_bus
+    address: 0x18
+    bits_per_sample: 16bit
+    # Muss zur sample_rate des Lautsprechers passen.
+    sample_rate: 48000
+    use_mclk: true
+    # Die Mikrofone haengen am ES7210, nicht am Codec.
+    use_microphone: false
+
+# Class-D-Verstaerker hinter dem Codec. Ohne "an" bleibt der Lautsprecher stumm.
+switch:
+  - platform: gpio
+    id: speaker_amp
+    name: "Lautsprecher-Verstaerker"
+    pin: GPIO53
+    restore_mode: ALWAYS_ON
+
+speaker:
+  - platform: i2s_audio
+    id: onboard_speaker
+    i2s_audio_id: i2s_bus
+    i2s_dout_pin: GPIO9
+    dac_type: external
+    audio_dac: es8311_dac
+    sample_rate: 48000
+    bits_per_sample: 16bit
+    channel: mono
+    num_channels: 1
+    # Grosszuegig gewaehlt: faengt Netzwerk-Jitter ab, damit TTS nicht abreisst.
+    buffer_duration: 1000ms
+
+  # Musik und Ansagen brauchen jeweils einen eigenen Speaker -- der Mixer legt
+  # beide Quellen auf den einen physischen Ausgang. Waehrend einer Ansage wird
+  # die Musik nur leiser gedreht statt gestoppt.
+  - platform: mixer
+    id: speaker_mixer
+    output_speaker: onboard_speaker
+    source_speakers:
+      - id: mixer_media_in
+      - id: mixer_announcement_in
+
+  # Die Resampler rechnen ankommende Streams (HA liefert Musik meist mit
+  # 44,1 kHz) auf die 48 kHz des I2S-Ausgangs um.
+  - platform: resampler
+    id: media_resampler
+    output_speaker: mixer_media_in
+  - platform: resampler
+    id: announcement_resampler
+    output_speaker: mixer_announcement_in
+
+media_player:
+  - platform: speaker
+    id: onboard_media_player
+    name: "Lautsprecher"
+    volume_initial: 60%
+    volume_increment: 5%
+    # Zwei getrennte Pipelines: Musik laeuft weiter, waehrend eine Ansage
+    # (TTS, Benachrichtigung) darueber gelegt wird.
+    media_pipeline:
+      speaker: media_resampler
+      format: FLAC
+      sample_rate: 48000
+      num_channels: 1
+    announcement_pipeline:
+      speaker: announcement_resampler
+      format: FLAC
+      sample_rate: 48000
+      num_channels: 1
+
+# --- Aufnahme ---------------------------------------------------------------
+audio_adc:
+  - platform: es7210
+    id: es7210_adc
+    i2c_id: i2c_bus
+    address: 0x40
+    bits_per_sample: 16bit
+    sample_rate: 16000
+    # 0-37.5 dB moeglich. Bei zu leiser Erkennung schrittweise erhoehen.
+    mic_gain: 24db
+
+microphone:
+  - platform: i2s_audio
+    id: onboard_mic
+    i2s_audio_id: i2s_bus
+    i2s_din_pin: GPIO11
+    adc_type: external
+    pdm: false
+    sample_rate: 16000
+    bits_per_sample: 16bit
+    # "mono" ist beim I2S-Mikrofon nicht erlaubt; "left" liefert einen Kanal.
+    channel: left
+
+# --- Wakeword (laeuft auf dem Geraet, nicht in HA) --------------------------
+micro_wake_word:
+  id: wake_word
+  microphone:
+    microphone: onboard_mic
+    channels: 0
+    gain_factor: 4
+  models:
+    # Jedes Modell belegt eigenen Flash und laeuft parallel mit --
+    # drei gleichzeitig ist auf dem P4 unproblematisch.
+    - model: okay_nabu
+    - model: alexa
+    - model: hey_jarvis
+  # Voice Activity Detection reduziert Fehlausloesungen deutlich.
+  vad:
+  # Wakeword-Modelle und Tensor-Arena ins PSRAM.
+  task_stack_in_psram: true
+
+# --- Voice Assistant --------------------------------------------------------
+voice_assistant:
+  id: assistant
+  microphone:
+    microphone: onboard_mic
+    channels: 0
+    gain_factor: 4
+  media_player: onboard_media_player
+  # Wakeword-Erkennung on-device; startet die Pipeline automatisch.
+  micro_wake_word: wake_word
+  use_wake_word: false
+  # 0 = aus, 4 = maximal. Bei 2 werden entfernte Sprecher noch erkannt.
+  # Wenn Rufe quer durch den Raum verschluckt werden: auf 0 stellen.
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 2.0
+
+  # --- Rueckmeldung auf dem Display ----------------------------------------
+  # Die Label-IDs kommen aus dem Display-Package.
+  on_listening:
+    - script.execute: display_wake
+    - lvgl.widget.show: voice_panel
+    - lvgl.label.update:
+        id: lbl_assist_status
+        text: "Höre zu …"
+    - lvgl.label.update:
+        id: lbl_assist_request
+        text: ""
+    - lvgl.label.update:
+        id: lbl_assist_response
+        text: ""
+  on_stt_end:
+    - lvgl.label.update:
+        id: lbl_assist_status
+        text: "Denke nach …"
+    # x = der erkannte Text
+    - lvgl.label.update:
+        id: lbl_assist_request
+        text: !lambda return x;
+  on_tts_start:
+    - lvgl.label.update:
+        id: lbl_assist_status
+        text: "Antworte …"
+    # x = der gesprochene Antworttext
+    - lvgl.label.update:
+        id: lbl_assist_response
+        text: !lambda return x;
+  on_end:
+    - lvgl.label.update:
+        id: lbl_assist_status
+        text: "Bereit"
+    # Overlay noch kurz stehen lassen, damit die Antwort lesbar bleibt.
+    - delay: 6s
+    - lvgl.widget.hide: voice_panel
+  on_error:
+    - lvgl.label.update:
+        id: lbl_assist_status
+        # Blockform noetig: ein ": " im einzeiligen Lambda bricht das YAML.
+        text: !lambda |-
+          return "Fehler: " + code;
