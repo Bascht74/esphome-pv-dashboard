@@ -42,6 +42,21 @@ touchscreen:
   - platform: sdl
     id: main_touchscreen
 
+# Auf dem Geraet kommt die Zeit von Home Assistant, hier von der Systemuhr des
+# Rechners. Beide tragen dieselbe ID, damit die Uhr in .pv-dashboard_ui.yaml
+# unveraendert auf beiden Seiten laeuft.
+time:
+  - platform: host
+    id: dash_time
+    timezone: Europe/Berlin
+    on_time_sync:
+      - then:
+          - script.execute: update_clock
+    on_time:
+      - seconds: 0
+        then:
+          - script.execute: update_clock
+
 packages:
   tokens: !include .pv-dashboard_tokens.yaml
   fonts:  !include .pv-dashboard_fonts.yaml

@@ -128,6 +128,61 @@ api:
 ota:
   - platform: esphome
     password: !secret ota_password
+    # Waehrend des Uploads teilen sich Display und OTA die PSRAM-Bandbreite.
+    # Ohne Abdeckung flackert die Oberflaeche sichtbar. Deshalb legt sich ein
+    # vollflaechiges Panel darueber (definiert in .pv-dashboard_ui.yaml) und
+    # das ota_running-Flag legt die periodischen Anzeigen still.
+    on_begin:
+      - globals.set:
+          id: ota_running
+          value: 'true'
+      - lvgl.bar.update:
+          id: bar_ota
+          value: 0
+      - lvgl.label.update:
+          id: lbl_ota_pct
+          text: "0 %"
+      - lvgl.widget.show: ota_panel
+    on_progress:
+      # x ist der Fortschritt in Prozent (float).
+      - lvgl.bar.update:
+          id: bar_ota
+          value: !lambda return (int) x;
+      - lvgl.label.update:
+          id: lbl_ota_pct
+          text: !lambda |-
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%d %%", (int) x);
+            return std::string(buf);
+    on_end:
+      - lvgl.bar.update:
+          id: bar_ota
+          value: 100
+      - lvgl.label.update:
+          id: lbl_ota_pct
+          text: "100 %"
+      - lvgl.label.update:
+          id: lbl_ota_hint
+          text: "Neustart …"
+    on_error:
+      # x ist der Fehlercode (uint8_t).
+      - lvgl.label.update:
+          id: lbl_ota_title
+          text: "Update fehlgeschlagen"
+      - lvgl.label.update:
+          id: lbl_ota_hint
+          text: !lambda |-
+            char buf[24];
+            snprintf(buf, sizeof(buf), "Fehlercode %d", (int) x);
+            return std::string(buf);
+      # Stehen lassen, damit die Meldung lesbar ist -- danach zurueck zur
+      # Oberflaeche, das Geraet laeuft ja mit der alten Firmware weiter.
+      - delay: 10s
+      - globals.set:
+          id: ota_running
+          value: 'false'
+      - lvgl.widget.hide: ota_panel
+      - script.execute: update_clock
 
 packages:
   # Gemeinsam mit dem Simulator (pv-dashboard-sim.yaml) -- hier geaenderte

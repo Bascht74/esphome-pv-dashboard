@@ -12,6 +12,58 @@
 # Navigationsleiste. Das Anlagenschema folgt.
 ##############################################################################
 
+# Waehrend eines Firmware-Updates ruht die Oberflaeche: Jeder Redraw kostet
+# PSRAM-Bandbreite, die der Upload gerade selbst braucht. Gesetzt wird das
+# Flag von den ota-Triggern in pv-dashboard.yaml. Kuenftige periodische
+# Anzeigen sollen es genauso abfragen wie die Uhr unten.
+globals:
+  - id: ota_running
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+# Uhr oben links. Die Zeitquelle heisst auf beiden Seiten "dash_time" (Geraet:
+# Home Assistant, Simulator: Systemuhr) und ruft dieses Skript beim
+# Zeitabgleich und danach zu jeder vollen Minute auf. Die Formatierung steht
+# deshalb genau einmal -- hier.
+script:
+  - id: update_clock
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(ota_running);'
+          then:
+            - lvgl.label.update:
+                id: lbl_clock
+                text: !lambda |-
+                  auto t = id(dash_time).now();
+                  if (!t.is_valid())
+                    return std::string("--:--");
+                  char buf[6];
+                  snprintf(buf, sizeof(buf), "%02d:%02d", t.hour, t.minute);
+                  return std::string(buf);
+            - lvgl.label.update:
+                id: lbl_date
+                text: !lambda |-
+                  auto t = id(dash_time).now();
+                  if (!t.is_valid())
+                    return std::string("");
+                  // strftime richtet sich nach der C-Locale und liefert
+                  // englische Namen -- deshalb von Hand. day_of_week zaehlt
+                  // ab Sonntag = 1.
+                  static const char *const WD[] = {"", "So", "Mo", "Di", "Mi",
+                                                   "Do", "Fr", "Sa"};
+                  static const char *const MO[] = {"", "Januar", "Februar",
+                                                   "März", "April", "Mai",
+                                                   "Juni", "Juli", "August",
+                                                   "September", "Oktober",
+                                                   "November", "Dezember"};
+                  char buf[32];
+                  snprintf(buf, sizeof(buf), "%s, %d. %s", WD[t.day_of_week],
+                           t.day_of_month, MO[t.month]);
+                  return std::string(buf);
+
 lvgl:
   displays:
     - main_display
@@ -295,6 +347,61 @@ lvgl:
                 text_color: $col_ink2
                 long_mode: WRAP
                 text_align: CENTER
+
+      # Firmware-Update. Deckt die Oberflaeche vollflaechig ab, weil sich
+      # Display und OTA waehrend des Uploads die PSRAM-Bandbreite teilen --
+      # ohne Abdeckung flackert das Bild sichtbar. Ausgeloest wird das Panel
+      # von den ota-Triggern in pv-dashboard.yaml; im Simulator bleibt es
+      # unsichtbar, dort gibt es kein OTA.
+      - obj:
+          id: ota_panel
+          x: 0
+          y: 0
+          width: 1280
+          height: 800
+          hidden: true
+          bg_color: $col_bg
+          bg_opa: COVER
+          scrollbar_mode: 'off'
+          border_width: 0
+          radius: 0
+          pad_all: 0
+          widgets:
+            - label:
+                id: lbl_ota_title
+                align: CENTER
+                y: -72
+                text: "Firmware-Update"
+                text_font: f_val_xl
+                text_color: $col_ink
+            - bar:
+                id: bar_ota
+                align: CENTER
+                y: -12
+                width: 560
+                height: 16
+                min_value: 0
+                max_value: 100
+                value: 0
+                bg_color: $col_surface
+                radius: 4
+                indicator:
+                  bg_color: $col_batt
+                  radius: 4
+            - label:
+                id: lbl_ota_pct
+                align: CENTER
+                y: 28
+                text: "0 %"
+                text_font: f_val_m
+                text_color: $col_batt
+            - label:
+                id: lbl_ota_hint
+                align: CENTER
+                y: 76
+                text: "Stromversorgung bitte nicht trennen"
+                text_font: f_text_s
+                text_color: $col_ink3
 
   pages:
     # =====================================================================

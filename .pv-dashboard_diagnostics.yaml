@@ -7,8 +7,20 @@
 
 time:
   - platform: homeassistant
-    id: ha_time
+    # Die ID heisst bewusst neutral: Der Simulator legt unter demselben Namen
+    # eine host-Zeitquelle an, damit die Uhr in .pv-dashboard_ui.yaml auf
+    # beiden Seiten unveraendert funktioniert.
+    id: dash_time
     timezone: Europe/Berlin
+    # Sobald die Zeit steht, sofort anzeigen -- sonst stuende bis zur naechsten
+    # vollen Minute weiter "--:--" auf dem Panel.
+    on_time_sync:
+      - then:
+          - script.execute: update_clock
+    on_time:
+      - seconds: 0
+        then:
+          - script.execute: update_clock
 
 sensor:
   - platform: wifi_signal
