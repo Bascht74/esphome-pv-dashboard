@@ -9,28 +9,45 @@
 #
 # Der I2C-Bus "i2c_bus" wird im Display-Package definiert.
 #
-# ACHTUNG -- UNGELOESTER KONFLIKT (Stand 2026-07-31):
+# I2S-BUS IM HALBDUPLEX (Stand 2026-09-11):
 #
-# Ein frueherer Kommentar an dieser Stelle behauptete, Lautsprecher und
-# Mikrofon duerften unterschiedliche Taktraten fahren, weil ESPHome den Bus
-# per Mutex exklusiv vergibt und danach wieder freigibt. Das ist falsch: Der
-# Mutex wird gehalten, solange die Seite laeuft -- nicht nur zur Einrichtung.
-#
-# Folge im Betrieb (Log vom 2026-07-31): Sobald Home Assistant verbindet,
-# startet micro_wake_word das Mikrofon, das den Bus dauerhaft belegt. Der
-# mixer-Speaker will parallel dauerhaft senden, bekommt den Bus nicht und
-# meldet im Sekundentakt "Parent bus is busy" -- eine Endlosschleife.
-#
-# Der Konflikt ist auch physikalisch: beide Chips haengen an denselben
-# Leitungen (MCLK/BCLK/LRCLK). Ein BCLK kann nicht gleichzeitig 48 kHz und
-# 16 kHz takten, egal was die Software will.
+# ESPHome vergibt den Bus per Mutex exklusiv, und die laufende Seite haelt
+# ihn, solange sie laeuft -- nicht nur zur Einrichtung. Der Konflikt ist auch
+# physikalisch: beide Chips haengen an denselben Leitungen (MCLK/BCLK/LRCLK).
+# Ein BCLK kann nicht gleichzeitig 48 kHz und 16 kHz takten.
 #
 #   Wiedergabe (ES8311) : 48 kHz  -> taugt fuer Musik
 #   Aufnahme   (ES7210) : 16 kHz  -> Norm fuer Sprachassistenten
 #
-# Zur Loesung muss entschieden werden, was Vorrang hat: dauerhaftes Wakeword
-# oder dauerhaft bereite Musikausgabe. Beides gleichzeitig gibt die
-# Verdrahtung nicht her.
+# Bis 2026-09 lief micro_wake_word ab dem API-Connect dauerhaft; der
+# Lautsprecher bekam den Bus nie und meldete im Sekundentakt "Parent bus is
+# busy" (Log vom 2026-07-31). Jetzt wechseln beide Seiten ab, nach dem Muster
+# der ESPHome-Referenz fuer die S3-Box-3 (gleiches Chip-Paar an einem Bus):
+#
+#   - Musik oder Ansage startet, HA meldet den Voice Assistant ab: Script
+#     wake_word_pause stoppt micro_wake_word, das Mikrofon gibt den Bus frei.
+#   - Wiedergabe endet oder pausiert, Voice Assistant fertig, HA abonniert
+#     den Voice Assistant: Script wake_word_resume wartet, bis der
+#     I2S-Lautsprecher gestoppt ist, und startet micro_wake_word wieder,
+#     sofern HA den Voice Assistant abonniert hat.
+#
+# Die Connect-Hooks haengen am voice_assistant, nicht am api: Dessen
+# on_client_connected feuert fuer jeden API-Client, auch fuer Log-Clients.
+# Die api-Trigger in pv-dashboard.yaml duerfen micro_wake_word daher nicht
+# direkt starten oder stoppen.
+#
+# Folge (Entscheidung 2026-09-11): Solange Musik laeuft, ist das Wakeword aus.
+# Beim Start einer Wiedergabe kann einmal "Parent bus is busy" erscheinen;
+# der Lautsprecher versucht es nach 1 s erneut.
+#
+# Bekannte Grenzen (Fehler in ESPHome selbst, im YAML nicht loesbar, 9.0b3):
+#   - Meldet HA den Voice Assistant ab, waehrend er noch auf das Mikrofon
+#     wartet (STARTING_MICROPHONE), stoppt er seine Mikrofon-Quelle nicht.
+#     Das Mikrofon haelt den Bus dann bis zum Neustart: Musik haengt, das
+#     Wakeword bleibt aus. Dasselbe, wenn der Pipeline-Start an HA scheitert.
+#   - Eine Anschlussfrage (continue_conversation) waehrend laufender Musik
+#     wartet mit dem Zuhoeren, bis die Musik endet oder eine Pause von mehr
+#     als 500 ms zwischen zwei Titeln den Bus freigibt.
 #
 # Es sind zwei getrennte Chips, also gibt es immerhin keinen Konflikt bei der
 # I2C-Konfiguration der Codecs.
@@ -76,6 +93,8 @@ speaker:
     num_channels: 1
     # Grosszuegig gewaehlt: faengt Netzwerk-Jitter ab, damit TTS nicht abreisst.
     buffer_duration: 1000ms
+    # Kein "timeout: never": Der Halbduplex-Wechsel (siehe Kopf) braucht die
+    # Freigabe des Busses nach 500 ms ohne Daten (Default).
 
   # Musik und Ansagen brauchen jeweils einen eigenen Speaker -- der Mixer legt
   # beide Quellen auf den einen physischen Ausgang. Waehrend einer Ansage wird
@@ -114,6 +133,17 @@ media_player:
       format: FLAC
       sample_rate: 48000
       num_channels: 1
+    # Halbduplex (siehe Kopf). Die Trigger feuern auch bei Lautstaerke-
+    # Aenderungen erneut; beide Scripts vertragen das.
+    on_play:
+      - script.execute: wake_word_pause
+    on_announcement:
+      - script.execute: wake_word_pause
+    on_idle:
+      - script.execute: wake_word_resume
+    # Pausierte Musik liefert keine Daten, der Lautsprecher gibt den Bus frei.
+    on_pause:
+      - script.execute: wake_word_resume
 
 # --- Aufnahme ---------------------------------------------------------------
 audio_adc:
@@ -140,7 +170,8 @@ microphone:
 
 # --- Wakeword (laeuft auf dem Geraet, nicht in HA) --------------------------
 micro_wake_word:
-  id: wake_word
+  # Nicht "wake_word": so heisst schon der Parameter von on_wake_word_detected.
+  id: mww
   microphone:
     microphone: onboard_mic
     channels: 0
@@ -155,6 +186,15 @@ micro_wake_word:
   vad:
   # Wakeword-Modelle und Tensor-Arena ins PSRAM.
   task_stack_in_psram: true
+  # Eine Erkennung loest nur diesen Trigger aus; danach stoppt micro_wake_word
+  # von selbst (stop_after_detection) bis zum naechsten wake_word_resume.
+  on_wake_word_detected:
+    - voice_assistant.start:
+        wake_word: !lambda return wake_word;
+    # Sicherheitsnetz: Startet die Pipeline gar nicht (z. B. kein API-Client
+    # verbunden), kaeme weder on_end noch on_error -- das Wakeword bliebe
+    # sonst aus.
+    - script.execute: wake_word_resume
 
 # --- Voice Assistant --------------------------------------------------------
 voice_assistant:
@@ -164,14 +204,24 @@ voice_assistant:
     channels: 0
     gain_factor: 4
   media_player: onboard_media_player
-  # Wakeword-Erkennung on-device; startet die Pipeline automatisch.
-  micro_wake_word: wake_word
+  # Meldet HA nur die Liste der Wakewords. Gestartet wird die Pipeline in
+  # micro_wake_word: on_wake_word_detected.
+  micro_wake_word: mww
   use_wake_word: false
   # 0 = aus, 4 = maximal. Bei 2 werden entfernte Sprecher noch erkannt.
   # Wenn Rufe quer durch den Raum verschluckt werden: auf 0 stellen.
   noise_suppression_level: 2
   auto_gain: 31dBFS
   volume_multiplier: 2.0
+
+  # Halbduplex (siehe Kopf): Diese Trigger feuern nur, wenn HA den Voice
+  # Assistant abonniert bzw. abmeldet -- nicht fuer Log-Clients. Eine
+  # laufende Sitzung raeumt der Voice Assistant beim Abmelden in der Regel
+  # selbst ab; Ausnahme siehe "Bekannte Grenzen" im Kopf.
+  on_client_connected:
+    - script.execute: wake_word_resume
+  on_client_disconnected:
+    - script.execute: wake_word_pause
 
   # --- Rueckmeldung auf dem Display ----------------------------------------
   # Die Label-IDs kommen aus dem Display-Package.
@@ -204,6 +254,8 @@ voice_assistant:
         id: lbl_assist_response
         text: !lambda return x;
   on_end:
+    # Wakeword wieder scharf schalten; das Script wartet selbst auf den Bus.
+    - script.execute: wake_word_resume
     - lvgl.label.update:
         id: lbl_assist_status
         text: "Bereit"
@@ -211,8 +263,76 @@ voice_assistant:
     - delay: 6s
     - lvgl.widget.hide: voice_panel
   on_error:
+    # Manche Fehler beenden die Pipeline ohne on_end.
+    - script.execute: wake_word_resume
     - lvgl.label.update:
         id: lbl_assist_status
         # Blockform noetig: ein ": " im einzeiligen Lambda bricht das YAML.
         text: !lambda |-
           return "Fehler: " + code;
+
+# --- Halbduplex-Wechsel (siehe Kopf) ----------------------------------------
+script:
+  # Wiedergabe startet: Das Mikrofon muss den I2S-Bus freigeben.
+  - id: wake_word_pause
+    mode: restart
+    then:
+      # Einen noch wartenden Neustart verwerfen.
+      - script.stop: wake_word_resume
+      - micro_wake_word.stop:
+      # Ein eben erst angefordertes micro_wake_word.start gilt noch als
+      # gestoppt und ueberhoert das erste stop -- kurz darauf nachfassen.
+      - delay: 250ms
+      - micro_wake_word.stop:
+
+  # Wiedergabe und Voice Assistant fertig: Das Mikrofon holt den Bus zurueck.
+  # mode restart: Das juengste Ereignis gewinnt und startet die Wartezeit neu.
+  # Bei single wuerde ein zweiter Aufruf ignoriert und ginge verloren.
+  - id: wake_word_resume
+    mode: restart
+    then:
+      # Laufende Zustandswechsel abwarten (nach einer Erkennung stoppt
+      # micro_wake_word erst im naechsten Loop). Muss laenger sein als das
+      # Nachfassen in wake_word_pause.
+      - delay: 500ms
+      # Der Bus ist erst frei, wenn der I2S-Lautsprecher ganz gestoppt ist;
+      # "not speaker.is_playing" gilt schon waehrend STOPPING. Der Timeout
+      # verhindert ein ewiges Warten -- endet die Wiedergabe spaeter, startet
+      # on_idle bzw. on_end das Script ohnehin neu.
+      - wait_until:
+          condition:
+            and:
+              - speaker.is_stopped: onboard_speaker
+              - not:
+                  media_player.is_playing: onboard_media_player
+              - not:
+                  media_player.is_announcing: onboard_media_player
+              - not:
+                  voice_assistant.is_running:
+          timeout: 60s
+      # micro_wake_word gilt auch waehrend STOPPING als laufend und ueberhoert
+      # dann start -- einen laufenden Stopp abwarten. Laeuft es regulaer,
+      # verstreicht nur der Timeout, und das if unten startet nichts.
+      - wait_until:
+          condition:
+            not:
+              micro_wake_word.is_running:
+          timeout: 2s
+      # Nach einem Timeout gelten die Bedingungen oben evtl. nicht -- pruefen.
+      - if:
+          condition:
+            and:
+              # Nur mit Voice-Abo durch HA; api.connected gilt auch, wenn nur
+              # ein Log-Client verbunden ist.
+              - voice_assistant.connected:
+              - not:
+                  micro_wake_word.is_running:
+              - speaker.is_stopped: onboard_speaker
+              - not:
+                  media_player.is_playing: onboard_media_player
+              - not:
+                  media_player.is_announcing: onboard_media_player
+              - not:
+                  voice_assistant.is_running:
+          then:
+            - micro_wake_word.start:

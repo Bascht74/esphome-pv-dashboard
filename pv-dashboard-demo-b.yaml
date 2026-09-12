@@ -1,0 +1,256 @@
+##############################################################################
+# Demo: die beiden Kennlinien im direkten Vergleich
+#
+#   esphome run pv-dashboard-demo-b.yaml
+#
+# LINKS (gold) zwei Potenzabschnitte mit Knick bei 500 W:
+#                50..500 W   T = 16 / (W/50)^0,30103   -> 500 W ergibt 8,00 s
+#                ab 500 W    T =  8 / (W/500)^0,48945  -> 35 kW ergibt 1,00 s
+#              Beide Abschnitte treffen sich bei 500 W auf denselben Wert; es
+#              knickt nur die Steigung, der Wert springt nicht. Deshalb ist der
+#              Uebergang nicht zu sehen. Ueber 35 kW wird bei 1 s geklemmt --
+#              genau wie die lineare Kennlinie rechts, nur eben erst dort.
+#
+# RECHTS (blau) linear, wie sunsynk-power-flow-card:
+#              dur = animation_speed - (animation_speed - 1) * (W / max_power)
+#              mit animation_speed 9 s, max_power 8000 W, geklemmt bei 1 s.
+#              Belegt in src/index.ts:1952-1958, gegengeprueft im Bundle v7.3.3.
+#
+# Jede Leistungsstufe laeuft auf drei Laengen (90/200/340 px). Die Umlaufzeit
+# folgt in erster Linie der Leistung, wird aber mit (L/340)^0,25 an die Laenge
+# angepasst: Kurze Strecken laufen etwas schneller um, weil die Kugel dort
+# sonst traege wirkt -- sie legt ja kaum Weg zurueck. Die laengste Strecke
+# bleibt unveraendert. Faktoren: 90 px -> 0,72, 200 px -> 0,88, 340 px -> 1,00.
+#
+# Die beiden oberen Stufen zeigen, warum linear hier nicht taugt: ab 8.000 W
+# klemmt sie bei 1 s, 15.000 und 35.000 W sind dort nicht mehr zu
+# unterscheiden. Links bleiben 2,69 und 2,39 s -- ein sichtbarer Abstand.
+##############################################################################
+
+substitutions:
+  col_bg: "0x0E141B"
+  col_line: "0x51698A"
+  col_ink: "0xFFFFFF"
+  col_ink3: "0xC3D1DD"
+  col_solar: "0xF5B33C"
+  col_batt: "0x45C6D6"
+
+esphome:
+  name: flow-demo-b
+  friendly_name: "Kennlinien-Vergleich"
+  min_version: 2026.7.0
+host:
+logger:
+  level: INFO
+display:
+  - platform: sdl
+    id: main_display
+    dimensions: { width: 920, height: 710 }
+touchscreen:
+  - platform: sdl
+    id: main_touchscreen
+font:
+  - file: "gfonts://IBM+Plex+Sans@400"
+    id: f_small
+    size: 13
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://IBM+Plex+Sans@600"
+    id: f_head
+    size: 15
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+
+lvgl:
+  displays: [main_display]
+  touchscreens: [main_touchscreen]
+  bg_color: $col_bg
+  text_color: $col_ink
+  text_font: f_small
+  style_definitions:
+    - id: st_dot
+      width: 10
+      height: 10
+      radius: CIRCLE
+      bg_opa: COVER
+      border_width: 0
+      pad_all: 0
+  pages:
+    - id: page_demo
+      bg_color: $col_bg
+      scrollable: false
+      widgets:
+        - label: { x: 96, y: 12, text: "zweiteilig   16 s bei 50 W, 8 s bei 500 W, 1 s bei 35 kW", text_color: $col_solar, text_font: f_head }
+        - label: { x: 512, y: 12, text: "linear   9 - 8 x W/8000, ab 8 kW bei 1 s", text_color: $col_batt, text_font: f_head }
+        - obj:
+            id: area
+            x: 0
+            y: 26
+            width: 920
+            height: 650
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            scrollable: false
+            scroll_dir: NONE
+            widgets:
+              - label: { x: 8, y: 52, text: "50 W", text_color: $col_ink, text_font: f_head }
+              - label: { x: 8, y: 178, text: "500 W", text_color: $col_ink, text_font: f_head }
+              - label: { x: 8, y: 304, text: "5.000 W", text_color: $col_ink, text_font: f_head }
+              - label: { x: 8, y: 430, text: "15.000 W", text_color: $col_ink, text_font: f_head }
+              - label: { x: 8, y: 556, text: "35.000 W", text_color: $col_ink, text_font: f_head }
+              - line: { points: [[96,60],[186,60]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d000, styles: st_dot, x: 91, y: 55, bg_color: $col_solar, scrollable: false }
+              - label: { id: t000, x: 194, y: 51, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,60],[602,60]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d100, styles: st_dot, x: 507, y: 55, bg_color: $col_batt, scrollable: false }
+              - label: { id: t100, x: 610, y: 51, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,102],[296,102]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d001, styles: st_dot, x: 91, y: 97, bg_color: $col_solar, scrollable: false }
+              - label: { id: t001, x: 304, y: 93, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,102],[712,102]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d101, styles: st_dot, x: 507, y: 97, bg_color: $col_batt, scrollable: false }
+              - label: { id: t101, x: 720, y: 93, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,144],[436,144]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d002, styles: st_dot, x: 91, y: 139, bg_color: $col_solar, scrollable: false }
+              - label: { id: t002, x: 444, y: 135, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,144],[852,144]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d102, styles: st_dot, x: 507, y: 139, bg_color: $col_batt, scrollable: false }
+              - label: { id: t102, x: 860, y: 135, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,186],[186,186]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d003, styles: st_dot, x: 91, y: 181, bg_color: $col_solar, scrollable: false }
+              - label: { id: t003, x: 194, y: 177, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,186],[602,186]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d103, styles: st_dot, x: 507, y: 181, bg_color: $col_batt, scrollable: false }
+              - label: { id: t103, x: 610, y: 177, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,228],[296,228]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d004, styles: st_dot, x: 91, y: 223, bg_color: $col_solar, scrollable: false }
+              - label: { id: t004, x: 304, y: 219, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,228],[712,228]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d104, styles: st_dot, x: 507, y: 223, bg_color: $col_batt, scrollable: false }
+              - label: { id: t104, x: 720, y: 219, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,270],[436,270]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d005, styles: st_dot, x: 91, y: 265, bg_color: $col_solar, scrollable: false }
+              - label: { id: t005, x: 444, y: 261, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,270],[852,270]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d105, styles: st_dot, x: 507, y: 265, bg_color: $col_batt, scrollable: false }
+              - label: { id: t105, x: 860, y: 261, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,312],[186,312]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d006, styles: st_dot, x: 91, y: 307, bg_color: $col_solar, scrollable: false }
+              - label: { id: t006, x: 194, y: 303, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,312],[602,312]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d106, styles: st_dot, x: 507, y: 307, bg_color: $col_batt, scrollable: false }
+              - label: { id: t106, x: 610, y: 303, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,354],[296,354]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d007, styles: st_dot, x: 91, y: 349, bg_color: $col_solar, scrollable: false }
+              - label: { id: t007, x: 304, y: 345, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,354],[712,354]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d107, styles: st_dot, x: 507, y: 349, bg_color: $col_batt, scrollable: false }
+              - label: { id: t107, x: 720, y: 345, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,396],[436,396]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d008, styles: st_dot, x: 91, y: 391, bg_color: $col_solar, scrollable: false }
+              - label: { id: t008, x: 444, y: 387, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,396],[852,396]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d108, styles: st_dot, x: 507, y: 391, bg_color: $col_batt, scrollable: false }
+              - label: { id: t108, x: 860, y: 387, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,438],[186,438]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d009, styles: st_dot, x: 91, y: 433, bg_color: $col_solar, scrollable: false }
+              - label: { id: t009, x: 194, y: 429, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,438],[602,438]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d109, styles: st_dot, x: 507, y: 433, bg_color: $col_batt, scrollable: false }
+              - label: { id: t109, x: 610, y: 429, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,480],[296,480]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d010, styles: st_dot, x: 91, y: 475, bg_color: $col_solar, scrollable: false }
+              - label: { id: t010, x: 304, y: 471, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,480],[712,480]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d110, styles: st_dot, x: 507, y: 475, bg_color: $col_batt, scrollable: false }
+              - label: { id: t110, x: 720, y: 471, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,522],[436,522]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d011, styles: st_dot, x: 91, y: 517, bg_color: $col_solar, scrollable: false }
+              - label: { id: t011, x: 444, y: 513, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,522],[852,522]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d111, styles: st_dot, x: 507, y: 517, bg_color: $col_batt, scrollable: false }
+              - label: { id: t111, x: 860, y: 513, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,564],[186,564]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d012, styles: st_dot, x: 91, y: 559, bg_color: $col_solar, scrollable: false }
+              - label: { id: t012, x: 194, y: 555, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,564],[602,564]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d112, styles: st_dot, x: 507, y: 559, bg_color: $col_batt, scrollable: false }
+              - label: { id: t112, x: 610, y: 555, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,606],[296,606]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d013, styles: st_dot, x: 91, y: 601, bg_color: $col_solar, scrollable: false }
+              - label: { id: t013, x: 304, y: 597, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,606],[712,606]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d113, styles: st_dot, x: 507, y: 601, bg_color: $col_batt, scrollable: false }
+              - label: { id: t113, x: 720, y: 597, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[96,648],[436,648]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d014, styles: st_dot, x: 91, y: 643, bg_color: $col_solar, scrollable: false }
+              - label: { id: t014, x: 444, y: 639, text: "", text_color: $col_ink3, text_font: f_small }
+              - line: { points: [[512,648],[852,648]], line_color: $col_line, line_width: 2 }
+              - obj: { id: d114, styles: st_dot, x: 507, y: 643, bg_color: $col_batt, scrollable: false }
+              - label: { id: t114, x: 860, y: 639, text: "", text_color: $col_ink3, text_font: f_small }
+
+interval:
+  - interval: 40ms
+    then:
+      - lambda: |-
+          static const int32_t W[]   = {50,50,50,500,500,500,5000,5000,5000,15000,15000,15000,35000,35000,35000};
+          static const int16_t LEN[] = {90,200,340,90,200,340,90,200,340,90,200,340,90,200,340};
+          static const int16_t X0[]  = {96,512};
+          static float pos[2][15] = {{0}};
+          static bool beschriftet = false;
+          lv_obj_t *const dots0[15] = {
+            reinterpret_cast<lv_obj_t *>(id(d000)), reinterpret_cast<lv_obj_t *>(id(d001)), reinterpret_cast<lv_obj_t *>(id(d002)), reinterpret_cast<lv_obj_t *>(id(d003)), reinterpret_cast<lv_obj_t *>(id(d004)), reinterpret_cast<lv_obj_t *>(id(d005)),
+            reinterpret_cast<lv_obj_t *>(id(d006)), reinterpret_cast<lv_obj_t *>(id(d007)), reinterpret_cast<lv_obj_t *>(id(d008)), reinterpret_cast<lv_obj_t *>(id(d009)), reinterpret_cast<lv_obj_t *>(id(d010)), reinterpret_cast<lv_obj_t *>(id(d011)),
+            reinterpret_cast<lv_obj_t *>(id(d012)), reinterpret_cast<lv_obj_t *>(id(d013)), reinterpret_cast<lv_obj_t *>(id(d014)) };
+          lv_obj_t *const dots1[15] = {
+            reinterpret_cast<lv_obj_t *>(id(d100)), reinterpret_cast<lv_obj_t *>(id(d101)), reinterpret_cast<lv_obj_t *>(id(d102)), reinterpret_cast<lv_obj_t *>(id(d103)), reinterpret_cast<lv_obj_t *>(id(d104)), reinterpret_cast<lv_obj_t *>(id(d105)),
+            reinterpret_cast<lv_obj_t *>(id(d106)), reinterpret_cast<lv_obj_t *>(id(d107)), reinterpret_cast<lv_obj_t *>(id(d108)), reinterpret_cast<lv_obj_t *>(id(d109)), reinterpret_cast<lv_obj_t *>(id(d110)), reinterpret_cast<lv_obj_t *>(id(d111)),
+            reinterpret_cast<lv_obj_t *>(id(d112)), reinterpret_cast<lv_obj_t *>(id(d113)), reinterpret_cast<lv_obj_t *>(id(d114)) };
+          lv_obj_t *const txt0[15] = {
+            reinterpret_cast<lv_obj_t *>(id(t000)), reinterpret_cast<lv_obj_t *>(id(t001)), reinterpret_cast<lv_obj_t *>(id(t002)), reinterpret_cast<lv_obj_t *>(id(t003)), reinterpret_cast<lv_obj_t *>(id(t004)), reinterpret_cast<lv_obj_t *>(id(t005)),
+            reinterpret_cast<lv_obj_t *>(id(t006)), reinterpret_cast<lv_obj_t *>(id(t007)), reinterpret_cast<lv_obj_t *>(id(t008)), reinterpret_cast<lv_obj_t *>(id(t009)), reinterpret_cast<lv_obj_t *>(id(t010)), reinterpret_cast<lv_obj_t *>(id(t011)),
+            reinterpret_cast<lv_obj_t *>(id(t012)), reinterpret_cast<lv_obj_t *>(id(t013)), reinterpret_cast<lv_obj_t *>(id(t014)) };
+          lv_obj_t *const txt1[15] = {
+            reinterpret_cast<lv_obj_t *>(id(t100)), reinterpret_cast<lv_obj_t *>(id(t101)), reinterpret_cast<lv_obj_t *>(id(t102)), reinterpret_cast<lv_obj_t *>(id(t103)), reinterpret_cast<lv_obj_t *>(id(t104)), reinterpret_cast<lv_obj_t *>(id(t105)),
+            reinterpret_cast<lv_obj_t *>(id(t106)), reinterpret_cast<lv_obj_t *>(id(t107)), reinterpret_cast<lv_obj_t *>(id(t108)), reinterpret_cast<lv_obj_t *>(id(t109)), reinterpret_cast<lv_obj_t *>(id(t110)), reinterpret_cast<lv_obj_t *>(id(t111)),
+            reinterpret_cast<lv_obj_t *>(id(t112)), reinterpret_cast<lv_obj_t *>(id(t113)), reinterpret_cast<lv_obj_t *>(id(t114)) };
+
+          for (int i = 0; i < 15; i++) {
+            float w = W[i], l = LEN[i];
+            // links: logarithmisch, Steilheit 2 -> hundertfacher Wert 5x schneller
+            // Zwei Abschnitte, die sich bei 500 W auf 8,00 s treffen:
+            //   50..500 W    T = 16 / (W/50)^0,30103    Verzehnfachung halbiert
+            //   ab 500 W     T =  8 / (W/500)^0,48945   steiler, damit 35 kW bei 1 s landen
+            // Der Uebergang ist stetig -- es knickt nur die Steigung, der Wert
+            // springt nicht. Genau deshalb faellt der Knick nicht auf.
+            float t_log;
+            if (w <= 500.0f)
+              t_log = 16.0f / powf(fmaxf(w, 50.0f) / 50.0f, 0.30103f);
+            else
+              t_log = 8.0f / powf(w / 500.0f, 0.48945f);
+            if (t_log < 1.0f) t_log = 1.0f;
+            // rechts: linear nach sunsynk, geklemmt
+            float t_lin = 9.0f - 8.0f * (w / 8000.0f);
+            if (t_lin < 1.0f) t_lin = 1.0f;
+
+            // Laengenkorrektur: kurze Strecken laufen etwas schneller um.
+            // Bei gleicher Umlaufzeit wirkt eine kurze Linie traege, weil die
+            // Kugel kaum Weg macht. Der Exponent 0,25 staucht das -- die
+            // laengste Strecke bleibt unveraendert bei Faktor 1,0.
+            float f = powf(l / 340.0f, 0.25f);
+            float dur[2] = {t_log * f, t_lin * f};
+            for (int s = 0; s < 2; s++) {
+              pos[s][i] += l / dur[s] * 40 / 1000.0f;
+              while (pos[s][i] >= l) pos[s][i] -= l;
+              lv_obj_set_x(s ? dots1[i] : dots0[i], X0[s] + (int) pos[s][i] - 5);
+            }
+            if (!beschriftet) {
+              char b[24];
+              snprintf(b, sizeof(b), "%.1f s", t_log * powf(l / 340.0f, 0.25f));
+              lv_label_set_text(txt0[i], b);
+              snprintf(b, sizeof(b), "%.1f s", t_lin * powf(l / 340.0f, 0.25f));
+              lv_label_set_text(txt1[i], b);
+            }
+          }
+          beschriftet = true;

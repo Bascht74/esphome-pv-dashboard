@@ -7,15 +7,20 @@
 # (CONFIG_ESP_HOSTED_ENABLE_BT_BLUEDROID / ..._BLUEDROID_HCI_VHCI).
 # Der C6 kann Bluetooth 5 / BLE inklusive Coded PHY.
 #
-# WLAN und BLE teilen sich die Antenne des C6 -- unter Dauerscan kann der
-# Durchsatz beider Seiten leicht sinken. Falls WLAN instabil wird, zuerst
-# "active: false" beim Scan probieren.
+# WLAN und BLE teilen sich das Funkteil des C6. Ein Dauerscan (Fenster =
+# Intervall, frueher 1100ms/1100ms) laesst WLAN keine Luft; ab 2026.9 warnt
+# ESPHome genau davor. Deshalb scannt BLE nur 300ms von 320ms -- die Luecke
+# gehoert WLAN. Waehrend der aktive Proxy GATT-Verbindungen fuer Home
+# Assistant haelt, scannt er nur noch 30ms pro Intervall
+# (connection_scan_window), damit Verbindung und WLAN nicht verhungern.
+# Falls WLAN trotzdem instabil wird, zuerst "active: false" beim Scan probieren.
 ##############################################################################
 
 esp32_ble_tracker:
   scan_parameters:
-    interval: 1100ms
-    window: 1100ms
+    interval: 320ms
+    window: 300ms
+    connection_scan_window: 30ms
     active: true
 
 # Macht das Panel zum Bluetooth-Proxy fuer Home Assistant: BLE-Geraete in

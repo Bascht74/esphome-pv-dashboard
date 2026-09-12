@@ -21,6 +21,11 @@ time:
       - seconds: 0
         then:
           - script.execute: update_clock
+      # Zur vollen Stunde die Tagesreihe fortschreiben
+      - minutes: 0
+        seconds: 5
+        then:
+          - script.execute: record_hour
 
 sensor:
   - platform: wifi_signal

@@ -5,7 +5,12 @@
 # host-Plattform kompiliert fuer den Rechner, das sdl-Display oeffnet ein
 # Fenster, der sdl-Touchscreen macht Mausklicks zu Beruehrungen.
 #
-#   esphome run pv-dashboard-sim.yaml
+#   esphome run pv-dashboard-sim.yaml        (ab ESPHome 2026.9.0)
+#
+# F12 im Fenster speichert das aktuelle Bild als BMP (Name mit Zeitstempel)
+# unter .esphome/snapshots/pv-dashboard-sim/; die Umgebungsvariable
+# ESPHOME_SNAPSHOT_DIR lenkt es in einen anderen Ordner. Alle Seiten auf
+# einmal und ohne Fenster: pv-dashboard-shots.yaml.
 #
 # Oberflaeche, Schriften und Farben kommen aus denselben Packages wie beim
 # echten Panel. Wer hier etwas aendert, aendert es dort mit.
@@ -23,7 +28,7 @@ esphome:
   name: "${devicename}"
   friendly_name: "${upper_devicename}"
   comment: "${device_description}"
-  min_version: 2026.7.0
+  min_version: 2026.9.0
 
 host:
 
@@ -34,6 +39,9 @@ logger:
 display:
   - platform: sdl
     id: main_display
+    # F12 = Screenshot. ESPHome 2026.9 meldet beim Pruefen, dass es den Wert
+    # wegen "_key" im Namen schwaerzt -- nur Kosmetik der Config-Ausgabe.
+    snapshot_key: SDLK_F12
     dimensions:
       width: 1280
       height: 800
@@ -56,6 +64,11 @@ time:
       - seconds: 0
         then:
           - script.execute: update_clock
+      # Zur vollen Stunde die Tagesreihe fortschreiben
+      - minutes: 0
+        seconds: 5
+        then:
+          - script.execute: record_hour
 
 packages:
   tokens: !include .pv-dashboard_tokens.yaml

@@ -40,6 +40,14 @@ font:
     size: 13
     bpp: 4
     glyphsets: [GF_Latin_Core]
+    # Zwei Pfeile aus Material Design Icons mitten im Fliesstext:
+    #   \U000F005D  arrow-up    Entladen -- Energie verlaesst den Speicher
+    #   \U000F0045  arrow-down  Laden    -- Energie geht hinein
+    extras:
+      - file:
+          type: web
+          url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+        glyphs: ["\U000F005D", "\U000F0045"]
   - file: "gfonts://IBM+Plex+Sans@600"
     id: f_label
     size: 13
@@ -53,6 +61,19 @@ font:
   - file: "gfonts://IBM+Plex+Sans@400"
     id: f_text
     size: 17
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+
+  # --- Kopfzeile: gross und halbfett, aus jeder Entfernung lesbar -------
+  - file: "gfonts://IBM+Plex+Sans@600"
+    id: f_bar
+    size: 22
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  # --- Meldungszeile: 4 px groesser als der bisherige Fliesstext --------
+  - file: "gfonts://IBM+Plex+Sans@400"
+    id: f_alert
+    size: 19
     bpp: 4
     glyphsets: [GF_Latin_Core]
 

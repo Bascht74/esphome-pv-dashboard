@@ -1,0 +1,197 @@
+##############################################################################
+# Screenshots: alle Seiten der Oberflaeche als Bild, ohne Fenster
+#
+# Wofuer: Punkt 7 der LVGL-Layout-Checkliste -- das Rendering nach jeder
+# Layoutaenderung wirklich ansehen. "esphome config" findet weder
+# abgeschnittene Zeilen noch Ueberlappungen, die zeigen sich nur im Bild.
+#
+#   esphome run pv-dashboard-shots.yaml        (ab ESPHome 2026.9.0)
+#
+# Baut den Simulator (pv-dashboard-sim.yaml, hier als Package eingebunden)
+# mit headless-Display: Es oeffnet sich kein Fenster. Das Programm zeigt
+# nacheinander alle sieben Seiten -- der passende Reiter unten ist dabei
+# markiert -- und die beiden Overlays Sprachassistent und Firmware-Update,
+# legt jedes Bild als BMP ab und beendet sich dann selbst.
+#
+# Die Bilder landen in shots/ unterhalb des Verzeichnisses, aus dem der
+# Befehl gestartet wird -- also im Projektordner starten. snapshot.take nimmt
+# nur einen Dateinamen (ein "/" wird zu "_"); den Ordner liefert die
+# Umgebungsvariable ESPHOME_SNAPSHOT_DIR. on_boot setzt sie auf "shots",
+# sofern sie nicht schon von aussen gesetzt ist, und ESPHome legt den Ordner
+# selbst an. snapshot.take ueberschreibt nie -- Bilder gleichen Namens aus
+# einem frueheren Lauf loescht shots_take deshalb vorher.
+##############################################################################
+
+substitutions:
+  upper_devicename: PV-Dashboard Screenshots
+  devicename: pv-dashboard-shots
+  device_description: "Headless-Screenshots aller Seiten"
+
+# Alles vom Simulator: host, Zeit, Packages (tokens, fonts, ui). Die Eintraege
+# unten ergaenzen bzw. entfernen nur, was headless anders sein muss.
+packages:
+  sim: !include pv-dashboard-sim.yaml
+
+esphome:
+  on_boot:
+    # Nach dem Aufbau der Oberflaeche; LVGL braucht einige Durchlaeufe, bis
+    # Schriften und Seiten stehen.
+    priority: -100
+    then:
+      # snapshot.take liest die Variable bei jedem Bild neu; 0 = eine von
+      # aussen gesetzte Variable hat Vorrang.
+      - lambda: 'setenv("ESPHOME_SNAPSHOT_DIR", "shots", 0);'
+      - delay: 3s
+      - script.execute: shots_run
+
+logger:
+  level: INFO
+
+# Headless zeichnet in den Speicher statt in ein Fenster. Ohne Fenster keine
+# Tastatur: Den F12-Schluessel des Simulators lehnt ESPHome hier ab.
+display:
+  - id: !extend main_display
+    headless: true
+    snapshot_key: !remove
+
+# Ohne Fenster auch keine Maus -- ESPHome lehnt den sdl-Touchscreen headless
+# ab. Die Zuordnung im ui-Package (lvgl.touchscreens) muss mit weg.
+touchscreen: !remove
+
+lvgl:
+  touchscreens: !remove
+
+script:
+  # Alle Reiter abwaehlen, danach setzt shots_run den passenden. Wie beim
+  # on_idle-Rueckfall: one_checked raeumt nur beim Antippen auf.
+  - id: shots_nav_clear
+    then:
+      - lvgl.matrix.button.update:
+          id: [btn_nav_overview, btn_nav_pv, btn_nav_battery, btn_nav_wallbox,
+               btn_nav_heatpump, btn_nav_house, btn_nav_alerts]
+          control:
+            checked: false
+
+  # Ein Bild: warten, bis LVGL neu gezeichnet hat, Datei aus einem frueheren
+  # Lauf entfernen, aufnehmen.
+  - id: shots_take
+    parameters:
+      name: string
+    then:
+      - delay: 500ms
+      - lambda: |-
+          std::string path = std::string(getenv("ESPHOME_SNAPSHOT_DIR")) + "/" + name;
+          std::remove(path.c_str());
+      - snapshot.take:
+          id: main_display
+          filename: !lambda 'return name;'
+
+  - id: shots_run
+    then:
+      # Uhr sofort fuellen, sonst steht bis zur naechsten vollen Minute --:--
+      - script.execute: update_clock
+
+      # Beispieldaten, damit Meldungen, Speicher und die Meldungszeile nicht
+      # leer auf den Bildern stehen -- nur hier, nie im Geraet. Aelteste
+      # Meldung zuerst: jede neue rutscht oben in die Liste.
+      - script.execute: { id: alert_push, severity: 0, device: "Nilan WP", text: "Filterwechsel in 14 Tagen fällig" }
+      - script.wait: alert_push
+      # Auf gestern zurueckdatieren, damit auch das Datumsformat auf dem Bild
+      # ist (Zeitstempel im user_data der Zeile, siehe alert_push).
+      - lambda: |-
+          lv_obj_t *row = lv_obj_get_child(id(alert_list), 0);
+          uint32_t ts = (uint32_t) (uintptr_t) lv_obj_get_user_data(row);
+          if (ts >= 1000000000u)   // nur eine echte Uhrzeit, keine Laufzeit
+            lv_obj_set_user_data(row, (void *) (uintptr_t) (ts - 26 * 3600));
+      - script.execute: { id: alert_push, severity: 1, device: "Speicher 2", text: "Zelldifferenz 182 mV – Balancing aktiv, Ladeleistung bis zum Ausgleich auf 50 % begrenzt" }
+      - script.execute: { id: alert_push, severity: 0, device: "Co-Prozessor", text: "Firmware 2.12.12 verfügbar (installiert: 2.12.9)" }
+      - script.execute: { id: alert_push, severity: 1, device: "DEYE 10 kW · Slave", text: "String 4: Leistung 38 % unter Prognose" }
+      - script.execute: { id: alert_push, severity: 2, device: "Wallbox 1", text: "Fehlerstrom erkannt (RCD 6 mA DC) – Ladevorgang abgebrochen" }
+      - script.wait: alert_push
+      # Die Speicher-Warnung (Zeile 3 von 0..4) gilt als quittiert
+      - script.execute: { id: alert_ack, row: 3 }
+      - script.execute: { id: storage_update, bat: 0, soc: 72, current: 12.4, cell_min: 3.281, cell_max: 3.302, temp_min: 18, temp_max: 21, cycles: 412 }
+      - script.execute: { id: storage_update, bat: 1, soc: 38, current: -8.9, cell_min: 3.195, cell_max: 3.377, temp_min: 19, temp_max: 24, cycles: 398 }
+      - script.execute: { id: storage_update, bat: 2, soc: 100, current: 0.0, cell_min: 3.402, cell_max: 3.411, temp_min: 17, temp_max: 19, cycles: 1287 }
+      # Beispielkurven fuer die Kachel Tagesertrag (Ist und Prognose). Das ui-
+      # Package startet mit 16 x 0; publish_state speichert nicht im NVS.
+      - lambda: |-
+          id(day_curve).publish_state("0.3,1.2,3.5,7.1,11.8,16.2,19.4,21,20.3,17.6,13.2,8.4,4.6,1.9,0.5,0");
+          id(forecast_curve).publish_state("0.4,1.5,4,7.8,12.5,17,20.1,21.6,21,18.4,14,9,5,2.1,0.6,0");
+      # Zweitzeile des Speicherkastens mit zweistelligen Tageswerten, damit
+      # die Breite (176, jeder Wert mit Einheit) mit auf dem Bild ist.
+      - lvgl.label.update:
+          id: sub_battery_total
+          text: "W · \U000F004512,3 kWh · \U000F005D18,5 kWh"
+
+      - script.execute: { id: shots_take, name: 01_overview.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_pv
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_pv, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 02_pv.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_battery
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_battery, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 03_battery.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_wallbox
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_wallbox, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 04_wallbox.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_heatpump
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_heatpump, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 05_heatpump.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_house
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_house, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 06_house.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_alerts
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_alerts, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 07_alerts.bmp }
+      - script.wait: shots_take
+
+      # Overlays im top_layer, wie im Betrieb ueber der Uebersicht. Die Texte
+      # sind Beispiele, damit Umbruch und Ueberlauf mit auf dem Bild sind.
+      - lvgl.page.show: page_overview
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_overview, control: { checked: true } }
+      - lvgl.label.update:
+          id: lbl_assist_status
+          text: "Antworte …"
+      - lvgl.label.update:
+          id: lbl_assist_request
+          text: "Wie viel hat die PV-Anlage heute erzeugt und wie viel davon wurde direkt im Haus verbraucht?"
+      - lvgl.label.update:
+          id: lbl_assist_response
+          text: "Heute wurden bisher 23,4 kWh erzeugt, davon 17,9 kWh selbst verbraucht. Der Speicher ist zu 72 % geladen, bis zum Abend werden noch etwa 6 kWh erwartet. Die Wallbox 1 meldet einen Fehlerstrom."
+      - lvgl.widget.show: voice_panel
+      - script.execute: { id: shots_take, name: 08_voice_panel.bmp }
+      - script.wait: shots_take
+      - lvgl.widget.hide: voice_panel
+
+      - lvgl.bar.update:
+          id: bar_ota
+          value: 42
+      - lvgl.label.update:
+          id: lbl_ota_pct
+          text: "42"
+      - lvgl.widget.show: ota_panel
+      - script.execute: { id: shots_take, name: 09_ota_panel.bmp }
+      - script.wait: shots_take
+      - lvgl.widget.hide: ota_panel
+
+      - delay: 200ms
+      - lambda: 'exit(0);'

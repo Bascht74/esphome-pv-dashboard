@@ -1,0 +1,175 @@
+##############################################################################
+# Demo: Flussrichtung auf Leitungen -- drei Varianten nebeneinander
+#
+#   esphome run pv-dashboard-demo.yaml
+#
+# Laeuft nur auf dem Rechner (SDL-Fenster), beruehrt die Dashboard-Dateien
+# nicht. Zweck: die Bewegungsmuster einmal in echt sehen, bevor 28 Leitungen
+# umgebaut werden.
+#
+# Zum Flaechenbudget (der begrenzende Faktor):
+#   LVGL merkt sich je Bild hoechstens 32 ungueltige Flaechen
+#   (LV_INV_BUF_SIZE). Laeuft der Puffer ueber, wird der ganze Schirm neu
+#   gezeichnet -- auf 1280x800 sind das 2 MB je Bild.
+#   Bei 16 ms Refresh-Periode (62,5 Bilder/s) verteilt sich das aber ueber
+#   die Zeit: Ein Punkt, der alle 100 ms springt, belegt nur jedes sechste
+#   Bild zwei Flaechen. 28 Leitungen kommen so auf rund 9 Flaechen je Bild.
+##############################################################################
+
+substitutions:
+  col_bg: "0x0E141B"
+  col_surface: "0x16202B"
+  col_ink: "0xFFFFFF"
+  col_ink3: "0xC3D1DD"
+  col_solar: "0xF5B33C"
+  col_batt: "0x45C6D6"
+  col_feed: "0x5CC98A"
+
+esphome:
+  name: flow-demo
+  friendly_name: "Flussrichtung-Demo"
+  min_version: 2026.7.0
+
+host:
+
+logger:
+  level: INFO
+
+display:
+  - platform: sdl
+    id: main_display
+    dimensions:
+      width: 900
+      height: 420
+
+touchscreen:
+  - platform: sdl
+    id: main_touchscreen
+
+font:
+  - file: "gfonts://IBM+Plex+Sans@400"
+    id: f_text
+    size: 15
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://IBM+Plex+Sans@600"
+    id: f_head
+    size: 17
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  # Fuer Variante C: ein Dreieck aus Material Design Icons.
+  #   \U000F0142  chevron-right
+  - file: "gfonts://IBM+Plex+Sans@400"
+    id: f_arrow
+    size: 20
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+    extras:
+      - file:
+          type: web
+          url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+        glyphs: ["\U000F0142"]
+
+# Variante B schaltet drei feste Punkte reihum. Der Zaehler merkt sich, welcher
+# gerade dran ist.
+globals:
+  - id: phase_b
+    type: int
+    restore_value: false
+    initial_value: '0'
+
+lvgl:
+  displays: [main_display]
+  touchscreens: [main_touchscreen]
+  bg_color: $col_bg
+  text_color: $col_ink
+  text_font: f_text
+
+  style_definitions:
+    - id: st_dot
+      width: 10
+      height: 10
+      radius: CIRCLE
+      bg_opa: COVER
+      border_width: 0
+      pad_all: 0
+
+  # --- Variante A: ein Punkt wandert die Linie entlang --------------------
+  # Der animations-Block ist Teil von ESPHome; from/to gelten je Widget und
+  # je Eigenschaft. x und y werden unabhaengig linear interpoliert -- fuer
+  # eine Gerade genau richtig, fuer Knicke braeuchte es je Segment eine
+  # eigene Animation.
+  animations:
+    - id: anim_a
+      duration: 2500ms
+      loop: true
+      auto_start: true
+      widgets:
+        - id: dot_a
+          x: { from: 60, to: 640 }
+
+  pages:
+    - id: page_demo
+      bg_color: $col_bg
+      scrollable: false
+      widgets:
+        - label: { x: 20, y: 12, text: "Flussrichtung -- drei Varianten", text_font: f_head }
+
+        # ---------------- A: wandernder Punkt --------------------------
+        - label: { x: 20, y: 52, text: "A  ein Punkt wandert (animations, 2,5 s je Durchlauf)", text_color: $col_ink3 }
+        - line: { points: [[60,92],[640,92]], line_color: $col_solar, line_width: 3, line_rounded: true }
+        - obj: { id: dot_a, styles: st_dot, x: 60, y: 87, bg_color: $col_solar, scrollable: false }
+        - label: { x: 660, y: 84, text: "2 Flächen\nje Schritt", text_color: $col_ink3 }
+
+        # ---------------- B: drei Punkte reihum ------------------------
+        - label: { x: 20, y: 142, text: "B  drei feste Punkte leuchten reihum (Phi-Phänomen, 220 ms)", text_color: $col_ink3 }
+        - line: { points: [[60,182],[640,182]], line_color: $col_batt, line_width: 3, line_rounded: true }
+        - obj: { id: dot_b0, styles: st_dot, x: 160, y: 177, bg_color: $col_batt, scrollable: false }
+        - obj: { id: dot_b1, styles: st_dot, x: 340, y: 177, bg_color: $col_batt, opa: 25%, scrollable: false }
+        - obj: { id: dot_b2, styles: st_dot, x: 520, y: 177, bg_color: $col_batt, opa: 25%, scrollable: false }
+        - label: { x: 660, y: 174, text: "2 Flächen\nje Schritt", text_color: $col_ink3 }
+
+        # ---------------- C: Pfeilspitze statt Punkt -------------------
+        - label: { x: 20, y: 232, text: "C  Pfeilspitze wandert -- zeigt die Richtung auch im Stillstand", text_color: $col_ink3 }
+        - line: { points: [[60,272],[640,272]], line_color: $col_feed, line_width: 3, line_rounded: true }
+        - label: { id: dot_c, x: 60, y: 260, text: "\U000F0142", text_font: f_arrow, text_color: $col_feed }
+        - label: { x: 660, y: 264, text: "2 Flächen\nje Schritt", text_color: $col_ink3 }
+
+        # ---------------- Fussnote -------------------------------------
+        - label:
+            x: 20
+            y: 330
+            width: 860
+            long_mode: WRAP
+            text_color: $col_ink3
+            text: "Budget: 32 Flächen je Bild bei 62,5 Bildern/s. Ein Schritt alle 100 ms belegt nur jedes sechste Bild — 28 Leitungen kommen damit auf rund 9 Flächen je Bild."
+
+# --- Variante B und C werden per Intervall geschaltet ----------------------
+# B: reihum ein Punkt hell, die beiden anderen gedaempft.
+# C: die Pfeilspitze springt in Stufen weiter -- dasselbe Muster wie A, aber
+#    ohne animations-Block, dafuer mit voller Kontrolle ueber jeden Schritt
+#    (so wuerde man Knicke abfahren).
+interval:
+  - interval: 220ms
+    then:
+      - lambda: 'id(phase_b) = (id(phase_b) + 1) % 3;'
+      - lvgl.widget.update:
+          id: dot_b0
+          opa: !lambda 'return id(phase_b) == 0 ? 255 : 64;'
+      - lvgl.widget.update:
+          id: dot_b1
+          opa: !lambda 'return id(phase_b) == 1 ? 255 : 64;'
+      - lvgl.widget.update:
+          id: dot_b2
+          opa: !lambda 'return id(phase_b) == 2 ? 255 : 64;'
+
+  - interval: 100ms
+    then:
+      - lvgl.widget.update:
+          id: dot_c
+          x: !lambda |-
+            static int x = 60;
+            x += 24;
+            if (x > 630)
+              x = 60;
+            return x;

@@ -6,7 +6,11 @@
 # (pv-dashboard-sim.yaml) eingebunden -- Aenderungen wirken damit auf beiden.
 #
 # Regelwerk fuer Werte (aus dem Layoutentwurf):
-#   - Einheit steht IMMER unter dem Wert, nie dahinter
+#   - Einheit steht IMMER unter dem Wert, nie dahinter. Erlaubt ist die
+#     Zweitzeile "kW · 15,4 kWh": vorn die Einheit des Werts darueber, dann
+#     der Tageswert mit seiner eigenen Einheit
+#   - Ausnahme Statusleiste: "Autarkie 87 % · Restprognose 6,2 kWh" ist ein
+#     Satz in der Kopfzeile, dort steht die Einheit hinter dem Wert
 #   - kein Wert ohne Einheit, auch nicht bei % und °C
 #   - Momentanwert gross, Tageswert klein darunter
 #   - alle Zahlen in Mono mit Tabellenziffern
@@ -18,14 +22,17 @@ substitutions:
   # --- Flaechen ---------------------------------------------------------
   col_bg: "0x0E141B"      # Panel-Hintergrund, blaustichiges Anthrazit
   col_surface: "0x16202B" # Kacheln und Geraetekaesten
-  col_line: "0x3E5570"    # Rahmen, Haarlinien, ruhende Leitungen
+  col_line: "0x51698A"    # Rahmen, Haarlinien, ruhende Leitungen
 
   # --- Schrift ----------------------------------------------------------
-  col_ink: "0xE8EEF4"     # Primaertext und grosse Werte
-  # Aufgehellt gegenueber dem Entwurf: auf dem Panel aus zwei Metern
-  # Entfernung waren die gedaempften Toene zu schwach.
-  col_ink2: "0xCBD6DF"    # Zweitzeilen
-  col_ink3: "0xA6B8C6"    # Beschriftungen, Einheiten
+  # Zweite Aufhellung: Das Panel haengt nicht im abgedunkelten Raum, sondern
+  # im Tageslicht. Kontrast gegen col_bg (WCAG, gerechnet):
+  #   col_ink   18,6:1   col_ink2  16,4:1   col_ink3  11,9:1
+  # col_ink3 traegt Beschriftungen und Einheiten und war mit 9,1:1 der
+  # schwaechste Ton -- genau der, der draussen zuerst wegfaellt.
+  col_ink: "0xFFFFFF"     # Primaertext und grosse Werte
+  col_ink2: "0xF0F5F9"    # Zweitzeilen
+  col_ink3: "0xC3D1DD"    # Beschriftungen, Einheiten
 
   # --- Energiefarben ----------------------------------------------------
   # Leitungen werden nach QUELLE eingefaerbt, nicht nach Ziel.
@@ -38,7 +45,9 @@ substitutions:
   col_crit: "0xE8654F"    # Stoerung
 
   # --- Abstaende und Radien --------------------------------------------
-  pad_page: "20"
+  # Aussenrand 4 px. Das Panel hat einen physischen Rahmen, ein zusaetzlicher
+  # gezeichneter Rand kostet nur Flaeche, die Schema und Kacheln brauchen.
+  pad_page: "4"
   pad_tile: "10"
   gap_tile: "8"
   radius_tile: "11"
