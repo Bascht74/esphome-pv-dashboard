@@ -97,7 +97,7 @@ script:
       - script.execute: { id: alert_push, severity: 0, device: "Nilan WP", text: "Filterwechsel in 14 Tagen fällig" }
       - script.wait: alert_push
       # Auf gestern zurueckdatieren, damit auch das Datumsformat auf dem Bild
-      # ist (Zeitstempel im user_data der Zeile, siehe alert_push).
+      # ist (Zeitstempel im user_data der Zeile, setzt on_add der Liste).
       - lambda: |-
           lv_obj_t *row = lv_obj_get_child(id(alert_list), 0);
           uint32_t ts = (uint32_t) (uintptr_t) lv_obj_get_user_data(row);
@@ -123,6 +123,12 @@ script:
       - lvgl.label.update:
           id: sub_battery_total
           text: "W · \U000F004512,3 kWh · \U000F005D18,5 kWh"
+      # Ringe Autarkie und Eigenverbrauch: Den Verlauf sieht man nur, wo der
+      # Deckbogen ihn freigibt -- dessen Wert ist 100 - Anteil (100 = leer).
+      - lvgl.arc.update: { id: ring_cover_autarky, value: 13 }
+      - lvgl.arc.update: { id: ring_cover_selfuse, value: 36 }
+      - lvgl.label.update: { id: val_autarky, text: "87" }
+      - lvgl.label.update: { id: val_selfuse, text: "64" }
 
       - script.execute: { id: shots_take, name: 01_overview.bmp }
       - script.wait: shots_take

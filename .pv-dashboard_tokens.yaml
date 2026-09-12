@@ -44,6 +44,78 @@ substitutions:
   col_warn: "0xE8B83C"    # Warnung
   col_crit: "0xE8654F"    # Stoerung
 
+  # --- Verlaufstoene ----------------------------------------------------
+  # Tiefer Ton nur als dunkles Ende von Verlaeufen nach col_solar
+  # (Stundenbalken unten, Eigenverbrauchsring am Bogenanfang). Nie fuer
+  # Text -- dafuer reicht sein Kontrast gegen col_surface nicht.
+  col_solar_deep: "0xB6751F"
+  # Kacheln der Energiebilanz: Anfangston des Kantenverlaufs (grad_tile_*),
+  # deckend statt mit Deckkraft -- LVGL interpoliert Farbe und Deckkraft
+  # getrennt, "Akzent 14 %" nach "col_surface 100 %" waere in der Mitte
+  # heller. Gewaehlt nach den RGB565-Stufen: Einspeisung stuft nur in G
+  # (4 Uebergaenge), R und B sind in RGB565 gleich col_surface.
+  # Netzbezug beginnt im Ton seiner Kante (col_draw, Farbwinkel 37 Grad
+  # in LCh): R/G/B 8/8/3, Farbwinkel 39. Stufte er nur in R und laege B
+  # wie col_surface ueber G, waere der Anfang mauve (325 Grad). So faellt
+  # R in 6 Stufen und B steigt in 2 bis col_surface, G bleibt. Von der
+  # Kante aus erst orange (39..44 Grad), dann rot (12..20 Grad), dann
+  # ein neutrales Grau 33/32/33 und ueber
+  # 24/32/41 der Grund -- kein Mauve dazwischen. Erzeugt und Verbraucht
+  # stufen in mehreren Kanaelen; sie laufen in col_tint_end, col_surface
+  # auf die RGB565-Stufengrenzen abgerundet (gleich dargestellt). Die
+  # Anfangstoene liegen in R (bei Verbraucht auch in B) 6/8, in G 3/4
+  # einer Stufe ueber einer vollen Stufe, so fallen die Grenzen zusammen:
+  # Erzeugt 4 Uebergaenge in R und G zugleich (warm, B wie col_surface),
+  # Verbraucht 2 in R, G und B zugleich (heller Schieferton, je Stufe +1
+  # in jedem Kanal). Aendert sich col_surface, im Bild nachmessen.
+  col_tint_solar: "0x36332C"
+  col_tint_ink: "0x262B3E"
+  col_tint_feed: "0x16342E"
+  col_tint_draw: "0x45201D"
+  col_tint_end: "0x102028"
+  # Schein hinter dem Hausnetz (grad_hub): in RGB565 gleich viele R- und
+  # G-Stufen ueber col_bg (je 23) -- so stufen R und G am selben Radius,
+  # jeder Ring bleibt im selben warmen Ton. B mit Absicht 3 Stufen ueber
+  # col_bg: LVGL rundet beim Mischen ab, bei gleichem B faellt es im
+  # Schein um eine Stufe unter col_bg (Blaustich-Ring am Rand).
+  col_glow_hub: "0xC07030"
+  # Schein der Kachel Tagesertrag (grad_yield). LINEAR mischt je Pixel mit
+  # der 8-Bit-Deckkraft, nicht in Mischstufen. In RGB565 liegt G genau
+  # doppelt so viele Stufen ueber col_bg wie B (46 zu 23): Jeder Sprung in
+  # B faellt auf einen Sprung in G, es gibt keine blaustichige
+  # Einzelstufe. R liegt nur 4 Stufen darueber und stuft bis 25 %
+  # Deckkraft gar nicht. Werte als Vielfache der Stufen (R 5, G 51,
+  # B 26); G und B nahe col_batt, R tiefer. Aendert sich col_bg, neu
+  # rechnen und im Bild nachmessen.
+  col_glow_yield: "0x28CCD0"
+  # Fuellung der getoenten Geraetekaesten im Schema (Wechselrichter,
+  # Speicher, Wert auf der Speicherleitung): deckend -- mit bg_opa 7 %
+  # schienen die Kugeln, die unter den Kaesten enden, zu 93 % durch. Als
+  # 24-Bit-Wert mit wiederholten Bits, also genau der Wert in RGB565.
+  # Cyan ist col_bg mit 7 % col_batt, vorgemischt wie LVGL es rechnet:
+  # 7 % = Deckkraft 17, Mischstufe (17 + 4) >> 3 = 2 von 32, je Kanal
+  # col_bg + (Ton - col_bg) x 2 / 32, abgerundet: R/G/B 1/7/4.
+  # Gold (col_full und col_solar gemeinsam) ist KEINE solche Mischung:
+  # Die ergab 2/7/3, tuerkis (Farbwinkel 171 Grad in LCh), weil RGB565
+  # G mit 6 Bit fuehrt, R nur mit 5 -- so dunkle warme Mischungen fallen
+  # auf G-Stufen. Gewaehlt ist 4/6/2: L* 9,1 (vorher 9,0), 66 Grad
+  # (Orange-Braun), R5 nicht unter G6 / 2. Der Schein grad_box_long_*
+  # stuft darauf in 6 Stufen bis 66/48/16 (col_full) bzw. 66/52/16
+  # (col_solar), jede zwischen 72 und 89 Grad. Aendert sich ein Ton,
+  # jede Stufe im Bild nachmessen.
+  col_box_full: "0x211810"
+  col_box_solar: "0x211810"
+  col_box_batt: "0x081C21"
+  # Auslauf der Dachgruppen (grad_lit_*): Unter 75 % der Hoehe mischt der
+  # Verlauf diesen Rotorange-Ton statt col_full/col_solar ueber col_bg.
+  # col_bg ist blaustichig (G ueber R); Gold stufte dort zuerst in G, die
+  # unteren Stufen wurden gruen (143..199 Grad). Dieser Ton stuft zuerst
+  # in R: warm bis 33/28/24 (67 Grad), dann neutral 24/24/24 und 16/20/24
+  # in col_bg. Die ersten Stufen ueber col_bg koennen in RGB565 nicht
+  # warm sein (einzeln +R, +G oder -B). G nur wenig ueber col_bg, B nicht
+  # darunter -- sonst faellt B schon bei kleinster Deckkraft (gruenlich).
+  col_lit_tail: "0xE83020"
+
   # --- Abstaende und Radien --------------------------------------------
   # Aussenrand 4 px. Das Panel hat einen physischen Rahmen, ein zusaetzlicher
   # gezeichneter Rand kostet nur Flaeche, die Schema und Kacheln brauchen.
@@ -52,6 +124,11 @@ substitutions:
   gap_tile: "8"
   radius_tile: "11"
   radius_box: "10"
+
+  # --- Meldungen --------------------------------------------------------
+  # Hoechstzahl der Zeilen der Meldungsliste: alert_push (max_runs und
+  # Obergrenze) und on_add der Liste in .pv-dashboard_ui.yaml.
+  alert_max: "50"
 
   # --- Tarife fuer die Geldrechnung ------------------------------------
   # Sungrow laeuft auf Volleinspeisung bis 2031.

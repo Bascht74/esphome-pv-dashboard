@@ -213,26 +213,45 @@ script:
   #
   # Aufbau einer Zeile -- die Skripte greifen per Index auf die Kinder zu,
   # die Reihenfolge in alert_push also nicht umstellen:
-  #   0 Schweregrad   1 Zeit   2 Geraet   3 Meldung   4 Hinweis (letztes Kind)
-  # Die Zeile selbst traegt im user_data den Zeitstempel (Epoche, 32 Bit).
+  #   0 Schweregrad   1 Zeit   2 Geraet   3 Meldung   4 Hinweis
+  #   5 Quelle "Geraet: Meldung", versteckt und ungekuerzt
+  # Die Meldungszeile oben liest nur Kind 5, nie die Labels 2 und 3: Die
+  # kuerzen mit long_mode DOT, und LVGL schreibt das "..." in den
+  # Textpuffer. Auf einer nie gezeigten Seite haben sie keine Breite, der
+  # Text wird ganz zu "..."; nach dem Zeigen steht dort die gekuerzte
+  # Fassung. Kind 5 hat long_mode CLIP, das den Text nie aendert. Es
+  # gehoert zur Zeile und verschwindet mit ihr (list.remove, list.clear)
+  # -- LVGL gibt seinen Text mit der Zeile frei, nichts nachzuhalten.
+  # Die Zeile selbst traegt im user_data den Zeitstempel (Epoche, 32 Bit),
+  # gesetzt von on_add der Liste (siehe alert_list).
   # Kommt eine Meldung vor der Zeitsynchronisation, steht dort vorlaeufig die
   # Laufzeit in Sekunden + 1 (immer < 1e9; jede Epoche seit 2001 liegt
   # darueber). alert_refresh rechnet sie in die Uhrzeit um, sobald die Zeit
   # gilt -- spaetestens beim ersten gueltigen update_clock (siehe dort).
   #
-  # KEIN on_add/on_remove an der Liste: In 2026.9.0b3 laesst die Kombination
-  # mit lvgl.list.add in einem Skript die Codegenerierung abstuerzen
-  # (AttributeError ... 'detent'). Gezaehlt wird deshalb in alert_refresh.
+  # Gezaehlt wird ueber on_add/on_remove der Liste (siehe alert_list) -- wer
+  # Zeilen hinzufuegt oder entfernt, ruft danach kein alert_refresh mehr
+  # auf. Vorsicht mit 2026.9.0b3: Nutzt on_add/on_remove eine spaet
+  # angelegte ID, etwa aus globals:, bricht dort die Codegenerierung ab
+  # ("'NoneType' object has no attribute 'detent'"). Das behebt
+  # esphome/esphome#19177 (Stand 12.09.2026 offen, fuer 2026.9.0
+  # vorgesehen) -- vor dem Umstieg pruefen, ob die Version ihn enthaelt.
+  # Die Trigger hier nutzen nur Widgets, Skripte und dash_time -- die
+  # erzeugt auch 2026.9.0b3 fehlerfrei.
   # Die Liste liegt nur im RAM und ist nach einem Neustart leer.
   # ---------------------------------------------------------------------
 
   # Neue Meldung oben einfuegen. severity: 0 = Info, 1 = Warnung,
   # 2 = Stoerung. Aufruf spaeter aus BMS-, Modbus- und HA-Fehlerzustaenden.
+  # Den Zeitstempel setzt on_add der Liste; neu gezaehlt (Zaehler,
+  # Kopfzeile, Meldungszeile) wird ueber on_add und on_remove. Bei voller
+  # Liste zaehlt erst on_remove der Obergrenze unten, on_add laesst es dann
+  # aus -- beide lesen die Grenze aus alert_max (Tokens).
   - id: alert_push
     mode: queued
     # So viele wie die Liste Zeilen hat: Ueberzaehlige Aufrufe verwirft
     # ESPHome nur mit einer Log-Warnung, die Meldung fehlte dann.
-    max_runs: 50
+    max_runs: ${alert_max}
     parameters:
       severity: int
       device: string
@@ -308,6 +327,11 @@ script:
                   text_align: RIGHT
                   styles: st_unit
                   text: "Antippen zum Quittieren"
+              # Quelle der Meldungszeile (siehe Kopf der Meldungs-Skripte)
+              - label:
+                  hidden: true
+                  long_mode: CLIP
+                  text: !lambda 'return device + ": " + text;'
             # -1 = Zeile nicht gefunden. alert_ack liest -1 als "alle offenen",
             # deshalb nur mit gueltigem Index quittieren.
             on_click:
@@ -318,18 +342,12 @@ script:
                     - script.execute:
                         id: alert_ack
                         row: !lambda 'return lvgl::lv_list_get_row_index(id(alert_list), static_cast<lv_obj_t *>(lv_event_get_target(event)));'
-      - lambda: |-
-          auto now = id(dash_time).now();
-          // Ohne gueltige Zeit (z. B. die Co-Prozessor-Meldung kurz nach dem
-          // Start) vorlaeufig die Laufzeit merken, siehe Kopf.
-          uint32_t ts = now.is_valid() ? (uint32_t) now.timestamp : millis() / 1000 + 1;
-          lv_obj_set_user_data(lv_obj_get_child(id(alert_list), 0), (void *) (uintptr_t) ts);
-      # Hoechstens 50 Zeilen. Heraus faellt die aelteste QUITTIERTE Zeile;
-      # nur wenn keine quittiert ist, die aelteste ueberhaupt -- dann kann
-      # auch eine offene Meldung verloren gehen.
+      # Hoechstens alert_max Zeilen. Heraus faellt die aelteste QUITTIERTE
+      # Zeile; nur wenn keine quittiert ist, die aelteste ueberhaupt -- dann
+      # kann auch eine offene Meldung verloren gehen.
       - if:
           condition:
-            lambda: 'return lv_obj_get_child_count(id(alert_list)) > 50;'
+            lambda: 'return lv_obj_get_child_count(id(alert_list)) > ${alert_max};'
           then:
             - lvgl.list.remove:
                 id: alert_list
@@ -340,7 +358,6 @@ script:
                     if (lv_obj_has_state(lv_obj_get_child(list, i), LV_STATE_CHECKED))
                       return i;
                   return n - 1;
-      - script.execute: alert_refresh
 
   # Quittieren: row = Zeilenindex, -1 = alle offenen. Hier spaeter auch die
   # Quittung an das Geraet bzw. an Home Assistant.
@@ -365,27 +382,34 @@ script:
             lv_obj_add_state(entry, LV_STATE_CHECKED);
             for (uint32_t k = 0; k < lv_obj_get_child_count(entry); k++)
               lv_obj_add_state(lv_obj_get_child(entry, k), LV_STATE_CHECKED);
-            lv_label_set_text(lv_obj_get_child(entry, -1), hint);
+            lv_label_set_text(lv_obj_get_child(entry, 4), hint);  // Hinweis
           }
       - script.execute: alert_refresh
 
   # Zaehlt offene Meldungen, setzt Zeitangaben (heute nur die Uhrzeit, sonst
   # mit Datum), die Kopfzeile der Seite, die Meldungszeile oben und die
-  # Knoepfe. Laeuft nach jeder Aenderung, beim Tageswechsel und beim ersten
+  # Knoepfe. Laeuft nach jedem Hinzufuegen und Entfernen (on_add/on_remove
+  # der Liste), nach dem Quittieren, beim Tageswechsel und beim ersten
   # gueltigen Zeitpunkt nach dem Start (update_clock).
+  # Zeilen mit LV_OBJ_FLAG_USER_1 zaehlen nicht mehr: So markiert on_remove
+  # die Zeile, die LVGL gleich danach loescht (siehe alert_list).
   - id: alert_refresh
     then:
       - lambda: |-
           lv_obj_t *list = id(alert_list);
-          const uint32_t n = lv_obj_get_child_count(list);
+          const uint32_t count = lv_obj_get_child_count(list);
           auto now = id(dash_time).now();
+          uint32_t n = 0;
           int open = 0;
           lv_obj_t *newest = nullptr;
-          for (uint32_t i = 0; i < n; i++) {
+          for (uint32_t i = 0; i < count; i++) {
             lv_obj_t *entry = lv_obj_get_child(list, i);
+            if (lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_1))
+              continue;
+            n++;
             uint32_t ts = (uint32_t) (uintptr_t) lv_obj_get_user_data(entry);
-            // Vorlaeufige Laufzeit aus alert_push: sobald die Zeit gilt, in
-            // die Uhrzeit der Meldung umrechnen und dauerhaft eintragen.
+            // Vorlaeufige Laufzeit aus on_add: sobald die Zeit gilt, in die
+            // Uhrzeit der Meldung umrechnen und dauerhaft eintragen.
             if (ts != 0 && ts < 1000000000u && now.is_valid()) {
               ts = (uint32_t) now.timestamp - (millis() / 1000 + 1 - ts);
               lv_obj_set_user_data(entry, (void *) (uintptr_t) ts);
@@ -410,16 +434,16 @@ script:
           }
           lv_label_set_text_fmt(id(lbl_alerts_summary), "%d offen · %u %s", open,
                                 (unsigned) n, n == 1 ? "Eintrag" : "Einträge");
-          // Meldungszeile oben: Anzahl zuerst, damit sie beim Kuerzen bleibt
+          // Meldungszeile oben: Anzahl zuerst, damit sie beim Kuerzen bleibt.
+          // Geraet und Text aus Kind 5, nie aus den gekuerzten Labels.
           if (n == 0)
             lv_label_set_text(id(lbl_alert), "Keine Meldungen");
           else if (open == 0)
             lv_label_set_text(id(lbl_alert), "Keine offenen Meldungen");
           else
-            lv_label_set_text_fmt(id(lbl_alert), "%d %s · %s: %s", open,
+            lv_label_set_text_fmt(id(lbl_alert), "%d %s · %s", open,
                                   open == 1 ? "offene Meldung" : "offene Meldungen",
-                                  lv_label_get_text(lv_obj_get_child(newest, 2)),
-                                  lv_label_get_text(lv_obj_get_child(newest, 3)));
+                                  lv_label_get_text(lv_obj_get_child(newest, 5)));
           if (n == 0)
             lv_obj_remove_flag(id(lbl_alerts_empty), LV_OBJ_FLAG_HIDDEN);
           else
@@ -666,12 +690,26 @@ lvgl:
       text_color: $col_ink2
       text_font: f_text_s
 
-  # SoC-Ring der Speicherseite: voller Kreis ab 12 Uhr im Uhrzeigersinn,
-  # rot -> bernstein -> tuerkis. Die Farbe zeigt, WO man auf dem Ring steht;
-  # den leeren Teil deckt storage_update mit einem Bogen in Spurfarbe ab.
-  # Bewusst nur hier: 16 Bit Farbtiefe ohne Dithering zeigt bei feinen
-  # Flaechenverlaeufen Stufen, auf dem schmalen Ring faellt das nicht auf.
+  # 16 Bit Farbtiefe ohne Dithering zeigt bei Verlaeufen Stufen. Kraeftige
+  # Farbverlaeufe deshalb nur auf schmalen Ringen und Balken; Flaechen
+  # bekommen Toene, deren Stufen breit bleiben und nicht farbig flimmern.
+  # Zwei Mischwege in RGB565: VER faerbt je Zeile und mischt mit
+  # (opa + 4) >> 3, also in 32 Stufen fuer alle Kanaele zugleich. HOR,
+  # LINEAR und RADIAL mischen je Pixel, und jeder Kanal rundet fuer sich
+  # -- R, G und B springen dann an verschiedenen Stellen (Streifen mit
+  # Farbstich), wenn die Toene nicht passend gewaehlt sind.
+  # LVGL 9.5 rechnet die Farbtabelle bei jedem Zeichnen neu (kein Cache),
+  # konisch/radial dazu je Pixel einen Winkel oder Abstand, linear eine
+  # Projektion (nur Addition und Tabelle). Die Flussanimation laesst die
+  # Kugeln alle 20 ms neu zeichnen; wo eine Kugel unter einem Kasten
+  # verschwindet, zeichnet LVGL diesen Ausschnitt mit. Dort liegt darum
+  # hoechstens ein VER-Verlauf (je Zeile eine Farbe), nie HOR, LINEAR,
+  # RADIAL oder konisch.
   gradients:
+    # SoC-Ring der Speicherseite: voller Kreis ab 12 Uhr im Uhrzeigersinn,
+    # rot -> bernstein -> tuerkis. Die Farbe zeigt, WO man auf dem Ring
+    # steht; den leeren Teil deckt storage_update mit einem Bogen in
+    # Spurfarbe ab.
     - id: grad_soc_ring
       direction: conical
       conical:
@@ -687,6 +725,273 @@ lvgl:
         - color: $col_batt
           position: 70%
         - color: $col_batt
+          position: 100%
+
+    # Ringe Autarkie und Eigenverbrauch der Uebersicht: 270-Grad-Bogen ab
+    # 135 Grad (unten links) im Uhrzeigersinn. Wie beim SoC-Ring zeigt die
+    # Farbe, WO man auf dem Ring steht. Autarkie spricht dessen Sprache:
+    # rot (Netzbezug) -> bernstein -> gruen ab 80 %. Eigenverbrauch laeuft
+    # vom tiefen Ton zu col_solar wie die Stundenbalken, echtes Gold schon
+    # ab 60 %, sonst wirkt der Ring bei ueblichen Werten ocker. Die untere
+    # Oeffnung (45..135 Grad) bekommt den Endton, deckt aber ein Bogen in
+    # Kachelfarbe ab. Hinter dem letzten Stopp gilt dessen Farbe weiter.
+    - id: grad_autarky_ring
+      direction: conical
+      conical:
+        center_x: 50%
+        center_y: 50%
+        start_angle: 135
+        end_angle: 45
+      stops:
+        - color: $col_draw
+          position: 0%
+        - color: $col_warn
+          position: 40%
+        - color: $col_feed
+          position: 80%
+    - id: grad_selfuse_ring
+      direction: conical
+      conical:
+        center_x: 50%
+        center_y: 50%
+        start_angle: 135
+        end_angle: 45
+      stops:
+        - color: $col_solar_deep
+          position: 0%
+        - color: $col_solar
+          position: 60%
+
+    # Stundenbalken Tagesverlauf: oben col_solar, unten der tiefe Ton. VER
+    # (nicht LINEAR) mit Absicht: Bei einem senkrechten bar legt LVGL einen
+    # VER-Verlauf ueber die volle Balkenhoehe und schneidet den Indikator
+    # heraus -- gleiche Hoehe hat so ueberall denselben Ton, nur die hohen
+    # Mittagsbalken erreichen das helle Gold. LINEAR wuerde jeden Indikator
+    # fuer sich strecken. Kosten: je Balken eine kurze ARGB8888-Ebene
+    # (17 x 130, etwa 8,8 KB), nur wenn redraw_curve die Kachel neu zeichnen
+    # laesst; keine Kugel in der Naehe.
+    - id: grad_day_bar
+      direction: VER
+      stops:
+        - color: $col_solar
+          position: 0%
+        - color: $col_solar_deep
+          position: 100%
+
+    # Dachgruppen, "von oben beschienen": Farbton oben mit 23 % Deckkraft,
+    # nach unten ganz aus, unten also keine Kante. Die Wechselrichter
+    # darunter tragen denselben Ton (grad_box_long_full,
+    # grad_box_long_solar), so liest man, welche Strings wohin laufen.
+    # Sungrow bleibt der Bedeutung nach in col_full, die Unterscheidung
+    # traegt der Volleinspeisungs-Rahmen. Nur VER (siehe oben): 23 % = 58
+    # liegt oben in Mischstufe 7 (52..59). Liegt der Anfangswert knapp
+    # ueber einer Stufengrenze, bleibt oben nur ein schmaler heller
+    # Streifen. Die Flaechen liegen nie unter einer Kugel, siehe Schema.
+    # Auslauf in col_lit_tail (siehe Tokens): Bis 75,3 % (= 192 von 255)
+    # gleitet die Farbe dorthin, darunter bleibt sie. Deckkraft dort 5,5 %
+    # (= 14): dieselbe Steigung wie ohne Zwischenstopp (58 x 63 / 255).
+    # Gemessen auf 91 px: warm von oben bis 33/28/24 (67..98 Grad in LCh),
+    # dann 24/24/24 und 16/20/24 je 12..13 px, unten 19 px col_bg.
+    - id: grad_lit_full
+      direction: VER
+      stops:
+        - color: $col_full
+          opa: 23%
+          position: 0%
+        - color: $col_lit_tail
+          opa: 5.5%
+          position: 75.3%
+        - color: $col_lit_tail
+          opa: 0%
+          position: 100%
+    - id: grad_lit_solar
+      direction: VER
+      stops:
+        - color: $col_solar
+          opa: 23%
+          position: 0%
+        - color: $col_lit_tail
+          opa: 5.5%
+          position: 75.3%
+        - color: $col_lit_tail
+          opa: 0%
+          position: 100%
+
+    # Leuchtflaechen IN den getoenten Kaesten, zweilagig: Der Kasten selbst
+    # ist deckend getoent (col_box_*: dunkles Orange-Braun bzw. Cyan, siehe
+    # Tokens) -- flach bis an den Rahmen, ohne Verlauf und ohne Kante, und
+    # Kugeln, die in den Kasten laufen, verschwinden dahinter. Darauf liegt
+    # von oben ein Schein auf voller Innenbreite: 0 % an der Oberkante,
+    # dann 20 % (= 51, Mischstufe 6, eine unter den Dachgruppen mit 23 %),
+    # dann linear bis 0 % am unteren Ende, wo er ohne Kante in die Toenung
+    # auslaeuft.
+    #   grad_box_long_*    alle Wechselrichter und Speicher: 66 hoch ab
+    #                      Kasten y 7, Spitze bei 11 % = y 14
+    #                      (Namenszeile), danach eine Mischstufe je 9 px.
+    #   grad_box_short_batt  Wertkasten auf der Speicherleitung (ohne
+    #                      Namenszeile): 17 hoch ab y 1, Spitze bei 25 %
+    #                      = y 5, danach eine Stufe je 2 px, siehe dort.
+    # Auch Mini-WR und DEYE tragen die lange Form, obwohl dort Kugeln
+    # seitlich einlaufen (Kasten y 35..44). Ein Schein, der ueber dieser
+    # Kugelzeile endet (26 hoch), hob das Kasteninnere im Mittel nur um
+    # L* 5,5 ueber col_bg, die lange Form um 9,0 (Speicher 8,8): Die Reihe
+    # wirkte uneinheitlich, Gold schwaecher als Cyan. Die Kugel liegt unter
+    # der deckenden Fuellung; neu gezeichnet wird mit ihr nur ein etwa
+    # 12 x 12 px grosser Ausschnitt dieses VER-Verlaufs.
+    # Keine Einrueckung und keine Seitenstufe. Cyan mit derselben Deckkraft
+    # wie Gold: Bei gleicher Mischstufe sind beide gleich hell (L* Spitze
+    # +15,9 / +15,7 ueber col_bg), Cyan ist nur weniger bunt. Eine Stufe
+    # weniger liesse die Speicher schwaecher.
+    - id: grad_box_long_full
+      direction: VER
+      stops:
+        - color: $col_full
+          opa: 0%
+          position: 0%
+        - color: $col_full
+          opa: 20%
+          position: 11%
+        - color: $col_full
+          opa: 0%
+          position: 100%
+    - id: grad_box_long_solar
+      direction: VER
+      stops:
+        - color: $col_solar
+          opa: 0%
+          position: 0%
+        - color: $col_solar
+          opa: 20%
+          position: 11%
+        - color: $col_solar
+          opa: 0%
+          position: 100%
+    - id: grad_box_long_batt
+      direction: VER
+      stops:
+        - color: $col_batt
+          opa: 0%
+          position: 0%
+        - color: $col_batt
+          opa: 20%
+          position: 11%
+        - color: $col_batt
+          opa: 0%
+          position: 100%
+    - id: grad_box_short_batt
+      direction: VER
+      stops:
+        - color: $col_batt
+          opa: 0%
+          position: 0%
+        - color: $col_batt
+          opa: 20%
+          position: 25%
+        - color: $col_batt
+          opa: 0%
+          position: 100%
+
+    # Hausnetz: radialer Schein von oben Mitte, wo die Solarleitung
+    # ankommt. Mitte an der Oberkante der 114 px hohen Flaeche, Radius
+    # 139 px, also 26 px unter ihre Unterkante (in px: Prozent ueber 100
+    # nimmt ESPHome hier nicht). RADIAL mischt je Pixel; neutrales Weiss
+    # wuerde R, G und B an verschiedenen Radien stufen (13 Ringe, 11 davon
+    # nur in einem Kanal, gruen-, blau- oder rotstichig). col_glow_hub
+    # stuft R und G zugleich und B gar nicht: 5 Ringe, alle im selben
+    # warmen Ton. Hinter dem grossen Wert bleibt col_ink 15:1 und mehr.
+    - id: grad_hub
+      direction: RADIAL
+      radial:
+        center_x: 50%
+        center_y: 0
+        to_x: 50%
+        to_y: 139
+      stops:
+        - color: $col_glow_hub
+          opa: 30%
+          position: 0%
+        - color: $col_glow_hub
+          opa: 0%
+          position: 100%
+    # Darueber auf derselben Flaeche (VER, mischt je Zeile): col_bg deckend
+    # an der Oberkante, bis 16 % (17 px) linear auf 3 %, von dort gleich
+    # bis unten. Die oberste Zeile ist so genau col_bg, der Schein beginnt
+    # ohne Kante, obwohl die Flaeche der Kugel wegen erst 5 px unter dem
+    # Rahmen anfaengt. Die 3 % bis unten sind Absicht: LVGL rundet beim
+    # Mischen ab, jede Deckkraft ab 4 (Mischstufe 1) nimmt jedem Pixel
+    # ueber col_bg eine Stufe. Liefe der Schatten auf 0 aus, wuerde dort
+    # die ganze Breite um eine Stufe springen -- eine gerade Linie. So nimmt
+    # er jedem Ring eine Stufe und der aeusserste faellt weg; das gleichen
+    # 30 % Deckkraft und der lange Radius aus, der sichtbare Schein endet
+    # trotzdem ueber der Unterkante. Im Einblendbereich folgen die Stufen
+    # (je 1 in R und G) den Ringen: gerade Stuecke hoechstens 31 px lang,
+    # von Ring zu Ring versetzt.
+    - id: grad_hub_shade
+      direction: VER
+      stops:
+        - color: $col_bg
+          opa: 100%
+          position: 0%
+        - color: $col_bg
+          opa: 3%
+          position: 16%
+
+    # Kacheln der Energiebilanz: der Ton der farbigen Kante, bis zur Mitte
+    # in col_surface ausgelaufen. Deckende Toene, siehe col_tint_*. HOR
+    # mischt je Pixel (siehe oben): Einspeisung stuft nur in G, Netzbezug
+    # in R und B (Anfang im Ton von col_draw). Erzeugt (R+G) und
+    # Verbraucht (R+G+B) laufen in den gleich dargestellten Endton
+    # col_tint_end, so fallen die Stufen aller Kanaele zusammen (siehe
+    # Tokens).
+    - id: grad_tile_gen
+      direction: HOR
+      stops:
+        - color: $col_tint_solar
+          position: 0%
+        - color: $col_tint_end
+          position: 50%
+    - id: grad_tile_use
+      direction: HOR
+      stops:
+        - color: $col_tint_ink
+          position: 0%
+        - color: $col_tint_end
+          position: 50%
+    - id: grad_tile_feed
+      direction: HOR
+      stops:
+        - color: $col_tint_feed
+          position: 0%
+        - color: $col_surface
+          position: 50%
+    - id: grad_tile_draw
+      direction: HOR
+      stops:
+        - color: $col_tint_draw
+          position: 0%
+        - color: $col_surface
+          position: 50%
+
+    # Tagesertrag: schraeg von links unten (kraeftig) nach rechts oben
+    # (fast aus). Nur die Deckkraft aendert sich, die Kachel liegt direkt
+    # auf col_bg, die Mitte wird nicht heller. LINEAR mischt je Pixel; mit
+    # col_glow_yield statt col_batt faellt jeder Sprung in B auf einen in G
+    # und R stuft nicht (siehe Tokens). Ueber den ganzen Verlauf 9
+    # Stufenwechsel, abwechselnd nur G (feinste Stufe) und G mit B
+    # zugleich. Text mindestens 5,3:1.
+    - id: grad_yield
+      direction: LINEAR
+      linear:
+        from_x: 0%
+        from_y: 100%
+        to_x: 100%
+        to_y: 0%
+      stops:
+        - color: $col_glow_yield
+          opa: 24%
+          position: 0%
+        - color: $col_glow_yield
+          opa: 4%
           position: 100%
 
   top_layer:
@@ -1046,23 +1351,25 @@ lvgl:
               # 16 Balken im Raster 21 belegen 15 x 21 + 17 = 332 px der 342 px
               # Innenbreite -- x ab 5 gibt links und rechts je 5 px Rand. Die
               # Prognoselinie ruht mit x: 5 im selben Raster, redraw_curve
-              # rechnet ihre Punkte deshalb weiter ab 0.
-              - bar: { id: bar_h00, x:   5, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h01, x:  26, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h02, x:  47, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h03, x:  68, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h04, x:  89, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h05, x: 110, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h06, x: 131, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h07, x: 152, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h08, x: 173, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h09, x: 194, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h10, x: 215, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h11, x: 236, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h12, x: 257, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h13, x: 278, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h14, x: 299, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
-              - bar: { id: bar_h15, x: 320, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_color: $col_solar, radius: 3 } }
+              # rechnet ihre Punkte deshalb weiter ab 0. Fuellung grad_day_bar
+              # (oben col_solar, darunter tiefer); die helle Prognoselinie
+              # kreuzt so nie einen helleren Ton als col_solar.
+              - bar: { id: bar_h00, x:   5, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h01, x:  26, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h02, x:  47, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h03, x:  68, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h04, x:  89, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h05, x: 110, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h06, x: 131, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h07, x: 152, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h08, x: 173, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h09, x: 194, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h10, x: 215, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h11, x: 236, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h12, x: 257, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h13, x: 278, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h14, x: 299, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h15, x: 320, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
               - line:
                   id: line_forecast
                   x: 5
@@ -1097,6 +1404,7 @@ lvgl:
             y: 292
             width: 178
             height: 100
+            bg_grad: grad_tile_gen
             border_side: [LEFT]
             border_width: 3
             border_color: $col_solar
@@ -1140,6 +1448,7 @@ lvgl:
             y: 292
             width: 178
             height: 100
+            bg_grad: grad_tile_use
             border_side: [LEFT]
             border_width: 3
             border_color: $col_ink2
@@ -1179,6 +1488,7 @@ lvgl:
             y: 400
             width: 178
             height: 100
+            bg_grad: grad_tile_feed
             border_side: [LEFT]
             border_width: 3
             border_color: $col_feed
@@ -1218,6 +1528,7 @@ lvgl:
             y: 400
             width: 178
             height: 100
+            bg_grad: grad_tile_draw
             border_side: [LEFT]
             border_width: 3
             border_color: $col_draw
@@ -1257,8 +1568,8 @@ lvgl:
             y: 508
             width: 364
             height: 108
-            bg_color: $col_batt
-            bg_opa: 6%
+            # Deckkraft steckt im Verlauf, bg_opa bleibt COVER aus st_tile
+            bg_grad: grad_yield
             border_side: [LEFT]
             border_width: 3
             border_color: $col_batt
@@ -1326,22 +1637,37 @@ lvgl:
             width: 178
             height: 112
             widgets:
-              - arc:
-                  id: arc_autarky
+              # Ring wie auf der Speicherseite: konischer Verlauf als Scheibe,
+              # innen eine Scheibe in Kachelfarbe (Ring 7 breit), darueber ein
+              # Bogen im REVERSE-Modus, der 100 - Autarkie in Spurfarbe
+              # abdeckt (Wert 100 = leer, der Stand ohne Daten; speisen wie
+              # storage_update: lv_arc_set_value(Deckbogen, 100 - Wert)).
+              # Die untere Oeffnung deckt zuletzt ein Bogen in Kachelfarbe:
+              # je 3 Grad in den Ring hinein, damit nie zwei geglaettete
+              # Kanten aufeinander liegen, und 62 breit, damit der Saum der
+              # Scheibe nicht durchscheint (die Scheibe schneidet ihn auf 58
+              # zu). Die Oeffnung als durchsichtiger Teil eines 360-Grad-
+              # Verlaufs zeigte dagegen unten einen Saum.
+              - obj:
                   x: 0
                   y: 16
                   width: 58
                   height: 58
-                  min_value: 0
-                  max_value: 100
-                  value: 0
-                  arc_width: 7
-                  arc_color: $col_line
-                  indicator:
-                    arc_color: $col_feed
-                    arc_width: 7
-                  knob:
-                    bg_opa: TRANSP
+                  radius: CIRCLE
+                  bg_grad: grad_autarky_ring
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj: { align: CENTER, width: 44, height: 44, radius: CIRCLE, bg_color: $col_surface, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - arc: { id: ring_cover_autarky, align: CENTER, width: 58, height: 58, start_angle: 135, end_angle: 45, mode: REVERSE, value: 100, arc_opa: TRANSP, arc_width: 7, pad_all: 0, clickable: false,
+                             indicator: { arc_color: $col_line, arc_width: 7, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
+                    - arc: { align: CENTER, width: 62, height: 62, start_angle: 42, end_angle: 138, value: 0, arc_color: $col_surface, arc_width: 12, arc_rounded: false, pad_all: 0, clickable: false,
+                             indicator: { arc_opa: TRANSP, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
               # Wert und Einheit mittig im Ring (x 0..58); das "%" sitzt in
               # der unteren Oeffnung des Bogens. Wert 26..47, Einheit 47..64:
               # Blockmitte 45 = Ringmitte (16 + 29), keine Ueberlappung.
@@ -1392,22 +1718,27 @@ lvgl:
             width: 178
             height: 112
             widgets:
-              - arc:
-                  id: arc_selfuse
+              # Ring wie Autarkie, der Bogen deckt 100 - Eigenverbrauch ab
+              - obj:
                   x: 0
                   y: 16
                   width: 58
                   height: 58
-                  min_value: 0
-                  max_value: 100
-                  value: 0
-                  arc_width: 7
-                  arc_color: $col_line
-                  indicator:
-                    arc_color: $col_solar
-                    arc_width: 7
-                  knob:
-                    bg_opa: TRANSP
+                  radius: CIRCLE
+                  bg_grad: grad_selfuse_ring
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj: { align: CENTER, width: 44, height: 44, radius: CIRCLE, bg_color: $col_surface, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - arc: { id: ring_cover_selfuse, align: CENTER, width: 58, height: 58, start_angle: 135, end_angle: 45, mode: REVERSE, value: 100, arc_opa: TRANSP, arc_width: 7, pad_all: 0, clickable: false,
+                             indicator: { arc_color: $col_line, arc_width: 7, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
+                    - arc: { align: CENTER, width: 62, height: 62, start_angle: 42, end_angle: 138, value: 0, arc_color: $col_surface, arc_width: 12, arc_rounded: false, pad_all: 0, clickable: false,
+                             indicator: { arc_opa: TRANSP, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
               - label:
                   id: val_selfuse
                   x: 0
@@ -1559,6 +1890,22 @@ lvgl:
               - line: { points: [[733,595],[534,595]], line_color: $col_feed, line_width: 3, line_rounded: true }
               - line: { points: [[452,657],[452,664]], line_color: $col_feed, line_width: 3, line_rounded: true }
 
+              # ---------- Dachgruppen: je zwei Dachflaechen ueber ihrem
+              #            Wechselrichter, Verlauf grad_lit_*, vor den
+              #            Dachflaechen, also dahinter. 200 breit, je 4
+              #            Rand zu den Kaesten, Mitte = Mitte des Paars.
+              #            Oben y 9 = 5 unter der Aussenkante des Voll-
+              #            einspeisungs-Rahmens, Radius 7 konzentrisch zu
+              #            dessen 12. Unten bis 99: Die Kugeln (8 x 8)
+              #            starten bei y 107 -> Flaeche ab 103, mit
+              #            draw_rounding 2 ab 102. So bleiben 2 px Abstand,
+              #            und die Flussanimation zeichnet die Gruppen nie
+              #            mit.
+              - obj: { x: 7, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_full, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { x: 237, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { x: 467, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { x: 697, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+
               # ---------- Dachflaechen: feste y-Positionen, kein Flex. Bild 0..24,
               #            Name 25..42, Wert 45..66, Tageswert 68..85 -> Kasten 90,
               #            Reserve 5
@@ -1615,24 +1962,41 @@ lvgl:
               #            80 - 2 x 1 - 2 x 2 = 74; Name 3..20, Wert 24..49,
               #            Tageswert 52..69 -> 3 oben, Reserve 5 unten. Die
               #            Glyphen sitzen oben tiefer in der Zeile, sichtbar
-              #            sind es so etwa 10 / 10 wie bei den Flex-Kaesten
+              #            sind es so etwa 10 / 10 wie bei den Flex-Kaesten.
+              #            Ton wie die Dachgruppe darueber (Kastenmass): Der
+              #            Kasten ist deckend getoent (col_box_*), darauf
+              #            liegt ab 2 / 7 ein Schein auf voller Innenbreite,
+              #            136 x 66 bis y 72: grad_box_long_full beim
+              #            Sungrow, grad_box_long_solar bei den anderen.
+              #            Kugeln reichen mit draw_rounding 2 bis 5 px hinein
+              #            (oben und unten mittig, bei Mini-WR und DEYE
+              #            seitlich bei y 35..44) und verschwinden hinter
+              #            der deckenden Fuellung. Oben und unten bleiben
+              #            2 px Abstand zum Schein; seitlich liegt die Kugel
+              #            unter ihm, LVGL zeichnet dort ein kleines Stueck
+              #            VER-Verlauf mit neu (siehe grad_box_long_*).
+              #            Im Inhaltsbereich (Rahmen 2 + pad 1): x -1, y 4.
               - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 37, y: 131, width: 140, height: 80,
-                       border_color: $col_full, bg_color: $col_bg, pad_all: 1, widgets: [
+                       border_color: $col_full, bg_color: $col_box_full, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 136, height: 66, radius: 0, bg_grad: grad_box_long_full, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
                   { label: { align: TOP_MID, y: 3, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "Sungrow 7 kW", text_color: $col_ink, text_font: f_unit } },
                   { label: { id: v_wr_sungrow, align: TOP_MID, y: 24, width: 132, height: 25, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_m, text_color: $col_full } },
                   { label: { id: e_wr_sungrow, align: TOP_MID, y: 52, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
               - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 267, y: 131, width: 140, height: 80,
-                       border_color: $col_solar, bg_color: $col_bg, pad_all: 1, widgets: [
+                       border_color: $col_solar, bg_color: $col_box_solar, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 136, height: 66, radius: 0, bg_grad: grad_box_long_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
                   { label: { align: TOP_MID, y: 3, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "Mini-WR 0,8 kW", text_color: $col_ink, text_font: f_unit } },
                   { label: { id: v_wr_mini, align: TOP_MID, y: 24, width: 132, height: 25, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_m, text_color: $col_solar } },
                   { label: { id: e_wr_mini, align: TOP_MID, y: 52, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
               - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 497, y: 131, width: 140, height: 80,
-                       border_color: $col_solar, bg_color: $col_bg, pad_all: 1, widgets: [
+                       border_color: $col_solar, bg_color: $col_box_solar, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 136, height: 66, radius: 0, bg_grad: grad_box_long_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
                   { label: { align: TOP_MID, y: 3, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "DEYE 10 kW · Master", text_color: $col_ink, text_font: f_unit } },
                   { label: { id: v_wr_deye1, align: TOP_MID, y: 24, width: 132, height: 25, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_m, text_color: $col_solar } },
                   { label: { id: e_wr_deye1, align: TOP_MID, y: 52, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
               - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 727, y: 131, width: 140, height: 80,
-                       border_color: $col_solar, bg_color: $col_bg, pad_all: 1, widgets: [
+                       border_color: $col_solar, bg_color: $col_box_solar, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 136, height: 66, radius: 0, bg_grad: grad_box_long_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
                   { label: { align: TOP_MID, y: 3, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "DEYE 10 kW · Slave", text_color: $col_ink, text_font: f_unit } },
                   { label: { id: v_wr_deye2, align: TOP_MID, y: 24, width: 132, height: 25, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_m, text_color: $col_solar } },
                   { label: { id: e_wr_deye2, align: TOP_MID, y: 52, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
@@ -1643,7 +2007,17 @@ lvgl:
               #            gruppe. Der Mini-WR darueber (Mitte 337) folgt dem
               #            Dachraster; verbunden sind die beiden nicht, der
               #            Versatz von 7 ist bewusst.
+              #            Schein grad_hub auf eigener Flaeche 176 x 114 ab
+              #            2 / 7 (Kastenmass): volle Innenbreite, keine
+              #            seitliche Kugel; oben und unten mittig reichen die
+              #            Kugeln gerundet bis 5 px hinein, dazu 2 px Abstand.
+              #            Radius 5 haelt die oberen Ecken vom geglaetteten
+              #            Rahmenbogen fern. Darueber grad_hub_shade auf
+              #            derselben Flaeche (Einblenden von oben, siehe
+              #            dort). ignore_layout nimmt beide aus dem Flex.
               - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 240, y: 257, width: 180, height: 128, border_color: $col_ink2, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
+                  { obj: { x: -1, y: 4, width: 176, height: 114, radius: 5, bg_grad: grad_hub, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, ignore_layout: true } },
+                  { obj: { x: -1, y: 4, width: 176, height: 114, radius: 0, bg_grad: grad_hub_shade, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, ignore_layout: true } },
                   { label: { text: "\U000F1903", text_font: f_icon, text_color: $col_ink2 } },
                   { label: { width: 172, height: 20, long_mode: DOT, text_align: CENTER, text: "Hausnetz", text_color: $col_ink2, text_font: f_text_s } },
                   { label: { id: v_house, width: 172, height: 39, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_xl, text_color: $col_ink } },
@@ -1657,18 +2031,26 @@ lvgl:
               #            Nachkommastelle waeren es 114,2. Ab 100 A (113,2)
               #            kuerzt DOT das Ende, also die Spannung, nie den Strom
               #            samt Vorzeichen. Feste Hoehe 17, sonst bricht DOT um.
+              #            Toenung und Schein wie beim Sungrow (Kugeln nur
+              #            oben mittig, hinter der deckenden Fuellung
+              #            col_box_batt): grad_box_long_batt 112 x 66 ab
+              #            2 / 7 auf voller Innenbreite bis y 72, dort ist er
+              #            aus.
               - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 498, y: 299, width: 116, height: 80,
-                       border_color: $col_batt, bg_color: $col_bg, pad_all: 1, widgets: [
+                       border_color: $col_batt, bg_color: $col_box_batt, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 112, height: 66, radius: 0, bg_grad: grad_box_long_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
                   { label: { align: TOP_MID, y: 3, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "Speicher 1", text_color: $col_ink, text_font: f_unit } },
                   { label: { id: v_bat1, align: TOP_MID, y: 24, width: 108, height: 25, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_m, text_color: $col_batt } },
                   { label: { id: d_bat1, align: TOP_MID, y: 52, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "% · --- A · --,- V", text_color: $col_ink2, text_font: f_unit } } ] }
               - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 624, y: 299, width: 116, height: 80,
-                       border_color: $col_batt, bg_color: $col_bg, pad_all: 1, widgets: [
+                       border_color: $col_batt, bg_color: $col_box_batt, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 112, height: 66, radius: 0, bg_grad: grad_box_long_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
                   { label: { align: TOP_MID, y: 3, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "Speicher 2", text_color: $col_ink, text_font: f_unit } },
                   { label: { id: v_bat2, align: TOP_MID, y: 24, width: 108, height: 25, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_m, text_color: $col_batt } },
                   { label: { id: d_bat2, align: TOP_MID, y: 52, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "% · --- A · --,- V", text_color: $col_ink2, text_font: f_unit } } ] }
               - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 750, y: 299, width: 116, height: 80,
-                       border_color: $col_batt, bg_color: $col_bg, pad_all: 1, widgets: [
+                       border_color: $col_batt, bg_color: $col_box_batt, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 112, height: 66, radius: 0, bg_grad: grad_box_long_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
                   { label: { align: TOP_MID, y: 3, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "Speicher 3", text_color: $col_ink, text_font: f_unit } },
                   { label: { id: v_bat3, align: TOP_MID, y: 24, width: 108, height: 25, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_m, text_color: $col_batt } },
                   { label: { id: d_bat3, align: TOP_MID, y: 52, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "% · --- A · --,- V", text_color: $col_ink2, text_font: f_unit } } ] }
@@ -1736,8 +2118,20 @@ lvgl:
               #            (Pfeil)18,5 kWh" = 172 -> Reserve 4 fuer jeden
               #            zweistelligen Wert; mit Leerzeichen hinter den
               #            Pfeilen waeren es 178. Dreistellig kuerzt DOT.
+              #            Toenung wie bei den Speichern (deckend,
+              #            col_box_batt), Schein in der kurzen Form
+              #            (grad_box_short_batt). Die Kugeln links und rechts
+              #            (y 20..27) und unten mittig (ab y 44) reichen
+              #            gerundet bis 4 px hinein und verschwinden hinter
+              #            der Fuellung; zum Schein bleiben 2 px Abstand
+              #            (Kastenmass). Schein 182 x 17 ab 1 / 1,
+              #            volle Innenbreite bis y 17, Radius 6 konzentrisch
+              #            zum Rahmen (7). Er laeuft unten auf 0 % aus, die
+              #            gerundeten Unterecken zeigen so keine Tasche. Im
+              #            Inhaltsbereich (Rahmen 1 + pad 3): x -3, y -3.
               - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 590, y: 226, width: 184, height: 48,
-                       bg_color: $col_bg, bg_opa: COVER, border_color: $col_batt, border_width: 1, radius: 7, pad_all: 3, widgets: [
+                       bg_color: $col_box_batt, bg_opa: COVER, border_color: $col_batt, border_width: 1, radius: 7, pad_all: 3, widgets: [
+                  { obj: { x: -3, y: -3, width: 182, height: 17, radius: 6, bg_grad: grad_box_short_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
                   { label: { id: e_batt, align: TOP_MID, y: 0, width: 176, height: 21, long_mode: DOT, text_align: CENTER, text: "---.---", text_font: f_val_s, text_color: $col_batt } },
                   { label: { id: sub_battery_total, align: TOP_MID, y: 22, width: 176, height: 17, long_mode: DOT, text_align: CENTER, text: "W · \U000F0045--,- kWh · \U000F005D--,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
 
@@ -2092,10 +2486,9 @@ lvgl:
                     - label: { align: CENTER, text: "Liste leeren" }
                   on_click:
                     # Nur die Langform: "lvgl.list.clear: alert_list" lehnt
-                    # ESPHome ab.
+                    # ESPHome ab. Neu gezaehlt wird ueber on_remove der Liste.
                     - lvgl.list.clear:
                         id: alert_list
-                    - script.execute: alert_refresh
 
         # Die EINZIGE scrollende Flaeche der Oberflaeche. Die Seite bleibt
         # scrollable: false; scroll_chain: false reicht einen Wisch am
@@ -2121,6 +2514,47 @@ lvgl:
               pad_right: 3
               pad_top: 10
               pad_bottom: 10
+            # Neue Zeile: Zeitstempel eintragen und sofort neu zaehlen, noch
+            # im selben Durchlauf. Die Meldungszeile liest dabei das
+            # versteckte Kind 5, nicht die sichtbaren, spaeter gekuerzten
+            # Labels (siehe Kopf der Meldungs-Skripte).
+            # Ueber alert_max Zeilen nimmt alert_push gleich danach eine
+            # heraus (Obergrenze, siehe dort); dann zaehlt erst deren
+            # on_remove, noch im selben Durchlauf -- sonst liefe
+            # alert_refresh zweimal.
+            on_add:
+              - lambda: |-
+                  auto now = id(dash_time).now();
+                  // Ohne gueltige Zeit (z. B. die Co-Prozessor-Meldung kurz
+                  // nach dem Start) vorlaeufig die Laufzeit merken, siehe
+                  // Kopf der Meldungs-Skripte.
+                  uint32_t ts = now.is_valid() ? (uint32_t) now.timestamp : millis() / 1000 + 1;
+                  lv_obj_set_user_data(lv_obj_get_child(id(alert_list), list_index),
+                                       (void *) (uintptr_t) ts);
+              - if:
+                  condition:
+                    lambda: 'return lv_obj_get_child_count(id(alert_list)) <= ${alert_max};'
+                  then:
+                    - script.execute: alert_refresh
+            # on_remove laeuft, BEVOR LVGL die Zeile loescht. Deshalb wird
+            # sie markiert, alert_refresh zaehlt sie dann nicht mehr mit.
+            # lvgl.list.clear meldet jede Zeile einzeln, von der letzten
+            # abwaerts, und loescht erst danach. Ist die Zeile dahinter schon
+            # markiert, laeuft gerade ein Leeren: Dann zaehlt erst der letzte
+            # Aufruf (list_index 0) -- hoechstens zwei alert_refresh statt
+            # einem je Zeile.
+            on_remove:
+              - lambda: 'lv_obj_add_flag(lv_obj_get_child(id(alert_list), list_index), LV_OBJ_FLAG_USER_1);'
+              - if:
+                  condition:
+                    lambda: |-
+                      lv_obj_t *list = id(alert_list);
+                      const int n = (int) lv_obj_get_child_count(list);
+                      const bool clearing = list_index + 1 < n &&
+                          lv_obj_has_flag(lv_obj_get_child(list, list_index + 1), LV_OBJ_FLAG_USER_1);
+                      return !clearing || list_index == 0;
+                  then:
+                    - script.execute: alert_refresh
         # Leere Liste: Hinweis mittig ueber der Listenflaeche (Mitte y 444)
         - label:
             id: lbl_alerts_empty
