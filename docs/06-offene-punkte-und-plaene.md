@@ -2,6 +2,57 @@
 
 Was noch aussteht, jeweils mit Entscheidungsstand. Nichts davon wird ungefragt gebaut.
 
+## ToDo
+
+Kurzfassung aller offenen Punkte; die Einzelheiten stehen jeweils im Abschnitt
+darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefragt bauen.
+
+**Offen**
+
+- [ ] **Prüfen, wie `pv-dashboard.yaml` die eigenen Werte hält.** Die Datei ist
+      versioniert und steht mit Demo-Werten auf `main`; die eigenen Werte bleiben nur
+      so lange auf dem Rechner, wie sie nicht mitcommittet werden. Siehe „Was das Repo
+      über die Anlage verrät".
+
+**Entschieden, nicht zu tun**
+
+- [x] **Commit-Historie bereinigen** — am 20.09.2026 verworfen. Nicht erneut
+      vorschlagen.
+
+**BMS (Vorbereitung steht, Umsetzung wartet auf Klärung)**
+
+- [ ] **paceic-Version klären** — `protocol_commandset` 0x20 oder 0x25, nur am Gerät
+      feststellbar.
+- [ ] **Anzahl der BMS und Zuordnung zu `bat` 0…2 klären** — sind die Packs verkettet?
+      Eine Strecke kann drei Packs führen (Master/Slave), aber nur bei 0x25; die
+      Topologie nicht raten.
+- [ ] **`check_uart_settings` in `nkinnan/esphome-pace-bms`** — der abgekündigte Aufruf
+      steht noch drin, das Repo ruht seit 11.12.2025. Auf ein Update zu warten ist
+      vermutlich keine Strategie; ab ESPHome 2027.3.0 bricht der Build.
+
+**Vertagt (Entscheidung liegt vor, Zeitpunkt offen)**
+
+- [ ] **Echte Daten anbinden** — vier Anbindungspunkte plus `WATT[37]`. Am 20.09.2026
+      vertagt: die neuen Geräte laufen beim Nutzer noch nicht.
+- [ ] **Vier Detailseiten bauen** — PV, Wallboxen, Wärmepumpe, Haus. Am 20.09.2026
+      erneut vertagt.
+- [ ] **Kamera** — blockiert durch esphome/esphome#16944. Am 20.09.2026 vertagt, der
+      PR-Stand ist seit 11.09.2026 nicht nachgeprüft.
+
+**Am Gerät zu erledigen**
+
+- [ ] **OTA-Schritt 2** — `password:` durch `encryption: {}` ersetzen, erst nach der
+      ersten erfolgreichen OTA-Installation einer 9.0-Firmware.
+- [ ] **Audio-Halbduplex testen** — achtstufiger Testplan in Dokument 05.
+- [ ] **Farbwirkung im Tageslicht, Bildzeit, Touch und Scrollen** prüfen.
+
+**Entscheidungen, die noch niemand getroffen hat**
+
+- [ ] **Quittung nach Home Assistant** — wie die Quittung zurücklaufen soll, ist nicht
+      notiert.
+- [ ] **Remote-Packages beibehalten?** — der Bezug aus dem Repo kostet je Änderung
+      einen `push`.
+
 ## Detailseiten
 
 Vier Seiten sind nur Platzhalter: `page_pv`, `page_wallbox`, `page_heatpump`,
@@ -30,22 +81,20 @@ Fahrzeug-SoC; der Aufruf kommt erst mit den Sensoren. Was beim Anlegen einer Sei
 dazugehört (Kachelkonvention, `scrollable`, nav-Knopf, Screenshots, Flussanimation), steht
 in Dokument 03 unter „Neue Detailseite".
 
-## Offen: Zweitzeile der Autarkie-Kachel
+## Erledigt: Zweitzeile der Autarkie-Kachel
 
-Die Autarkie-Kachel der Übersicht zeigt im Ring den **Tageswert**, ihre Zweitzeile steht in
+Die Autarkie-Kachel der Übersicht zeigt im Ring den **Tageswert**, ihre Zweitzeile stand in
 `.pv-dashboard_page_overview.yaml` aber auf „Monat -- %". Am 20.09.2026 hat der Nutzer bestätigt: Das
-„Monat" ist ein Versehen, es bleibt beim Tageswert, und der Text auf dem Panel wird
-entsprechend geändert. **Entscheidungsstand: entschieden, Umsetzung offen.** Wer an der
-Übersicht arbeitet, erledigt die Textänderung mit — sonst gilt die Seite zu Unrecht als
-fertig. Definitionen in Dokument 01, Abschnitt „Autarkie".
+„Monat" war ein Versehen, es bleibt beim Tageswert. **Erledigt** — das Widget `sub_autarky`
+trägt jetzt `text: "Heute -- %"`, der Kommentar darüber nennt die Kennzahl-Festlegung.
+Definitionen in Dokument 01, Abschnitt „Autarkie".
 
 ## Was das Repo über die Anlage verrät
 
 Seit dem 20.09.2026 sind alle anlagenabhängigen Beschriftungen und die drei Tarife
 `substitutions` mit neutralen Demo-Werten; die eigenen Werte stehen in
-`pv-dashboard.yaml` und bleiben damit auf dem Rechner (Dokument 01). Am selben Tag
-sind auf Wunsch des Nutzers auch die Namen nachgezogen worden, die eine
-Beschriftungsänderung überdauern — **erledigt**:
+`pv-dashboard.yaml` (Dokument 01). Am selben Tag sind auf Wunsch des Nutzers auch die
+Namen nachgezogen worden, die eine Beschriftungsänderung überdauern — **erledigt**:
 
 - **Die Widget-IDs der Übersichtsseite** nannten Fabrikat und echte Dachflächen.
   Sie heißen jetzt nach Stellung und Aufgabe: die acht Flächen `v_roof_1` …
@@ -65,20 +114,16 @@ Beschriftungsänderung überdauern — **erledigt**:
   Aufbau. Was zur Anlage des Nutzers gehört, steht in seinen privaten Notizen
   außerhalb des Repos.
 
-**Offen und vor dem Öffentlichmachen zu erledigen: die Commit-Historie.** Die
-Generalisierung steht bisher nur im Arbeitsbaum. Vier der fünf Commits bis
-`c6a432f` tragen den alten Stand weiter — Fabrikate und Typenbezeichnungen, die
-echten Flächennamen, die alten Widget-IDs und den alten Tarifschlüssel mitsamt
-einem echten Tarifwert; nur der erste Commit (`28f09ac`, reine
-Versionsgeschichte) ist frei davon. Beim Veröffentlichen geht die Historie mit:
-`git log` und jeder alte Blob sind dann lesbar, auch wenn der aktuelle Stand
-neutral ist. Zwei Wege: ein einziger frischer Initial-Commit auf dem
-generalisierten Stand, die alte Historie separat und privat aufgehoben — oder
-ein Durchlauf mit `git filter-repo` über die betroffenen Dateien. Danach mit
-einem Suchlauf über alle Commits (`git rev-list --all`) gegenprüfen, dass die
-alten Namen nirgends mehr auftauchen. Die Umschreibung der Commit-Identität vom
-20.09.2026 muss dabei erneut laufen. Das ist ein schreibender Eingriff in die
-Historie und bleibt dem Nutzer vorbehalten.
+**Achtung, `pv-dashboard.yaml` ist versioniert.** Die Datei steht auf `main`, dort mit
+den Demo-Werten (`name_pv_1: "Dach Süd"`, `tarif_bezug_ct: "30.0"` und so fort). Die
+eigenen Werte bleiben also nur so lange auf dem Rechner, wie die Datei nicht
+mitcommittet wird; ein `git add -A` schiebt sie mit. Wie das dauerhaft abgesichert
+werden soll, ist offen.
+
+**Die Commit-Historie bleibt, wie sie ist.** Ältere Commits tragen den Stand vor
+dieser Generalisierung. Am 20.09.2026 hat der Nutzer nach Vorlage der Einzelheiten
+entschieden, daran nichts zu ändern. **Entscheidungsstand: entschieden, nicht erneut
+vorschlagen.**
 
 Ein weiterer Punkt bleibt offen; er blockiert das Öffentlichmachen nicht:
 
@@ -153,11 +198,17 @@ der Umsetzung am Gerät geklärt werden. Meldet sich das BMS auf RS232 nicht, is
 nächste Versuch. Der RS485-Port solcher BMS dient Wechselrichter und Parallelschaltung
 und spricht meist *nicht* paceic.
 
-**Problem `check_uart_settings` (geprüft 11.09.2026).** Die Kandidaten-Komponente
-`github://nkinnan/esphome-pace-bms` ruft in `pace_bms_component_master.cpp:79` das ab ESPHome
-9.0 abgekündigte `check_uart_settings(9600, …)` auf. Folge: Compile-Warnung; ab 2027.3.0
-bricht der Build ohne Update des Autors; bei 115200 Baud erscheint in `dump_config` ein
-Fehlerlog „Invalid baud_rate". Vor dem Einbau nach einem Update des Autors schauen.
+**Problem `check_uart_settings` (zuletzt geprüft 20.09.2026 an einem Klon von
+`main`).** Die Kandidaten-Komponente `github://nkinnan/esphome-pace-bms` ruft in
+`pace_bms_component_master.cpp:79` weiterhin das ab ESPHome 9.0 abgekündigte
+`check_uart_settings(9600, …)` auf. Unverändert seit der letzten Prüfung: Die Datei
+wurde zuletzt am 28.10.2025 angefasst, der jüngste Commit des Repos ist vom
+11.12.2025. Folge: Compile-Warnung; ab 2027.3.0 bricht der Build; bei 115200 Baud
+erscheint in `dump_config` ein Fehlerlog „Invalid baud_rate". Auf ein Update des Autors
+zu warten heißt, auf ein seit Monaten ruhendes Repo zu warten — vor dem Einbau also
+erneut nachsehen und, wenn sich nichts getan hat, entscheiden, ob ein eigener Fork oder
+ein Patch der Weg ist.
+
 `external_components`, `pace_bms` und `modbus` liegen auskommentiert bereit — erst aktivieren,
 wenn das BMS angeschlossen ist, sonst laufen nur Timeouts ins Log.
 
@@ -165,9 +216,31 @@ wenn das BMS angeschlossen ist, sonst laufen nur Timeouts ins Log.
 also **drei** getrennte Datenquellen für Speicher 1…3 (Dokument 03). Die dokumentierte
 Verdrahtung kennt dagegen nur **eine** RS232-Strecke — Port D, RJ11, 115200 — zu **einem**
 BMS (Dokument 02, Dokument 01 „Speicher"). Welches von beiden gilt, steht nirgends im
-Repo und ist vor der Umsetzung zu klären: drei BMS am RS485-Strang mit je eigener Adresse,
-ein BMS, das alle drei Packs führt, oder zunächst nur Speicher 1 angebunden und 2 und 3 auf
-Strichmuster. **Entscheidungsstand: offen** — die Topologie nicht raten.
+Repo und ist vor der Umsetzung zu klären. **Entscheidungsstand: offen** — die Topologie
+nicht raten.
+
+Was die Komponente dazu hergibt (README von `nkinnan/esphome-pace-bms`, gelesen am
+20.09.2026 an einem Klon von `main`): Ein Mehr-Pack-Aufbau über **eine** Strecke ist
+vorgesehen — der angeschlossene BMS wird `type: MASTER`, die übrigen Packs hängen als
+Slaves daran, abgefragt per `slave_query_mode: BROADCAST` (Empfehlung des Autors) oder
+`RELAY`. Die eine RS232-Strecke reicht dafür also. Drei Randbedingungen stehen dabei im
+README:
+
+- **Nur paceic 0x25.** Mehr-Pack wird für 0x20 nicht unterstützt und soll es laut Autor
+  auch nicht werden; bei 0x20 bleibt nur ein ESP je Pack. Damit hängt diese Frage an der
+  Protokollfrage oben.
+- **`response_timeout` hochsetzen** — als Startwert 2000 ms je Pack, bei drei Packs also
+  etwa 6000 ms, weil der Master erst alle Slaves abfragt.
+- **`rx_buffer_size` vergrößern** — bei BROADCAST 256 je Pack, bei drei Packs also 768,
+  und zwar an `uart` **und** `pace_bms`. Das README merkt ausdrücklich an, dass der
+  Speicherbedarf dort zum Thema wird, wo der ESP ohnehin unter Druck steht, und nennt
+  LVGL als Beispiel — für dieses Panel also mitzudenken.
+- Zur Trennung der gleichnamigen Sensoren je Pack sieht das README die ESPHome-Sub-Devices
+  über `device_id` vor. Wie das auf `storage_update(bat: 0…2)` abgebildet wird, ist offen.
+
+Das klärt die Frage nicht — ob die Packs des Nutzers überhaupt verkettet sind und welches
+Protokoll sie sprechen, steht weiterhin nirgends. Es zeigt nur, dass eine RS232-Strecke
+kein Widerspruch zu drei Datenquellen sein muss.
 
 **Nicht im Simulator prüfbar.** Die seriellen Schnittstellen stehen in `.pv-dashboard_core.yaml`,
 einem geräteeigenen Paket; der Simulator bindet es gar nicht ein. Die einzige lokale Kontrolle für Änderungen daran ist
@@ -250,8 +323,12 @@ Der LVGL-`list`-Bug ist mit 2026.9.0 erledigt.
 Stand: 20.09.2026 (Streckenzahlen aus einem Vorschaulauf von
 `tools/flow_animation.py`, Kontrastwerte nachgerechnet; LVGL-`list`-Bug mit 2026.9.0
 erledigt, OTA-Schritt 2 und der Audio-Hardware-Test noch offen; neu aufgenommen: die
-Zweitzeile der Autarkie-Kachel und die BMS-Zuordnung zu `bat` 0…2; am selben Tag auf
-die fertige Paketstruktur nachgezogen und die Reste, die das Repo über die Anlage
-verriet — Widget-IDs, Tarifschlüssel, Fabrikate in den Dokumenten, die Geräteseite der
-BMS-Verdrahtung — abgeräumt).
-Geprüfter Commit: `c6a432f` (12.09.2026).
+BMS-Zuordnung zu `bat` 0…2; am selben Tag auf die fertige Paketstruktur nachgezogen
+und die Reste, die das Repo über die Anlage verriet — Widget-IDs, Tarifschlüssel,
+Fabrikate in den Dokumenten, die Geräteseite der BMS-Verdrahtung — abgeräumt.
+Zuletzt gegen `7ddb5c5` nachgezogen: die Zweitzeile der Autarkie-Kachel steht im Code
+auf „Heute -- %" und gilt als erledigt; die Generalisierung ist geschoben, das Repo
+ist öffentlich; die Bereinigung der Commit-Historie hat der Nutzer am selben Tag
+ausdrücklich verworfen; `check_uart_settings` in der PACE-BMS-Komponente erneut
+geprüft; oben eine ToDo-Liste als Kurzfassung ergänzt).
+Geprüfter Commit: `7ddb5c5` (20.09.2026).
