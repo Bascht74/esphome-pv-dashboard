@@ -7,7 +7,7 @@
 #   LCD-Reset  : GPIO27
 #
 # Die Oberflaeche selbst steht in .pv-dashboard_ui.yaml und wird von Geraet und
-# Simulator gemeinsam benutzt. Schriften in .pv-dashboard_fonts.yaml.
+# Simulator gemeinsam benutzt. Schriften in .pv-dashboard_utility.yaml.
 ##############################################################################
 
 i2c:
@@ -103,7 +103,7 @@ lvgl:
   # bleibt. Mit der Kalibrierung oben sind 30 % echte 40 % Duty -- deutlich
   # gedimmt, aber quer durch den Raum noch ablesbar.
   #
-  # Timeout und Helligkeit stehen in .pv-dashboard_tokens.yaml. Denselben
+  # Timeout und Helligkeit stehen in .pv-dashboard_utility.yaml. Denselben
   # $idle_timeout benutzt der Rueckfall auf die Uebersicht in
   # .pv-dashboard_ui.yaml -- beides wird dadurch zusammen ausgeloest.
   on_idle:

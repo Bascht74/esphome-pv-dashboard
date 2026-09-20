@@ -1,0 +1,15 @@
+##############################################################################
+# Package: Seite 2 -- PV & Prognose
+#
+# Platzhalterseite, Inhalt kommt spaeter. y 10: mittig in der sichtbaren
+# Flaeche 76..744 (Mitte 410), nicht auf der Schirmmitte.
+##############################################################################
+
+lvgl:
+  pages:
+    - id: page_pv
+      bg_color: $col_bg
+      scrollable: false
+      scroll_dir: NONE
+      widgets:
+        - label: { align: CENTER, y: 10, text: "PV & Prognose", text_color: $col_ink3 }

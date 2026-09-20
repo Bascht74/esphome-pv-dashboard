@@ -1,0 +1,330 @@
+##############################################################################
+# Package: Seite 3 -- Speicher
+#
+# Ladezustand als Ringe, Zellwerte als Tabelle. storage_update gehoert dazu:
+# Es fuellt Spalte bat + 1 der Tabelle und Ring bat, kuenftige BMS-Sensoren
+# (PACE, Modbus) rufen nur dieses Skript auf.
+#
+# Flaeche x 4..1276, y 84..736 (je 8 Abstand zu Meldungszeile und
+# Menueleiste). Kacheln innen 1272 - 2 x 10 - 2 x 1 = 1250 breit.
+# Tabellenspalten 28/24/24/24 % = 350/300/300/300 px. Die Ringe stehen
+# mittig ueber ihren Spalten: Mitten innen 500/800/1100 (Schirm
+# 515/815/1115), Abstand je 300. Befuellt wird alles von storage_update.
+##############################################################################
+
+##############################################################################
+# Standardbeschriftungen (Demo-Anlage)
+#
+# Dieselben drei Namen wie im Schema der Uebersicht. Der Standard steht
+# deshalb doppelt -- auch in .pv-dashboard_page_overview.yaml. Beide Stellen
+# muessen gleich lauten; wer die Namen in pv-dashboard.yaml setzt, sticht
+# ohnehin beide (ESPHome laesst die Hauptdatei gewinnen, geprueft 2026.9.0).
+# Laufen die beiden Pakete auseinander, gewinnt stillschweigend dieses hier:
+# Es steht im packages-Block von .pv-dashboard_ui.yaml hinter der Uebersicht,
+# und unter Paketen sticht der spaetere Eintrag (geprueft mit 2026.9.0). Die
+# Standards in der Uebersicht sind dann wirkungslos, ohne Warnung.
+# So baut jedes Paket auch allein, und Simulator wie Screenshot-Lauf
+# kommen ohne pv-dashboard.yaml aus.
+#
+# Auf dieser Seite stehen die Namen in Grossbuchstaben -- wie jede
+# Abschnittsueberschrift im Stil st_label. Das "| upper" im Text macht das
+# aus dem Namen; im Wert selbst steht er in normaler Schreibweise.
+##############################################################################
+
+substitutions:
+  name_bat_1: "Speicher 1"     # 84 von 300 in Grossbuchstaben
+  name_bat_2: "Speicher 2"     # 84 von 300
+  name_bat_3: "Speicher 3"     # 84 von 300
+  # Zweitzeile unter dem Mittelwert (326 px)
+  name_bat_summary: "Mittel der drei Speicher"   # 139 von 326
+
+script:
+  # ---------------------------------------------------------------------
+  # Speicher (Seite page_battery): Spalte bat + 1 der Tabelle und Ring bat.
+  # Kuenftige BMS-Sensoren (PACE, Modbus) rufen nur dieses Skript auf.
+  #   bat 0..2 = Speicher 1..3; NAN bzw. cycles < 0 = kein Wert ("--")
+  #   current: + = Laden, - = Entladen
+  # ---------------------------------------------------------------------
+  - id: storage_update
+    parameters:
+      bat: int
+      soc: float
+      current: float
+      cell_min: float
+      cell_max: float
+      temp_min: float
+      temp_max: float
+      cycles: int
+    then:
+      - lambda: |-
+          if (bat < 0 || bat > 2)
+            return;
+          // Dezimalkomma wie ueberall auf der Oberflaeche
+          auto fmt = [](float v, const char *f) -> std::string {
+            if (std::isnan(v))
+              return "--";
+            char b[24];
+            snprintf(b, sizeof(b), f, v);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          // Reihenfolge = Tabellenzeilen 1..7
+          std::string cell[7];
+          cell[0] = fmt(soc, "%.0f");
+          cell[1] = (!std::isnan(current) && fabsf(current) < 0.05f) ? std::string("0,0")
+                                                                      : fmt(current, "%+.1f");
+          cell[2] = fmt(cell_min, "%.3f");
+          cell[3] = fmt(cell_max, "%.3f");
+          cell[4] = fmt((cell_max - cell_min) * 1000.0f, "%.0f");   // NAN bleibt NAN
+          cell[5] = (std::isnan(temp_min) || std::isnan(temp_max))
+                        ? std::string("--")
+                        : fmt(temp_min, "%.0f") + " / " + fmt(temp_max, "%.0f");
+          cell[6] = cycles < 0 ? std::string("--") : std::to_string(cycles);
+          lv_obj_t *tbl = id(tbl_storage)->obj;
+          for (int r = 0; r < 7; r++)
+            lv_table_set_cell_value(tbl, r + 1, bat + 1, cell[r].c_str());
+
+          // Ring: der Bogen deckt den leeren Teil (100 - SoC) in Spurfarbe ab
+          lv_obj_t *const covers[3] = {id(ring_cover_1), id(ring_cover_2), id(ring_cover_3)};
+          lv_obj_t *const values[3] = {id(ring_val_1), id(ring_val_2), id(ring_val_3)};
+          const float v = std::isnan(soc) ? 0.0f : std::clamp(soc, 0.0f, 100.0f);
+          lv_arc_set_value(covers[bat], (int32_t) lroundf(100.0f - v));
+          lv_label_set_text(values[bat], cell[0].c_str());
+
+          // Mittel nur, wenn alle drei Werte da sind -- sonst waere es falsch
+          static float socs[3] = {NAN, NAN, NAN};
+          socs[bat] = soc;
+          float sum = 0.0f;
+          int known = 0;
+          for (float s : socs)
+            if (!std::isnan(s)) {
+              sum += s;
+              known++;
+            }
+          lv_label_set_text(id(val_storage_mean), known == 3 ? fmt(sum / 3.0f, "%.0f").c_str() : "--");
+          auto now = id(dash_time).now();
+          if (now.is_valid())
+            lv_label_set_text_fmt(id(lbl_storage_stand), "Stand %02d:%02d", now.hour, now.minute);
+
+lvgl:
+  pages:
+    - id: page_battery
+      bg_color: $col_bg
+      scrollable: false
+      scroll_dir: NONE
+      widgets:
+        # Ringkachel, innen 1250 x 205: Ring 150 + 6 + Name 17 = 173, oben
+        # und unten je 16 frei.
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: $pad_page
+            y: 84
+            width: 1272
+            height: 227
+            widgets:
+              - label:
+                  styles: st_label
+                  width: 330
+                  height: 17
+                  long_mode: DOT
+                  text: "LADEZUSTAND"
+              # Mittelwert auf derselben Hoehe wie die Werte in den Ringen:
+              # Wert 63..102, Einheit 102..119. Links ab x 12, buendig mit der
+              # Beschriftungsspalte der Tabelle darunter (pad_left 12); Breite
+              # 326 = Spalte 350 - 2 x 12.
+              - label:
+                  id: val_storage_mean
+                  x: 12
+                  y: 63
+                  width: 120
+                  height: 39
+                  long_mode: DOT
+                  text: "--"
+                  text_font: f_val_xl
+                  text_color: $col_ink
+              - label:
+                  x: 12
+                  y: 102
+                  styles: st_unit
+                  text: "%"
+              - label:
+                  x: 12
+                  y: 124
+                  width: 326
+                  long_mode: WRAP
+                  styles: st_sub
+                  text: "${name_bat_summary}"
+              - label:
+                  id: lbl_storage_stand
+                  x: 12
+                  y: 172
+                  width: 326
+                  height: 17
+                  long_mode: DOT
+                  styles: st_sub
+                  text: "Stand --:--"
+
+              # Ring: konischer Verlauf als Scheibe, innen eine Scheibe in
+              # Kachelfarbe (Ring 14 breit), darueber ein Bogen im REVERSE-
+              # Modus, der 100 - SoC in Spurfarbe abdeckt. Wert mittig, "%"
+              # darunter: Block 39 + 17 = 56, Wert 46..85, Einheit 85..102,
+              # Mitte 74 (Ring 75).
+              - obj:
+                  x: 425
+                  y: 16
+                  width: 150
+                  height: 150
+                  radius: CIRCLE
+                  bg_grad: grad_soc_ring
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj: { align: CENTER, width: 122, height: 122, radius: CIRCLE, bg_color: $col_surface, bg_opa: COVER, border_width: 0, pad_all: 0, scrollable: false }
+                    - arc: { id: ring_cover_1, align: CENTER, width: 150, height: 150, rotation: 270, start_angle: 0, end_angle: 360, mode: REVERSE, value: 100, arc_opa: TRANSP, arc_width: 14, pad_all: 0, clickable: false,
+                             indicator: { arc_color: $col_line, arc_width: 14, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
+                    - label: { id: ring_val_1, align: CENTER, y: -9, text: "--", text_font: f_val_xl, text_color: $col_ink }
+                    - label: { align: CENTER, y: 19, text: "%", styles: st_unit }
+              - label: { x: 350, y: 172, width: 300, height: 17, long_mode: DOT, text_align: CENTER, styles: st_label, text: "${ name_bat_1 | upper }" }
+              - obj:
+                  x: 725
+                  y: 16
+                  width: 150
+                  height: 150
+                  radius: CIRCLE
+                  bg_grad: grad_soc_ring
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj: { align: CENTER, width: 122, height: 122, radius: CIRCLE, bg_color: $col_surface, bg_opa: COVER, border_width: 0, pad_all: 0, scrollable: false }
+                    - arc: { id: ring_cover_2, align: CENTER, width: 150, height: 150, rotation: 270, start_angle: 0, end_angle: 360, mode: REVERSE, value: 100, arc_opa: TRANSP, arc_width: 14, pad_all: 0, clickable: false,
+                             indicator: { arc_color: $col_line, arc_width: 14, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
+                    - label: { id: ring_val_2, align: CENTER, y: -9, text: "--", text_font: f_val_xl, text_color: $col_ink }
+                    - label: { align: CENTER, y: 19, text: "%", styles: st_unit }
+              - label: { x: 650, y: 172, width: 300, height: 17, long_mode: DOT, text_align: CENTER, styles: st_label, text: "${ name_bat_2 | upper }" }
+              - obj:
+                  x: 1025
+                  y: 16
+                  width: 150
+                  height: 150
+                  radius: CIRCLE
+                  bg_grad: grad_soc_ring
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj: { align: CENTER, width: 122, height: 122, radius: CIRCLE, bg_color: $col_surface, bg_opa: COVER, border_width: 0, pad_all: 0, scrollable: false }
+                    - arc: { id: ring_cover_3, align: CENTER, width: 150, height: 150, rotation: 270, start_angle: 0, end_angle: 360, mode: REVERSE, value: 100, arc_opa: TRANSP, arc_width: 14, pad_all: 0, clickable: false,
+                             indicator: { arc_color: $col_line, arc_width: 14, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
+                    - label: { id: ring_val_3, align: CENTER, y: -9, text: "--", text_font: f_val_xl, text_color: $col_ink }
+                    - label: { align: CENTER, y: 19, text: "%", styles: st_unit }
+              - label: { x: 950, y: 172, width: 300, height: 17, long_mode: DOT, text_align: CENTER, styles: st_label, text: "${ name_bat_3 | upper }" }
+
+        # Tabellenkachel, innen 1250 x 395: Titel 0..17, Tabelle ab y 26 mit
+        # 8 Zeilen x (21 + 2 x 12) = 360 -> 26..386, Reserve 9.
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: $pad_page
+            y: 319
+            width: 1272
+            height: 417
+            widgets:
+              - label:
+                  styles: st_label
+                  width: 330
+                  height: 17
+                  long_mode: DOT
+                  text: "ZELLWERTE JE SPEICHER"
+              # Hoehe bewusst nicht gesetzt: Die Tabelle waechst mit ihren
+              # Zeilen (LV_SIZE_CONTENT) und schneidet nichts ab. Die Einheit
+              # steht in der Beschriftungsspalte, die Zellen tragen nur Zahlen.
+              # Unter der letzten Zeile zeichnet LVGL keine Trennlinie -- so
+              # gewollt, den Abschluss bildet der Kachelrand.
+              - table:
+                  id: tbl_storage
+                  x: 0
+                  y: 26
+                  width: 100%
+                  clickable: false
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  columns:
+                    - width: 28%
+                    - width: 24%
+                    - width: 24%
+                    - width: 24%
+                  rows:
+                    - ["", "${ name_bat_1 | upper }", "${ name_bat_2 | upper }", "${ name_bat_3 | upper }"]
+                    - ["Ladezustand in %", "--", "--", "--"]
+                    - ["Strom in A (+ = Laden)", "--", "--", "--"]
+                    - ["Zelle min in V", "--", "--", "--"]
+                    - ["Zelle max in V", "--", "--", "--"]
+                    - ["Zelldifferenz in mV", "--", "--", "--"]
+                    - ["Temperatur min / max in °C", "--", "--", "--"]
+                    - ["Zyklen", "--", "--", "--"]
+                  items:
+                    text_font: f_val_s
+                    text_color: $col_ink
+                    text_align: CENTER
+                    bg_opa: TRANSP
+                    border_color: $col_line
+                    border_width: 1
+                    border_side: [BOTTOM]
+                    pad_top: 12
+                    pad_bottom: 12
+                    pad_left: 12
+                    pad_right: 12
+                  # Alle Zellen teilen sich in ESPHome einen Stil (items). Beim
+                  # Zeichnen stellt dieser Rueckruf um: Kopfzeile wie st_label,
+                  # Beschriftungsspalte linksbuendig in f_text_s und col_ink2.
+                  # Die Werte bleiben mittig unter ihren Ringen.
+                  on_boot:
+                    - lambda: |-
+                        lv_obj_t *tbl = id(tbl_storage)->obj;
+                        lv_obj_add_flag(tbl, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
+                        lv_obj_add_event_cb(tbl, [](lv_event_t *e) {
+                          lv_draw_task_t *task = lv_event_get_draw_task(e);
+                          if (lv_draw_task_get_type(task) != LV_DRAW_TASK_TYPE_LABEL)
+                            return;
+                          lv_draw_label_dsc_t *dsc = lv_draw_task_get_label_dsc(task);
+                          if (dsc == nullptr || dsc->base.part != LV_PART_ITEMS)
+                            return;
+                          // Die Zeilenhoehe rechnet LVGL mit f_val_s (21, Grundlinie
+                          // 17). ofs_y schiebt nach unten: f_label (17) mittig mit 2,
+                          // f_text_s (Grundlinie 16) mit 1 auf die Grundlinie der Werte.
+                          if (dsc->base.id1 == 0) {
+                            dsc->font = id(f_label)->get_lv_font();
+                            dsc->color = lv_color_hex($col_ink3);
+                            dsc->letter_space = 1;
+                            dsc->ofs_y = 2;
+                          } else if (dsc->base.id2 == 0) {
+                            dsc->font = id(f_text_s)->get_lv_font();
+                            dsc->color = lv_color_hex($col_ink2);
+                            dsc->ofs_y = 1;
+                          }
+                          if (dsc->base.id2 == 0)
+                            dsc->align = LV_TEXT_ALIGN_LEFT;
+                        }, LV_EVENT_DRAW_TASK_ADDED, nullptr);

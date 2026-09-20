@@ -5,7 +5,16 @@
 # Layoutaenderung wirklich ansehen. "esphome config" findet weder
 # abgeschnittene Zeilen noch Ueberlappungen, die zeigen sich nur im Bild.
 #
-#   esphome run pv-dashboard-shots.yaml        (ab ESPHome 2026.9.0)
+#   ~/.venvs/esphome-beta/bin/esphome run pv-dashboard-shots.yaml
+#   sips -s format png shots/*.bmp --out shots/
+#
+# Der volle Pfad ist nur die hiesige Arbeitsumgebung: Auf diesem Rechner gibt
+# es kein "esphome" im PATH, die Umgebung enthaelt ESPHome 2026.9.0 (stabil).
+# Wer ein "esphome" im PATH hat, ruft es einfach so auf. Auch "sips" ist nichts
+# vom Projekt -- es bringt nur macOS mit; plattformunabhaengig macht Pillow
+# dasselbe, es steckt ohnehin in der ESPHome-Umgebung. Der zweite Befehl macht
+# PNG aus den BMP -- angesehen wird die PNG. Einzelheiten in docs/03:
+# Pillow-Variante, Ausschnittbefehl, Dateinamen, Bauzeiten.
 #
 # Baut den Simulator (pv-dashboard-sim.yaml, hier als Package eingebunden)
 # mit headless-Display: Es oeffnet sich kein Fenster. Das Programm zeigt
@@ -94,7 +103,16 @@ script:
       # Beispieldaten, damit Meldungen, Speicher und die Meldungszeile nicht
       # leer auf den Bildern stehen -- nur hier, nie im Geraet. Aelteste
       # Meldung zuerst: jede neue rutscht oben in die Liste.
-      - script.execute: { id: alert_push, severity: 0, device: "Nilan WP", text: "Filterwechsel in 14 Tagen fällig" }
+      #
+      # Die Geraetenamen kommen aus denselben Substitutions wie die Kaesten
+      # im Schema, damit die Meldungen zur abgebildeten Anlage passen. Es
+      # sind dabei immer die Demo-Standards aus den Seiten-Paketen: Dieser
+      # Lauf bindet pv-dashboard-sim.yaml ein, und weder der Simulator noch
+      # dieser Lauf binden pv-dashboard.yaml ein. Eigene Werte von dort
+      # erreichen das Bild also nicht (geprueft mit 2026.9.0). Wer die
+      # eigene Beschriftung gerendert sehen will, traegt sie zum Messen
+      # voruebergehend in das jeweilige Seiten-Paket ein.
+      - script.execute: { id: alert_push, severity: 0, device: "${name_heatpump}", text: "Filterwechsel in 14 Tagen fällig" }
       - script.wait: alert_push
       # Auf gestern zurueckdatieren, damit auch das Datumsformat auf dem Bild
       # ist (Zeitstempel im user_data der Zeile, setzt on_add der Liste).
@@ -103,10 +121,10 @@ script:
           uint32_t ts = (uint32_t) (uintptr_t) lv_obj_get_user_data(row);
           if (ts >= 1000000000u)   // nur eine echte Uhrzeit, keine Laufzeit
             lv_obj_set_user_data(row, (void *) (uintptr_t) (ts - 26 * 3600));
-      - script.execute: { id: alert_push, severity: 1, device: "Speicher 2", text: "Zelldifferenz 182 mV – Balancing aktiv, Ladeleistung bis zum Ausgleich auf 50 % begrenzt" }
+      - script.execute: { id: alert_push, severity: 1, device: "${name_bat_2}", text: "Zelldifferenz 182 mV – Balancing aktiv, Ladeleistung bis zum Ausgleich auf 50 % begrenzt" }
       - script.execute: { id: alert_push, severity: 0, device: "Co-Prozessor", text: "Firmware 2.12.12 verfügbar (installiert: 2.12.9)" }
-      - script.execute: { id: alert_push, severity: 1, device: "DEYE 10 kW · Slave", text: "String 4: Leistung 38 % unter Prognose" }
-      - script.execute: { id: alert_push, severity: 2, device: "Wallbox 1", text: "Fehlerstrom erkannt (RCD 6 mA DC) – Ladevorgang abgebrochen" }
+      - script.execute: { id: alert_push, severity: 1, device: "${name_inv_4}", text: "String 4: Leistung 38 % unter Prognose" }
+      - script.execute: { id: alert_push, severity: 2, device: "${name_wb_1}", text: "Fehlerstrom erkannt (RCD 6 mA DC) – Ladevorgang abgebrochen" }
       - script.wait: alert_push
       # Die Speicher-Warnung (Zeile 3 von 0..4) gilt als quittiert
       - script.execute: { id: alert_ack, row: 3 }

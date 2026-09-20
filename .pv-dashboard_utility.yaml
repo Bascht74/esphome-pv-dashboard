@@ -1,5 +1,158 @@
 ##############################################################################
-# Package: Design-Tokens
+# Package: Werkzeugkasten -- Schriften, Bilder, Farben und Masse
+#
+# Fasst zusammen, was Geraet (pv-dashboard.yaml) und Simulator
+# (pv-dashboard-sim.yaml) neben der Oberflaeche gemeinsam brauchen. Die
+# beiden Abschnitte stehen unveraendert untereinander, jeder mit seinem
+# eigenen Kopf:
+#
+#   Abschnitt 1  Schriften und Bilder  (frueher .pv-dashboard_fonts.yaml)
+#   Abschnitt 2  Farben und Masse      (frueher .pv-dashboard_tokens.yaml)
+#
+# Ein dritter Abschnitt Audio war geplant, geht aber nicht: i2s_audio,
+# audio_dac und micro_wake_word verlangen die Plattform esp32, und der
+# Simulator laeuft auf host. Audio bleibt deshalb in
+# .pv-dashboard_audio.yaml, das nur das Geraet einbindet.
+##############################################################################
+
+##############################################################################
+# ABSCHNITT 1 -- Schriften und Bilder
+#
+# IBM Plex Sans fuer Text, IBM Plex Mono fuer alle Messwerte. Plex wurde fuer
+# technische Dokumentation entworfen; die Mono-Schwester garantiert gleiche
+# Ziffernbreite, damit sich im Sekundentakt nichts verschiebt.
+#
+# Groessen sind auf Ablesbarkeit aus ein bis zwei Metern ausgelegt -- das
+# Panel haengt an der Wand, nicht auf dem Schreibtisch.
+#
+# glyphsets: GF_Latin_Core deckt Umlaute und scharfes s ab -- die in LVGL
+# eingebauten Montserrat-Schriften tun das nicht.
+#
+# Wird von Geraet und Simulator gemeinsam benutzt. Laedt beim Kompilieren von
+# Google Fonts, braucht also Internet auf dem Build-Rechner.
+##############################################################################
+
+# Modulsymbole aus dem Layoutentwurf, weiss auf transparent -- LVGL faerbt sie
+# zur Laufzeit ein (image_recolor). Dieselbe Datei traegt so Gold fuer die
+# Flaechen der Volleinspeisung und Bernstein fuer die des Hausnetzes.
+#
+#   img_solar_field   Modulfeld mit acht Zellen -- fuer die sechs Dachflaechen
+#   img_solar_module  Einzelmodul mit vier Zellen -- fuer die zwei Mini-Module
+image:
+  - platform: file
+    file: images/solar_panel.png
+    id: img_solar_field
+    type: RGB565
+    transparency: alpha_channel
+  - platform: file
+    file: images/solar_module.png
+    id: img_solar_module
+    type: RGB565
+    transparency: alpha_channel
+
+font:
+  # --- Beschriftungen und Fliesstext ------------------------------------
+  - file: "gfonts://IBM+Plex+Sans@400"
+    id: f_unit
+    size: 13
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+    # Zwei Pfeile aus Material Design Icons mitten im Fliesstext:
+    #   \U000F005D  arrow-up    Entladen -- Energie verlaesst den Speicher
+    #   \U000F0045  arrow-down  Laden    -- Energie geht hinein
+    extras:
+      - file:
+          type: web
+          url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+        glyphs: ["\U000F005D", "\U000F0045"]
+  - file: "gfonts://IBM+Plex+Sans@600"
+    id: f_label
+    size: 13
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://IBM+Plex+Sans@400"
+    id: f_text_s
+    size: 15
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://IBM+Plex+Sans@400"
+    id: f_text
+    size: 17
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+
+  # --- Kopfzeile: gross und halbfett, aus jeder Entfernung lesbar -------
+  - file: "gfonts://IBM+Plex+Sans@600"
+    id: f_bar
+    size: 22
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  # --- Meldungszeile: 4 px groesser als der bisherige Fliesstext --------
+  - file: "gfonts://IBM+Plex+Sans@400"
+    id: f_alert
+    size: 19
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+
+  # --- Messwerte --------------------------------------------------------
+  - file: "gfonts://IBM+Plex+Mono@600"
+    id: f_val_s
+    size: 16
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://IBM+Plex+Mono@600"
+    id: f_val_m
+    size: 19
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://IBM+Plex+Mono@600"
+    id: f_val_l
+    size: 23
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://IBM+Plex+Mono@600"
+    id: f_val_xl
+    size: 30
+    bpp: 4
+    glyphsets: [GF_Latin_Core]
+
+  # --- Symbole ----------------------------------------------------------
+  # Material Design Icons als Schriftglyphen. Nur die tatsaechlich benutzten
+  # Zeichen werden eingebettet, das kostet praktisch nichts. LVGL kann keine
+  # SVG darstellen -- deshalb dieser Weg statt gezeichneter Piktogramme.
+  #
+  #   \U000F0D9B  solar-panel          Dachflaeche
+  #   \U000F1480  current-ac           Wechselrichter
+  #   \U000F12A3  battery-high         Speicher
+  #   \U000F1903  home-lightning-bolt  Hausnetz
+  #   \U000F05F1  ev-station           Wallbox
+  #   \U000F1A43  heat-pump            Waermepumpe
+  #   \U000F072A  washing-machine      sonstige Verbraucher
+  #   \U000F0199  counter              Zaehler
+  #   \U000F0D3E  transmission-tower   Hausanschluss / Netz
+  - file:
+      type: web
+      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: f_icon
+    size: 24
+    bpp: 4
+    glyphs: ["\U000F0D9B", "\U000F1480", "\U000F12A3", "\U000F1903",
+             "\U000F05F1", "\U000F1A43", "\U000F072A", "\U000F0199",
+             "\U000F0D3E"]
+  - file:
+      type: web
+      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: f_icon_l
+    size: 30
+    bpp: 4
+    glyphs: ["\U000F0D9B", "\U000F1480", "\U000F12A3", "\U000F1903",
+             "\U000F05F1", "\U000F1A43", "\U000F072A", "\U000F0199",
+             "\U000F0D3E"]
+
+
+
+##############################################################################
+# ABSCHNITT 2 -- Farben und Masse
 #
 # Einzige Quelle fuer Farben, Groessen und Abstaende der Oberflaeche.
 # Wird sowohl vom Geraet (pv-dashboard.yaml) als auch vom Simulator
@@ -36,8 +189,8 @@ substitutions:
 
   # --- Energiefarben ----------------------------------------------------
   # Leitungen werden nach QUELLE eingefaerbt, nicht nach Ziel.
-  col_solar: "0xF5B33C"   # PV Eigenverbrauch (DEYE + Mini)
-  col_full: "0xE8A020"    # Sungrow, Volleinspeisung -- bewusst abgesetzt
+  col_solar: "0xF5B33C"   # PV Eigenverbrauch (Hausnetz-Kreis)
+  col_full: "0xE8A020"    # Volleinspeisung -- bewusst abgesetzt
   col_batt: "0x45C6D6"    # Speicher, DC-Seite
   col_feed: "0x5CC98A"    # Einspeisung ins Netz
   col_draw: "0xE86A54"    # Netzbezug
@@ -127,14 +280,8 @@ substitutions:
 
   # --- Meldungen --------------------------------------------------------
   # Hoechstzahl der Zeilen der Meldungsliste: alert_push (max_runs und
-  # Obergrenze) und on_add der Liste in .pv-dashboard_ui.yaml.
+  # Obergrenze) und on_add der Liste in .pv-dashboard_page_alerts.yaml.
   alert_max: "50"
-
-  # --- Tarife fuer die Geldrechnung ------------------------------------
-  # Sungrow laeuft auf Volleinspeisung bis 2031.
-  tarif_sungrow_ct: "27.0"
-  tarif_ueberschuss_ct: "7.5"
-  tarif_bezug_ct: "22.5"
 
   # --- Verhalten bei Untaetigkeit ---------------------------------------
   # Ein Wert fuer zwei Reaktionen, die zusammen ausgeloest werden sollen:

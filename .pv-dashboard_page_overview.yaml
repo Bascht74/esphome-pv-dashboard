@@ -1,0 +1,1185 @@
+##############################################################################
+# Package: Seite 1 -- Uebersicht
+#
+# Haengt an .pv-dashboard_ui.yaml (packages:) und kommt damit ueberall mit.
+#
+# Anlagenschema mit Flussanimation und die rechte Kennzahlenspalte. Dazu
+# gehoeren hierher: redraw_curve, das Balken und Prognoselinie der Kachel
+# Tagesverlauf zeichnet, und der erzeugte Animationsblock am Ende.
+#
+# Der Block zwischen "# >>> flow-animation" und "# <<< flow-animation" und
+# die Kugel-Widgets flNN/flNNb im schema_area stammen NUR von
+# tools/flow_animation.py -- nicht von Hand aendern. Das Werkzeug liest und
+# schreibt genau diese Datei.
+##############################################################################
+
+##############################################################################
+# Standardbeschriftungen (Demo-Anlage)
+#
+# Jede Beschriftung, die von der eigenen Anlage abhaengt, steht hier als
+# Substitution mit einem neutralen Demo-Wert. Wer dieselbe Substitution in
+# pv-dashboard.yaml setzt, sticht den Standard: ESPHome traegt die
+# Substitutions der Hauptdatei zuerst ein und ueberspringt beim Einlesen der
+# Pakete jeden Namen, den es schon kennt (geprueft mit 2026.9.0). Unter
+# Paketen gilt das nicht: Dort sticht der spaetere Eintrag aus dem
+# packages-Block von .pv-dashboard_ui.yaml den frueheren. Ohne
+# pv-dashboard.yaml -- also im Simulator und beim Screenshot-Lauf -- gelten
+# die Werte von hier, beide Konfigurationen bauen dadurch allein.
+#
+# Hinter jeder Zeile steht "Breite des Demo-Werts von verfuegbarer Breite"
+# in Pixeln. Die Kaesten sind knapp gerechnet; laengere Namen kuerzt LVGL
+# mit "..." (long_mode DOT). Nach jeder Aenderung neu rendern, docs/04.
+##############################################################################
+
+substitutions:
+  # --- Dachflaechen und Module, von links nach rechts (je 88 px) --------
+  name_pv_1: "Dach Süd"        # 56 von 88
+  name_pv_2: "Dach West"       # 63 von 88
+  name_pv_3: "Modul 1"         # 48 von 88, Einzelmodul am Mini-Wechselrichter
+  name_pv_4: "Modul 2"         # 48 von 88, Einzelmodul am Mini-Wechselrichter
+  name_pv_5: "Dach Ost"        # 53 von 88
+  name_pv_6: "Nebendach"       # 67 von 88
+  name_pv_7: "Dach Nord"       # 62 von 88
+  name_pv_8: "Garagendach"     # 78 von 88
+
+  # --- Wechselrichter, je zwei Flaechen darueber (je 132 px) ------------
+  name_inv_1: "Voll-WR 7 kW"       #  81 von 132
+  name_inv_2: "Mini-WR 0,8 kW"     #  94 von 132
+  name_inv_3: "Hybrid 10 kW · A"   #  98 von 132
+  name_inv_4: "Hybrid 10 kW · B"   #  98 von 132
+
+  # --- Rahmen um die Volleinspeisung, zweizeilig (je 64 px) -------------
+  name_feedin: "VOLLEIN-\nSPEISUNG"   # 58 / 64 von je 64
+
+  # --- Speicher im Schema (je 108 px) -----------------------------------
+  # Standard steht doppelt: dieselben drei Namen setzt auch
+  # .pv-dashboard_page_battery.yaml. Beide Stellen muessen gleich lauten --
+  # laufen sie auseinander, gewinnt stillschweigend das Speicher-Paket, weil
+  # es im packages-Block von .pv-dashboard_ui.yaml spaeter steht; unter
+  # Paketen sticht der spaetere Eintrag (geprueft mit 2026.9.0). Die drei
+  # Zeilen hier sind dann tote Zeilen, gemeldet wird das nicht. Ein Wert aus
+  # pv-dashboard.yaml sticht ohnehin beide.
+  name_bat_1: "Speicher 1"     # 63 von 108
+  name_bat_2: "Speicher 2"     # 63 von 108
+  name_bat_3: "Speicher 3"     # 63 von 108
+
+  # --- Hausnetz und Verbraucherschiene ----------------------------------
+  name_house: "Hausnetz"       #  64 von 172
+  name_heatpump: "Wärmepumpe"  #  83 von 94
+  name_misc: "Sonstige"        #  50 von 94
+  name_wb_1: "Wallbox 1"       #  60 von 94
+  name_wb_2: "Wallbox 2"       #  60 von 94
+
+  # --- Zaehler der unteren Reihe ----------------------------------------
+  name_meter_pv: "PV-Zähler"      #  59 von 122
+  name_grid: "Hausanschluss"      #  86 von 158
+  name_meter_house: "Hauszähler"  #  65 von 122
+
+  # --- Zweitzeile der Kachel Eigenverbrauch (92 px) ---------------------
+  # Die Quote laesst die Volleinspeisung aussen vor (docs/01). Eigener Text
+  # statt Verweis auf name_inv_1: Dort steht die Leistung mit, das waere
+  # hier 112 statt 79 px breit und wuerde umbrechen.
+  name_selfuse_note: "ohne Voll-WR"   # 79 von 92
+
+  # --- Tarife fuer die Geldrechnung, in Cent je kWh ---------------------
+  # Noch ungenutzt: Die Kachel TAGESERTRAG zeigt Platzhalter. Der Standard
+  # steht hier, damit Simulator und Screenshot-Lauf weiterbauen, sobald die
+  # Rechnung dazukommt. Die eigenen Tarife gehoeren in pv-dashboard.yaml.
+  tarif_volleinspeisung_ct: "20.0"  # Volleinspeisung
+  tarif_ueberschuss_ct: "10.0"      # Ueberschusseinspeisung
+  tarif_bezug_ct: "30.0"            # Strombezug
+
+script:
+  # Zeichnet Balken (Ist) und Linie (Prognose) aus beiden Reihen. Sie liegen
+  # uebereinander in derselben Kachel: Die Linie steht im YAML nach den Balken
+  # und wird deshalb darueber gezeichnet.
+  - id: redraw_curve
+    then:
+      - lambda: |-
+          // Zerlegt "1.2,3.4,..." in 16 Werte. Fehlende Felder bleiben 0.
+          auto parse_curve = [](const std::string &src, float *out) {
+            size_t pos = 0;
+            for (int i = 0; i < 16 && pos <= src.size(); i++) {
+              size_t comma = src.find(',', pos);
+              std::string field = src.substr(pos, comma == std::string::npos
+                                                  ? std::string::npos : comma - pos);
+              float f = field.empty() ? 0.0f : strtof(field.c_str(), nullptr);
+              // Von Hand gesetzte Reihe (nan, negativ, 1e30) -> 0..999
+              out[i] = std::isfinite(f) ? std::clamp(f, 0.0f, 999.0f) : 0.0f;
+              if (comma == std::string::npos)
+                break;
+              pos = comma + 1;
+            }
+          };
+          float ist[16] = {0}, pro[16] = {0};
+          parse_curve(id(day_curve).state, ist);
+          parse_curve(id(forecast_curve).state, pro);
+          // Gemeinsamer Massstab -- sonst waere der Vergleich wertlos.
+          // Nebenbei die Tagessummen fuer die Unterzeile.
+          float peak = 0.1f, sum_ist = 0.0f, sum_pro = 0.0f;
+          for (int i = 0; i < 16; i++) {
+            peak = std::max(peak, ist[i]);
+            peak = std::max(peak, pro[i]);
+            sum_ist += ist[i];
+            sum_pro += pro[i];
+          }
+          // id(bar_hNN) ist bereits ein lv_obj_t* (der Cast aendert nichts).
+          // Die Linie ist dagegen ein C++-Wrapper (LvLineType, mit vtable):
+          // Ihr lv_obj_t steckt in ->obj, ein Cast zeigte auf den Wrapper und
+          // beschriebe fremden Speicher. Ein Makro geht hier nicht: ESPHome
+          // loest id(...) im Lambda-Text auf, bevor der Compiler es sieht.
+          lv_obj_t *const bars[16] = {
+            reinterpret_cast<lv_obj_t *>(id(bar_h00)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h01)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h02)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h03)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h04)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h05)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h06)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h07)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h08)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h09)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h10)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h11)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h12)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h13)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h14)),
+            reinterpret_cast<lv_obj_t *>(id(bar_h15)) };
+          for (int i = 0; i < 16; i++)
+            lv_bar_set_value(bars[i], (int32_t) (ist[i] / peak * 100.0f), LV_ANIM_OFF);
+          // Die Punktliste muss das Widget ueberleben, daher static.
+          static lv_point_precise_t pts[16];
+          for (int i = 0; i < 16; i++) {
+            pts[i].x = i * 21 + 8;
+            pts[i].y = (lv_value_precise_t) (130 - pro[i] / peak * 130.0f);
+          }
+          lv_line_set_points(id(line_forecast)->obj, pts, 16);
+          // Unterzeile: Summen mit einer Nachkommastelle und Dezimalkomma
+          char s_ist[16], s_pro[16];
+          snprintf(s_ist, sizeof(s_ist), "%.1f", sum_ist);
+          snprintf(s_pro, sizeof(s_pro), "%.1f", sum_pro);
+          for (char *s : {s_ist, s_pro})
+            if (char *dot = strchr(s, '.'))
+              *dot = ',';
+          lv_label_set_text_fmt(id(lbl_day_sub), "06 – 22 Uhr · Ist %s kWh · Prognose %s kWh",
+                                s_ist, s_pro);
+
+lvgl:
+  pages:
+    - id: page_overview
+      bg_color: $col_bg
+      scrollable: false
+      scroll_dir: NONE
+      widgets:
+        # ---------------- rechte Kennzahlenspalte ----------------------
+        # Tagesverlauf.
+        # ESPHomes LVGL kennt kein chart-Widget -- die Stundenbalken sind
+        # daher einzelne bar-Widgets. Vorteil: jeder Balken ist per ID
+        # ansprechbar und laesst sich einzeln einfaerben (z.B. Netzbezug rot).
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 912
+            y: 84
+            width: 364
+            height: 200
+            widgets:
+              - label:
+                  styles: st_label
+                  width: 342
+                  long_mode: WRAP
+                  text: "TAGESVERLAUF · IST UND PROGNOSE"
+              # 16 Balken im Raster 21 belegen 15 x 21 + 17 = 332 px der 342 px
+              # Innenbreite -- x ab 5 gibt links und rechts je 5 px Rand. Die
+              # Prognoselinie ruht mit x: 5 im selben Raster, redraw_curve
+              # rechnet ihre Punkte deshalb weiter ab 0. Fuellung grad_day_bar
+              # (oben col_solar, darunter tiefer); die helle Prognoselinie
+              # kreuzt so nie einen helleren Ton als col_solar.
+              - bar: { id: bar_h00, x:   5, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h01, x:  26, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h02, x:  47, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h03, x:  68, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h04, x:  89, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h05, x: 110, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h06, x: 131, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h07, x: 152, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h08, x: 173, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h09, x: 194, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h10, x: 215, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h11, x: 236, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h12, x: 257, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h13, x: 278, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h14, x: 299, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: bar_h15, x: 320, y: 26, width: 17, height: 130, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - line:
+                  id: line_forecast
+                  x: 5
+                  y: 26
+                  line_color: $col_ink2
+                  line_width: 3
+                  line_rounded: true
+                  points:
+                    - [8, 130]
+                    - [330, 130]
+              # Innen 200 - 2 x 10 - 2 x 1 = 178: Balken 26..156, Zeile 160..177
+              # -> Reserve 1. Die Summen setzt redraw_curve aus beiden Reihen;
+              # feste Hoehe, damit DOT kuerzt statt umzubrechen.
+              - label:
+                  id: lbl_day_sub
+                  x: 0
+                  y: 160
+                  styles: st_sub
+                  width: 342
+                  height: 17
+                  long_mode: DOT
+                  text: "06 – 22 Uhr · Ist --,- kWh · Prognose --,- kWh"
+
+        # Energiebilanz: erzeugt / verbraucht / eingespeist / bezogen
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            id: tile_gen
+            x: 912
+            y: 292
+            width: 178
+            height: 100
+            bg_grad: grad_tile_gen
+            border_side: [LEFT]
+            border_width: 3
+            border_color: $col_solar
+            # Rahmen 3 + Abstand 8 = 1 + 10 wie Tagesverlauf und Autarkie:
+            # Alle Titel der Spalte fluchten bei x 923.
+            pad_left: 8
+            widgets:
+              # Innen 178 - 8 - 10 - 3 (Rahmen nur links) = 157 breit. Feste
+              # Hoehe am Wert: DOT kuerzt nur so, sonst bricht LVGL um.
+              - label:
+                  styles: st_label
+                  width: 157
+                  long_mode: WRAP
+                  text: "ERZEUGT"
+              - label:
+                  id: val_gen
+                  x: 0
+                  y: 24
+                  width: 157
+                  height: 30
+                  long_mode: DOT
+                  text: "--,-"
+                  text_font: f_val_l
+                  text_color: $col_ink
+              - label:
+                  id: sub_gen
+                  x: 0
+                  y: 58
+                  width: 157
+                  long_mode: WRAP
+                  styles: st_sub
+                  text: "kWh heute"
+
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            id: tile_use
+            x: 1098
+            y: 292
+            width: 178
+            height: 100
+            bg_grad: grad_tile_use
+            border_side: [LEFT]
+            border_width: 3
+            border_color: $col_ink2
+            pad_left: 8
+            widgets:
+              - label:
+                  styles: st_label
+                  width: 157
+                  long_mode: WRAP
+                  text: "VERBRAUCHT"
+              - label:
+                  id: val_use
+                  x: 0
+                  y: 24
+                  width: 157
+                  height: 30
+                  long_mode: DOT
+                  text: "--,-"
+                  text_font: f_val_l
+                  text_color: $col_ink
+              - label:
+                  id: sub_use
+                  x: 0
+                  y: 58
+                  width: 157
+                  long_mode: WRAP
+                  styles: st_sub
+                  text: "kWh heute"
+
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            id: tile_feed
+            x: 912
+            y: 400
+            width: 178
+            height: 100
+            bg_grad: grad_tile_feed
+            border_side: [LEFT]
+            border_width: 3
+            border_color: $col_feed
+            pad_left: 8
+            widgets:
+              - label:
+                  styles: st_label
+                  width: 157
+                  long_mode: WRAP
+                  text: "EINGESPEIST"
+              - label:
+                  id: val_feed
+                  x: 0
+                  y: 24
+                  width: 157
+                  height: 30
+                  long_mode: DOT
+                  text: "--,-"
+                  text_font: f_val_l
+                  text_color: $col_ink
+              - label:
+                  id: sub_feed
+                  x: 0
+                  y: 58
+                  width: 157
+                  long_mode: WRAP
+                  styles: st_sub
+                  text: "kWh heute"
+
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            id: tile_draw
+            x: 1098
+            y: 400
+            width: 178
+            height: 100
+            bg_grad: grad_tile_draw
+            border_side: [LEFT]
+            border_width: 3
+            border_color: $col_draw
+            pad_left: 8
+            widgets:
+              - label:
+                  styles: st_label
+                  width: 157
+                  long_mode: WRAP
+                  text: "NETZBEZUG"
+              - label:
+                  id: val_draw
+                  x: 0
+                  y: 24
+                  width: 157
+                  height: 30
+                  long_mode: DOT
+                  text: "--,-"
+                  text_font: f_val_l
+                  text_color: $col_ink
+              - label:
+                  id: sub_draw
+                  x: 0
+                  y: 58
+                  width: 157
+                  long_mode: WRAP
+                  styles: st_sub
+                  text: "kWh heute"
+
+        # Tagesertrag mit Aufschluesselung
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 912
+            y: 508
+            width: 364
+            height: 108
+            # Deckkraft steckt im Verlauf, bg_opa bleibt COVER aus st_tile
+            bg_grad: grad_yield
+            border_side: [LEFT]
+            border_width: 3
+            border_color: $col_batt
+            pad_left: 8
+            widgets:
+              # Innen 364 - 8 - 10 - 3 (Rahmen nur links) = 343 x 88.
+              - label:
+                  styles: st_label
+                  width: 343
+                  long_mode: WRAP
+                  text: "TAGESERTRAG"
+              # Wert 18..57, Einheit darunter 57..74 -> Reserve 14. Sechs
+              # Zeichen ("123,45") sind 108 px breit; Breite 130 laesst 10 px
+              # bis zur Aufschluesselung bei x 140.
+              - label:
+                  id: val_money
+                  x: 0
+                  y: 18
+                  width: 130
+                  height: 39
+                  long_mode: DOT
+                  text: "--,--"
+                  text_font: f_val_xl
+                  text_color: $col_batt
+              - label:
+                  id: unit_money
+                  x: 0
+                  y: 57
+                  width: 130
+                  height: 17
+                  long_mode: DOT
+                  styles: st_unit
+                  text: "€"
+              # Aufschluesselung in zwei Spalten: f_unit hat keine festen
+              # Zeichenbreiten, Leerzeichen richten nichts aus. Namen links,
+              # Betraege rechtsbuendig an der Innenkante (x 226 + 117 = 343).
+              # Drei Zeilen 20..71, mittig zum Block aus Wert und Einheit.
+              - label:
+                  x: 140
+                  y: 20
+                  width: 86
+                  long_mode: WRAP
+                  styles: st_sub
+                  text: "Förderung\nGespart\nBezug"
+              - label:
+                  id: money_split
+                  x: 226
+                  y: 20
+                  width: 117
+                  long_mode: WRAP
+                  text_align: RIGHT
+                  styles: st_sub
+                  text: "+--,-- €\n+--,-- €\n---,-- €"
+
+        # Autarkie und Eigenverbrauch. Spalte 84..736 wie Speicher- und
+        # Meldungsseite, je 8 Abstand; innen 112 - 2 x 10 - 2 x 1 = 90, der
+        # Ring 16..74 sitzt mittig (45). Beschriftung in beiden Kacheln ab x 64.
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 912
+            y: 624
+            width: 178
+            height: 112
+            widgets:
+              # Ring wie auf der Speicherseite: konischer Verlauf als Scheibe,
+              # innen eine Scheibe in Kachelfarbe (Ring 7 breit), darueber ein
+              # Bogen im REVERSE-Modus, der 100 - Autarkie in Spurfarbe
+              # abdeckt (Wert 100 = leer, der Stand ohne Daten; speisen wie
+              # storage_update: lv_arc_set_value(Deckbogen, 100 - Wert)).
+              # Die untere Oeffnung deckt zuletzt ein Bogen in Kachelfarbe:
+              # je 3 Grad in den Ring hinein, damit nie zwei geglaettete
+              # Kanten aufeinander liegen, und 62 breit, damit der Saum der
+              # Scheibe nicht durchscheint (die Scheibe schneidet ihn auf 58
+              # zu). Die Oeffnung als durchsichtiger Teil eines 360-Grad-
+              # Verlaufs zeigte dagegen unten einen Saum.
+              - obj:
+                  x: 0
+                  y: 16
+                  width: 58
+                  height: 58
+                  radius: CIRCLE
+                  bg_grad: grad_autarky_ring
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj: { align: CENTER, width: 44, height: 44, radius: CIRCLE, bg_color: $col_surface, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - arc: { id: ring_cover_autarky, align: CENTER, width: 58, height: 58, start_angle: 135, end_angle: 45, mode: REVERSE, value: 100, arc_opa: TRANSP, arc_width: 7, pad_all: 0, clickable: false,
+                             indicator: { arc_color: $col_line, arc_width: 7, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
+                    - arc: { align: CENTER, width: 62, height: 62, start_angle: 42, end_angle: 138, value: 0, arc_color: $col_surface, arc_width: 12, arc_rounded: false, pad_all: 0, clickable: false,
+                             indicator: { arc_opa: TRANSP, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
+              # Wert und Einheit mittig im Ring (x 0..58); das "%" sitzt in
+              # der unteren Oeffnung des Bogens. Wert 26..47, Einheit 47..64:
+              # Blockmitte 45 = Ringmitte (16 + 29), keine Ueberlappung.
+              - label:
+                  id: val_autarky
+                  x: 0
+                  y: 26
+                  width: 58
+                  text_align: CENTER
+                  text: "--"
+                  text_font: f_val_s
+                  text_color: $col_ink
+              - label:
+                  x: 0
+                  y: 47
+                  width: 58
+                  text_align: CENTER
+                  styles: st_unit
+                  text: "%"
+              # Beschriftung 28..45, Abstand 4, Zweitzeile 49..66 -- derselbe
+              # Abstand wie in der Nachbarkachel (20..54, 58). Blockmitte 47
+              # ~ Ringmitte 45.
+              - label:
+                  styles: st_label
+                  x: 64
+                  y: 28
+                  width: 92
+                  height: 17
+                  long_mode: DOT
+                  text: "AUTARKIE"
+              - label:
+                  id: sub_autarky
+                  x: 64
+                  y: 49
+                  width: 92
+                  height: 17
+                  long_mode: DOT
+                  styles: st_sub
+                  # Tageswert, wie in der Kennzahl-Festlegung (Dokument 01):
+                  # die Statusleiste zeigt den Momentanwert, die Kachel den Tag.
+                  text: "Heute -- %"
+
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 1098
+            y: 624
+            width: 178
+            height: 112
+            widgets:
+              # Ring wie Autarkie, der Bogen deckt 100 - Eigenverbrauch ab
+              - obj:
+                  x: 0
+                  y: 16
+                  width: 58
+                  height: 58
+                  radius: CIRCLE
+                  bg_grad: grad_selfuse_ring
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj: { align: CENTER, width: 44, height: 44, radius: CIRCLE, bg_color: $col_surface, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - arc: { id: ring_cover_selfuse, align: CENTER, width: 58, height: 58, start_angle: 135, end_angle: 45, mode: REVERSE, value: 100, arc_opa: TRANSP, arc_width: 7, pad_all: 0, clickable: false,
+                             indicator: { arc_color: $col_line, arc_width: 7, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
+                    - arc: { align: CENTER, width: 62, height: 62, start_angle: 42, end_angle: 138, value: 0, arc_color: $col_surface, arc_width: 12, arc_rounded: false, pad_all: 0, clickable: false,
+                             indicator: { arc_opa: TRANSP, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
+              - label:
+                  id: val_selfuse
+                  x: 0
+                  y: 26
+                  width: 58
+                  text_align: CENTER
+                  text: "--"
+                  text_font: f_val_s
+                  text_color: $col_ink
+              - label:
+                  x: 0
+                  y: 47
+                  width: 58
+                  text_align: CENTER
+                  styles: st_unit
+                  text: "%"
+              - label:
+                  styles: st_label
+                  x: 64
+                  y: 20
+                  width: 92
+                  long_mode: WRAP
+                  text: "EIGEN-\nVERBRAUCH"
+              - label:
+                  id: sub_selfuse
+                  x: 64
+                  y: 58
+                  width: 92
+                  long_mode: WRAP
+                  styles: st_sub
+                  text: "${name_selfuse_note}"
+
+        # ================= Anlagenschema =================================
+        # Flaeche 904 x 668, Mittelachse x 452. Die Flex-Kaesten (Hausnetz,
+        # Verbraucher, Zaehler) setzen ihren Zeilenabstand ausdruecklich:
+        # pad_row: 4 im layout-Block -- direkt am Widget lehnt ESPHome
+        # pad_row ab. Ohne die Angabe gilt der Abstand aus LVGLs
+        # Standard-Theme, und flex_align_main CENTER schneidet die erste und
+        # letzte Zeile dann stillschweigend am Rahmen ab.
+        # Rechnung je Kasten: Zeilenhoehen + pad_row x (Zeilen - 1) muss in
+        # Hoehe - 2 x pad_all - 2 x Rahmen passen, mit Reserve > 0.
+        # Zeilenhoehen (so im erzeugten Code): Bild 24, f_icon 24, f_unit 17,
+        # f_text_s 20, f_val_s 21, f_val_m 25, f_val_l 30, f_val_xl 39.
+        # Einheit und Tageswert teilen sich eine Zeile; das spart je Kasten
+        # 17 px plus einen Abstand. Das gilt fuer alle Werte im Schema: Der
+        # Wert steht allein, die Einheit am Anfang der Zeile darunter.
+        - obj:
+            id: schema_area
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 76
+            width: 904
+            height: 668
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            widgets:
+              - obj: { id: fl00, x: 51, y: 103, width: 8, height: 8, radius: CIRCLE, bg_color: $col_full, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl01, x: 103, y: 115, width: 8, height: 8, radius: CIRCLE, bg_color: $col_full, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl02, x: 155, y: 103, width: 8, height: 8, radius: CIRCLE, bg_color: $col_full, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl03, x: 281, y: 103, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl04, x: 333, y: 115, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl05, x: 385, y: 103, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl06, x: 511, y: 103, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl07, x: 563, y: 115, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl08, x: 615, y: 103, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl09, x: 741, y: 103, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl10, x: 793, y: 115, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl11, x: 845, y: 103, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl12, x: 403, y: 167, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl13, x: 723, y: 167, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl14, x: 549, y: 207, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl15, x: 577, y: 207, width: 8, height: 8, radius: CIRCLE, bg_color: $col_batt, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl16, x: 779, y: 207, width: 8, height: 8, radius: CIRCLE, bg_color: $col_batt, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl19, x: 552, y: 281, width: 8, height: 8, radius: CIRCLE, bg_color: $col_batt, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl20, x: 678, y: 270, width: 8, height: 8, radius: CIRCLE, bg_color: $col_batt, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl21, x: 678, y: 281, width: 8, height: 8, radius: CIRCLE, bg_color: $col_batt, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl22, x: 804, y: 281, width: 8, height: 8, radius: CIRCLE, bg_color: $col_batt, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl23, x: 807, y: 207, width: 8, height: 8, radius: CIRCLE, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl24, x: 326, y: 381, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl29, x: 140, y: 399, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl30, x: 264, y: 399, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl31, x: 388, y: 399, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl32, x: 512, y: 399, width: 8, height: 8, radius: CIRCLE, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl33, x: 103, y: 207, width: 8, height: 8, radius: CIRCLE, bg_color: $col_full, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl34, x: 167, y: 591, width: 8, height: 8, radius: CIRCLE, bg_color: $col_full, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl35, x: 729, y: 591, width: 8, height: 8, radius: CIRCLE, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl36, x: 448, y: 653, width: 8, height: 8, radius: CIRCLE, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl01b, x: 103, y: 115, width: 8, height: 8, radius: CIRCLE, bg_color: $col_full, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl04b, x: 333, y: 115, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl07b, x: 563, y: 115, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              - obj: { id: fl10b, x: 793, y: 115, width: 8, height: 8, radius: CIRCLE, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, hidden: true, scrollable: false }
+              # Rahmen der Volleinspeisung zuerst, damit er hinter allem liegt.
+              #
+              # Die Beschriftung sass frueher oben bei y=8 und wurde dort von
+              # den Dachflaechen-Kaesten ueberlagert (Label bis y=25, Kaesten
+              # ab y=16). Oben ist kein Platz zu gewinnen -- die Kaesten
+              # koennen nicht tiefer, weil das Schema unten bereits auf der
+              # vollen Hoehe sitzt. Sie steht deshalb jetzt auf der unteren
+              # Rahmenlinie und traegt die Hintergrundfarbe, wodurch sie die
+              # Linie sauber freistanzt: dasselbe Prinzip wie bei einem
+              # beschrifteten Feldrahmen.
+              # Rahmen 2..212: Rand je 9 zur Gruppe der beiden ersten
+              # Flaechen (11..203), Mitte 107 = erster Wechselrichter.
+              # Beschriftung 76 breit bei 116..192, also auf der geraden
+              # Unterkante: 7,5 zu dessen Leitung (Kante
+              # 108,5), 8 zum Eckbogen ab x 200.
+              # Oben y 4 (Schirm 80) statt buendig mit der rechten Spalte
+              # (Kacheln ab Schirm 84): So bleiben 8 bis zum Dachbild (y 12),
+              # fast wie die 9 seitlich. Buendig blieben dort nur 4; der
+              # Versatz von 4 zur Kachelkante ist dafuer in Kauf genommen.
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 2, y: 4, width: 210, height: 246, bg_opa: TRANSP,
+                       border_color: $col_full, border_width: 1, border_opa: 45%, radius: 12, pad_all: 0 }
+              - label: { x: 116, y: 231, text: "${name_feedin}", text_align: CENTER, text_color: $col_full,
+                         text_font: f_unit, bg_color: $col_bg, bg_opa: COVER,
+                         pad_left: 6, pad_right: 6, pad_top: 2, pad_bottom: 2 }
+
+              # ---------- Leitungen --------------------------------------
+              - line: { points: [[55,107],[55,119],[107,119],[107,131]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { points: [[159,107],[159,119],[107,119]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { points: [[285,107],[285,119],[337,119],[337,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[389,107],[389,119],[337,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[515,107],[515,119],[567,119],[567,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[619,107],[619,119],[567,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[745,107],[745,119],[797,119],[797,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[849,107],[849,119],[797,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[407,171],[497,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[727,171],[637,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[553,211],[553,241],[330,241],[330,257]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[581,211],[581,250],[590,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { points: [[783,211],[783,250],[774,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { points: [[556,285],[808,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { points: [[556,285],[556,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { points: [[682,274],[682,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { points: [[808,285],[808,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              # Einspeisung knickt bei y 241 ab, gespiegelt zur Solarleitung
+              # links (553 / 811 = 682 -/+ 129, beide 30 unter den Kaesten):
+              # 28 zur Speicherleitung bei 783, 44 ueber der Schiene (285).
+              - line: { points: [[811,211],[811,241],[882,241],[882,517],[797,517],[797,545]], line_color: $col_feed, line_width: 3, line_rounded: true }
+              - line: { points: [[330,385],[330,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[144,403],[516,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[144,403],[144,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[268,403],[268,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[392,403],[392,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { points: [[516,403],[516,419]], line_color: $col_line, line_width: 3, line_rounded: true }
+              - line: { points: [[107,211],[107,545]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { points: [[171,595],[370,595]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { points: [[733,595],[534,595]], line_color: $col_feed, line_width: 3, line_rounded: true }
+              - line: { points: [[452,657],[452,664]], line_color: $col_feed, line_width: 3, line_rounded: true }
+
+              # ---------- Dachgruppen: je zwei Dachflaechen ueber ihrem
+              #            Wechselrichter, Verlauf grad_lit_*, vor den
+              #            Dachflaechen, also dahinter. 200 breit, je 4
+              #            Rand zu den Kaesten, Mitte = Mitte des Paars.
+              #            Oben y 9 = 5 unter der Aussenkante des Voll-
+              #            einspeisungs-Rahmens, Radius 7 konzentrisch zu
+              #            dessen 12. Unten bis 99: Die Kugeln (8 x 8)
+              #            starten bei y 107 -> Flaeche ab 103, mit
+              #            draw_rounding 2 ab 102. So bleiben 2 px Abstand,
+              #            und die Flussanimation zeichnet die Gruppen nie
+              #            mit.
+              - obj: { x: 7, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_full, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { x: 237, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { x: 467, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { x: 697, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+
+              # ---------- Dachflaechen: feste y-Positionen, kein Flex. Bild 0..24,
+              #            Name 25..42, Wert 45..66, Tageswert 68..85 -> Kasten 90,
+              #            Reserve 5
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 11, y: 12, width: 88, height: 90,
+                       bg_opa: TRANSP, border_width: 0, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_full, image_recolor_opa: COVER, align: TOP_MID, y: 0 } },
+                  { label: { align: TOP_MID, y: 25, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_1}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_roof_1, align: TOP_MID, y: 45, width: 88, height: 21, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_s, text_color: $col_full } },
+                  { label: { id: e_roof_1, align: TOP_MID, y: 68, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 115, y: 12, width: 88, height: 90,
+                       bg_opa: TRANSP, border_width: 0, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_full, image_recolor_opa: COVER, align: TOP_MID, y: 0 } },
+                  { label: { align: TOP_MID, y: 25, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_2}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_roof_2, align: TOP_MID, y: 45, width: 88, height: 21, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_s, text_color: $col_full } },
+                  { label: { id: e_roof_2, align: TOP_MID, y: 68, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 241, y: 12, width: 88, height: 90,
+                       bg_opa: TRANSP, border_width: 0, pad_all: 0, widgets: [
+                  { image: { src: img_solar_module, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 0 } },
+                  { label: { align: TOP_MID, y: 25, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_3}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_roof_3, align: TOP_MID, y: 45, width: 88, height: 21, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_s, text_color: $col_solar } },
+                  { label: { id: e_roof_3, align: TOP_MID, y: 68, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 345, y: 12, width: 88, height: 90,
+                       bg_opa: TRANSP, border_width: 0, pad_all: 0, widgets: [
+                  { image: { src: img_solar_module, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 0 } },
+                  { label: { align: TOP_MID, y: 25, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_4}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_roof_4, align: TOP_MID, y: 45, width: 88, height: 21, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_s, text_color: $col_solar } },
+                  { label: { id: e_roof_4, align: TOP_MID, y: 68, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 471, y: 12, width: 88, height: 90,
+                       bg_opa: TRANSP, border_width: 0, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 0 } },
+                  { label: { align: TOP_MID, y: 25, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_5}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_roof_5, align: TOP_MID, y: 45, width: 88, height: 21, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_s, text_color: $col_solar } },
+                  { label: { id: e_roof_5, align: TOP_MID, y: 68, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 575, y: 12, width: 88, height: 90,
+                       bg_opa: TRANSP, border_width: 0, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 0 } },
+                  { label: { align: TOP_MID, y: 25, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_6}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_roof_6, align: TOP_MID, y: 45, width: 88, height: 21, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_s, text_color: $col_solar } },
+                  { label: { id: e_roof_6, align: TOP_MID, y: 68, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 701, y: 12, width: 88, height: 90,
+                       bg_opa: TRANSP, border_width: 0, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 0 } },
+                  { label: { align: TOP_MID, y: 25, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_7}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_roof_7, align: TOP_MID, y: 45, width: 88, height: 21, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_s, text_color: $col_solar } },
+                  { label: { id: e_roof_7, align: TOP_MID, y: 68, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 805, y: 12, width: 88, height: 90,
+                       bg_opa: TRANSP, border_width: 0, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 0 } },
+                  { label: { align: TOP_MID, y: 25, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_8}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_roof_8, align: TOP_MID, y: 45, width: 88, height: 21, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_s, text_color: $col_solar } },
+                  { label: { id: e_roof_8, align: TOP_MID, y: 68, width: 88, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+
+              # ---------- Wechselrichter: feste y-Positionen, kein Flex. Innen
+              #            80 - 2 x 1 - 2 x 2 = 74; Name 3..20, Wert 24..49,
+              #            Tageswert 52..69 -> 3 oben, Reserve 5 unten. Die
+              #            Glyphen sitzen oben tiefer in der Zeile, sichtbar
+              #            sind es so etwa 10 / 10 wie bei den Flex-Kaesten.
+              #            Ton wie die Dachgruppe darueber (Kastenmass): Der
+              #            Kasten ist deckend getoent (col_box_*), darauf
+              #            liegt ab 2 / 7 ein Schein auf voller Innenbreite,
+              #            136 x 66 bis y 72: grad_box_long_full beim
+              #            ersten Wechselrichter, grad_box_long_solar bei den
+              #            anderen.
+              #            Kugeln reichen mit draw_rounding 2 bis 5 px hinein
+              #            (oben und unten mittig, bei den drei rechten
+              #            seitlich bei y 35..44) und verschwinden hinter
+              #            der deckenden Fuellung. Oben und unten bleiben
+              #            2 px Abstand zum Schein; seitlich liegt die Kugel
+              #            unter ihm, LVGL zeichnet dort ein kleines Stueck
+              #            VER-Verlauf mit neu (siehe grad_box_long_*).
+              #            Im Inhaltsbereich (Rahmen 2 + pad 1): x -1, y 4.
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 37, y: 131, width: 140, height: 80,
+                       border_color: $col_full, bg_color: $col_box_full, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 136, height: 66, radius: 0, bg_grad: grad_box_long_full, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
+                  { label: { align: TOP_MID, y: 3, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_inv_1}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_wr_full, align: TOP_MID, y: 24, width: 132, height: 25, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_m, text_color: $col_full } },
+                  { label: { id: e_wr_full, align: TOP_MID, y: 52, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 267, y: 131, width: 140, height: 80,
+                       border_color: $col_solar, bg_color: $col_box_solar, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 136, height: 66, radius: 0, bg_grad: grad_box_long_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
+                  { label: { align: TOP_MID, y: 3, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_inv_2}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_wr_mini, align: TOP_MID, y: 24, width: 132, height: 25, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_m, text_color: $col_solar } },
+                  { label: { id: e_wr_mini, align: TOP_MID, y: 52, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 497, y: 131, width: 140, height: 80,
+                       border_color: $col_solar, bg_color: $col_box_solar, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 136, height: 66, radius: 0, bg_grad: grad_box_long_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
+                  { label: { align: TOP_MID, y: 3, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_inv_3}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_wr_hybrid1, align: TOP_MID, y: 24, width: 132, height: 25, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_m, text_color: $col_solar } },
+                  { label: { id: e_wr_hybrid1, align: TOP_MID, y: 52, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 727, y: 131, width: 140, height: 80,
+                       border_color: $col_solar, bg_color: $col_box_solar, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 136, height: 66, radius: 0, bg_grad: grad_box_long_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
+                  { label: { align: TOP_MID, y: 3, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_inv_4}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_wr_hybrid2, align: TOP_MID, y: 24, width: 132, height: 25, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_m, text_color: $col_solar } },
+                  { label: { id: e_wr_hybrid2, align: TOP_MID, y: 52, width: 132, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+
+              # ---------- Hausnetz: 24 + 20 + 39 + 17 = 100, + 3 x pad_row 4 = 112;
+              #            innen 128 - 2 x 1 - 2 x 2 = 122 -> Reserve 10.
+              #            Mitte 330 = Solarabgang und Mitte der Verbraucher-
+              #            gruppe. Der Mini-WR darueber (Mitte 337) folgt dem
+              #            Dachraster; verbunden sind die beiden nicht, der
+              #            Versatz von 7 ist bewusst.
+              #            Schein grad_hub auf eigener Flaeche 176 x 114 ab
+              #            2 / 7 (Kastenmass): volle Innenbreite, keine
+              #            seitliche Kugel; oben und unten mittig reichen die
+              #            Kugeln gerundet bis 5 px hinein, dazu 2 px Abstand.
+              #            Radius 5 haelt die oberen Ecken vom geglaetteten
+              #            Rahmenbogen fern. Darueber grad_hub_shade auf
+              #            derselben Flaeche (Einblenden von oben, siehe
+              #            dort). ignore_layout nimmt beide aus dem Flex.
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 240, y: 257, width: 180, height: 128, border_color: $col_ink2, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
+                  { obj: { x: -1, y: 4, width: 176, height: 114, radius: 5, bg_grad: grad_hub, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, ignore_layout: true } },
+                  { obj: { x: -1, y: 4, width: 176, height: 114, radius: 0, bg_grad: grad_hub_shade, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, ignore_layout: true } },
+                  { label: { text: "\U000F1903", text_font: f_icon, text_color: $col_ink2 } },
+                  { label: { width: 172, height: 20, long_mode: DOT, text_align: CENTER, text: "${name_house}", text_color: $col_ink2, text_font: f_text_s } },
+                  { label: { id: v_house, width: 172, height: 39, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_xl, text_color: $col_ink } },
+                  { label: { id: e_house, width: 172, height: 17, long_mode: DOT, text_align: CENTER, text: "kW · --,- kWh heute", text_color: $col_ink3, text_font: f_unit } } ] }
+
+              # ---------- Speicher: wie die Wechselrichter, innen 74, 3 / 5.
+              #            Zweitzeile 108 breit (f_unit, gemessen): Strom VOR der
+              #            Spannung und ganzzahlig (%+.0f; die Nachkommastelle
+              #            nur in der Tabelle der Speicherseite).
+              #            "% · -12 A · 53,2 V" = 102,8 -> Reserve 5; mit
+              #            Nachkommastelle waeren es 114,2. Ab 100 A (113,2)
+              #            kuerzt DOT das Ende, also die Spannung, nie den Strom
+              #            samt Vorzeichen. Feste Hoehe 17, sonst bricht DOT um.
+              #            Toenung und Schein wie beim ersten
+              #            Wechselrichter (Kugeln nur
+              #            oben mittig, hinter der deckenden Fuellung
+              #            col_box_batt): grad_box_long_batt 112 x 66 ab
+              #            2 / 7 auf voller Innenbreite bis y 72, dort ist er
+              #            aus.
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 498, y: 299, width: 116, height: 80,
+                       border_color: $col_batt, bg_color: $col_box_batt, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 112, height: 66, radius: 0, bg_grad: grad_box_long_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
+                  { label: { align: TOP_MID, y: 3, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_bat_1}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_bat1, align: TOP_MID, y: 24, width: 108, height: 25, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_m, text_color: $col_batt } },
+                  { label: { id: d_bat1, align: TOP_MID, y: 52, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "% · --- A · --,- V", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 624, y: 299, width: 116, height: 80,
+                       border_color: $col_batt, bg_color: $col_box_batt, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 112, height: 66, radius: 0, bg_grad: grad_box_long_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
+                  { label: { align: TOP_MID, y: 3, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_bat_2}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_bat2, align: TOP_MID, y: 24, width: 108, height: 25, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_m, text_color: $col_batt } },
+                  { label: { id: d_bat2, align: TOP_MID, y: 52, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "% · --- A · --,- V", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 750, y: 299, width: 116, height: 80,
+                       border_color: $col_batt, bg_color: $col_box_batt, pad_all: 1, widgets: [
+                  { obj: { x: -1, y: 4, width: 112, height: 66, radius: 0, bg_grad: grad_box_long_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
+                  { label: { align: TOP_MID, y: 3, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_bat_3}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: v_bat3, align: TOP_MID, y: 24, width: 108, height: 25, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_m, text_color: $col_batt } },
+                  { label: { id: d_bat3, align: TOP_MID, y: 52, width: 108, height: 17, long_mode: DOT, text_align: CENTER, text: "% · --- A · --,- V", text_color: $col_ink2, text_font: f_unit } } ] }
+
+              # ---------- Verbraucher: 24 + 17 + 21 + 17 = 79, + 3 x 4 = 91;
+              #            innen 112 - 6 = 106 -> Reserve 15. Mitten 144/268/392/516
+              #            = Abgaenge der Schiene, Gruppe 94..566 mittig zu x 330
+              #            = Hausnetz
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 94, y: 419, width: 100, height: 112, border_color: $col_solar, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
+                  { label: { text: "\U000F1A43", text_font: f_icon, text_color: $col_solar } },
+                  { label: { width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_heatpump}", text_color: $col_ink2, text_font: f_unit } },
+                  { label: { id: v_heatpump, width: 94, height: 21, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_s, text_color: $col_ink } },
+                  { label: { id: d_heatpump, width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "kW · COP --", text_color: $col_ink3, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 218, y: 419, width: 100, height: 112, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
+                  { label: { text: "\U000F072A", text_font: f_icon, text_color: $col_ink2 } },
+                  { label: { width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_misc}", text_color: $col_ink2, text_font: f_unit } },
+                  { label: { id: v_misc, width: 94, height: 21, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_s, text_color: $col_ink } },
+                  { label: { id: d_misc, width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "kW · Basis --", text_color: $col_ink3, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 342, y: 419, width: 100, height: 112, border_color: $col_solar, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
+                  { label: { text: "\U000F05F1", text_font: f_icon, text_color: $col_solar } },
+                  { label: { width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_wb_1}", text_color: $col_ink2, text_font: f_unit } },
+                  { label: { id: v_wb1, width: 94, height: 21, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_s, text_color: $col_ink } },
+                  { label: { id: d_wb1, width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "kW · --,- kWh", text_color: $col_ink3, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 466, y: 419, width: 100, height: 112, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
+                  { label: { text: "\U000F05F1", text_font: f_icon, text_color: $col_ink3 } },
+                  { label: { width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_wb_2}", text_color: $col_ink2, text_font: f_unit } },
+                  { label: { id: v_wb2, width: 94, height: 21, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_s, text_color: $col_ink } },
+                  { label: { id: d_wb2, width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "kW · frei", text_color: $col_ink3, text_font: f_unit } } ] }
+
+              # ---------- Zaehler: PV/Haus 24 + 17 + 21 + 17 + 3 x 4 = 91 von innen
+              #            102 - 2 x 1 - 2 x 2 = 96 (Reserve 5); Hausanschluss
+              #            24 + 17 + 30 + 17 + 3 x 4 = 100 von innen 116 (Reserve
+              #            16). Hausanschluss 370..534 mittig zur Achse x 452; der
+              #            Abgang unten laeuft von seiner Unterkante 657 bis 664
+              #            (Kugel bis 668 = Schema). PV-Zaehler 43..171 und
+              #            Hauszaehler 733..861 gespiegelt: Mitten 107/797 = 452
+              #            -/+ 345, Rand je 43, Querleitungen 171..370 und
+              #            534..733, je 199 lang. Beide 545..647, Mitte 596 wie
+              #            beim Hausanschluss (535..657): Die Querleitungen bei
+              #            y 595 treffen alle drei Kaesten mittig.
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 43, y: 545, width: 128, height: 102, border_color: $col_full, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
+                  { label: { text: "\U000F0199", text_font: f_icon, text_color: $col_full } },
+                  { label: { width: 122, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_meter_pv}", text_color: $col_ink2, text_font: f_unit } },
+                  { label: { id: v_meter_pv, width: 122, height: 21, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_s, text_color: $col_full } },
+                  { label: { id: e_meter_pv, width: 122, height: 17, long_mode: DOT, text_align: CENTER, text: "kW · --,- kWh", text_color: $col_ink3, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 370, y: 535, width: 164, height: 122, border_color: $col_feed, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
+                  { label: { text: "\U000F0D3E", text_font: f_icon, text_color: $col_feed } },
+                  { label: { width: 158, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_grid}", text_color: $col_ink2, text_font: f_unit } },
+                  { label: { id: v_grid, width: 158, height: 30, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_l, text_color: $col_feed } },
+                  { label: { id: dir_grid, width: 158, height: 17, long_mode: DOT, text_align: CENTER, text: "kW", text_color: $col_ink3, text_font: f_unit } } ] }
+              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 733, y: 545, width: 128, height: 102, border_color: $col_feed, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
+                  { label: { text: "\U000F0199", text_font: f_icon, text_color: $col_feed } },
+                  { label: { width: 122, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_meter_house}", text_color: $col_ink2, text_font: f_unit } },
+                  { label: { id: v_meter_house, width: 122, height: 21, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_s, text_color: $col_feed } },
+                  { label: { id: e_meter_house, width: 122, height: 17, long_mode: DOT, text_align: CENTER, text: "kW · --,- kWh", text_color: $col_ink3, text_font: f_unit } } ] }
+
+              # ---------- Werte auf den Leitungen: feste y-Positionen, kein Flex.
+              #            Innen 48 - 2 x 3 - 2 x 1 = 40 hoch; Wert 0..21, Zeile
+              #            22..39 -> Reserve 1. Kasten 590..774, Mitte 682 =
+              #            Abgang zur Schiene, Stummel 581..590 und 774..783 je 9.
+              #            Innenbreite 184 - 8 = 176 = Labels. Jeder Tageswert
+              #            traegt seine Einheit, der Pfeil steht wie ein
+              #            Vorzeichen direkt vor der Zahl. Gemessen (f_unit,
+              #            Ziffern tabellarisch 7,8): "W · (Pfeil)12,3 kWh ·
+              #            (Pfeil)18,5 kWh" = 172 -> Reserve 4 fuer jeden
+              #            zweistelligen Wert; mit Leerzeichen hinter den
+              #            Pfeilen waeren es 178. Dreistellig kuerzt DOT.
+              #            Toenung wie bei den Speichern (deckend,
+              #            col_box_batt), Schein in der kurzen Form
+              #            (grad_box_short_batt). Die Kugeln links und rechts
+              #            (y 20..27) und unten mittig (ab y 44) reichen
+              #            gerundet bis 4 px hinein und verschwinden hinter
+              #            der Fuellung; zum Schein bleiben 2 px Abstand
+              #            (Kastenmass). Schein 182 x 17 ab 1 / 1,
+              #            volle Innenbreite bis y 17, Radius 6 konzentrisch
+              #            zum Rahmen (7). Er laeuft unten auf 0 % aus, die
+              #            gerundeten Unterecken zeigen so keine Tasche. Im
+              #            Inhaltsbereich (Rahmen 1 + pad 3): x -3, y -3.
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 590, y: 226, width: 184, height: 48,
+                       bg_color: $col_box_batt, bg_opa: COVER, border_color: $col_batt, border_width: 1, radius: 7, pad_all: 3, widgets: [
+                  { obj: { x: -3, y: -3, width: 182, height: 17, radius: 6, bg_grad: grad_box_short_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false } },
+                  { label: { id: e_batt, align: TOP_MID, y: 0, width: 176, height: 21, long_mode: DOT, text_align: CENTER, text: "---.---", text_font: f_val_s, text_color: $col_batt } },
+                  { label: { id: sub_battery_total, align: TOP_MID, y: 22, width: 176, height: 17, long_mode: DOT, text_align: CENTER, text: "W · \U000F0045--,- kWh · \U000F005D--,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+
+interval:
+  # >>> flow-animation -- erzeugt von tools/flow_animation.py, nicht von Hand aendern
+  - interval: 20ms
+    then:
+      - lambda: |-
+          static const int16_t  SX[] = {55,55,107,159,159,285,285,337,389,389,515,515,567,619,619,745,745,797,849,849,407,727,553,553,330,581,581,783,783,682,682,556,682,682,808,811,811,882,882,797,330,144,330,330,392,144,268,392,516,107,171,733,452};
+          static const int16_t  SY[] = {107,119,119,107,119,107,119,119,107,119,107,119,119,107,119,107,119,119,107,119,171,171,211,241,241,211,250,211,250,285,285,285,274,285,285,211,241,241,517,517,385,403,403,403,403,403,403,403,403,211,595,595,657};
+          static const int16_t  EX[] = {55,107,107,159,107,285,337,337,389,337,515,567,567,619,567,745,797,797,849,797,497,637,553,330,330,581,590,783,774,556,808,556,682,682,808,811,882,882,797,797,330,268,268,392,516,144,268,392,516,107,370,534,452};
+          static const int16_t  EY[] = {119,119,131,119,119,119,119,131,119,119,119,119,131,119,119,119,119,131,119,119,171,171,241,241,257,250,250,250,250,285,285,299,285,299,299,241,241,517,517,545,403,403,403,403,403,419,419,419,419,545,595,595,664};
+          static const uint16_t SL[] = {12,52,12,12,52,12,52,12,12,52,12,52,12,12,52,12,52,12,12,52,90,90,30,223,16,39,9,39,9,126,126,14,11,14,14,30,71,276,85,28,18,124,62,62,124,16,16,16,16,334,199,199,7};
+          static const uint16_t OFF[] = {0,2,3,5,7,8,10,12,13,15,17,18,20,21,22,25,27,29,30,31,32,33,34,35,40,41,42,43,44,45,46,47,48,49,50,51,52};
+          static const uint8_t  CNT[] = {2,1,2,2,1,2,2,1,2,2,1,2,1,1,3,2,2,1,1,1,1,1,1,5,1,1,1,1,1,1,1,1,1,1,1,1,1};
+          static const uint8_t  SUCC[] = {1,1,4,4,7,7,10,10,19,22,17,18,21,26,27,30,30,28,31,32};
+          static const uint16_t SOFF[] = {0,1,1,2,3,3,4,5,5,6,7,7,8,8,8,8,8,8,9,10,10,13,13,13,13,15,16,17,19,20,20,20,20,20,20,20,20};
+          static const uint8_t  SCNT[] = {1,0,1,1,0,1,1,0,1,1,0,1,0,0,0,0,0,1,1,0,3,0,0,0,2,1,1,2,1,0,0,0,0,0,0,0,0};
+          static const bool     ROOT[] = {true,false,true,true,false,true,true,false,true,true,false,true,true,true,true,true,true,false,false,true,true,false,true,true,true,true,false,false,true,true,true,true,true,true,true,true,true};
+          // Leistung je Strecke in W, hier binden spaeter die Sensoren an.
+          // Die Kugel laeuft in Zeichenrichtung, ihr Tempo folgt dem Betrag;
+          // 0 blendet sie aus, die Strecke loest dann auch nichts aus. Das
+          // VORZEICHEN wertet die Logik noch nicht aus -- eine Umkehr braucht
+          // die Topologie rueckwaerts und kommt mit der Sensoranbindung.
+          // Bis dahin laufen die Demo-Leistungen aus der Knotenregel nur auf
+          // der host-Plattform (Simulator, Screenshots). Auf dem Panel steht
+          // alles auf 0: keine erfundenen Fluesse.
+          #ifdef USE_HOST
+          static const int32_t  WATT[] = {2840,4460,1620,335,625,290,1910,3150,1240,680,2145,1465,760,430,1150,210,210,149,263,149,760,349,263,3180,430,210,154,276,122,1150,364,154,122,210,1150,3180,3180};
+          #else
+          static const int32_t  WATT[37] = {0};
+          #endif
+          static float   pos[37] = {0}, posB[37] = {0}, acc[37] = {0}, accB[37] = {0};
+          static bool    live[37] = {false}, liveB[37] = {false};
+          static int16_t lx[37], ly[37], lxB[37], lyB[37];
+          static bool    init = false;
+          static uint8_t next = 0;
+          lv_obj_t *const dots[37] = {
+            reinterpret_cast<lv_obj_t *>(id(fl00)), reinterpret_cast<lv_obj_t *>(id(fl01)), reinterpret_cast<lv_obj_t *>(id(fl02)), reinterpret_cast<lv_obj_t *>(id(fl03)), reinterpret_cast<lv_obj_t *>(id(fl04)),
+            reinterpret_cast<lv_obj_t *>(id(fl05)), reinterpret_cast<lv_obj_t *>(id(fl06)), reinterpret_cast<lv_obj_t *>(id(fl07)), reinterpret_cast<lv_obj_t *>(id(fl08)), reinterpret_cast<lv_obj_t *>(id(fl09)),
+            reinterpret_cast<lv_obj_t *>(id(fl10)), reinterpret_cast<lv_obj_t *>(id(fl11)), reinterpret_cast<lv_obj_t *>(id(fl12)), reinterpret_cast<lv_obj_t *>(id(fl13)), reinterpret_cast<lv_obj_t *>(id(fl14)),
+            reinterpret_cast<lv_obj_t *>(id(fl15)), reinterpret_cast<lv_obj_t *>(id(fl16)), nullptr, nullptr, reinterpret_cast<lv_obj_t *>(id(fl19)),
+            reinterpret_cast<lv_obj_t *>(id(fl20)), reinterpret_cast<lv_obj_t *>(id(fl21)), reinterpret_cast<lv_obj_t *>(id(fl22)), reinterpret_cast<lv_obj_t *>(id(fl23)), reinterpret_cast<lv_obj_t *>(id(fl24)),
+            nullptr, nullptr, nullptr, nullptr, reinterpret_cast<lv_obj_t *>(id(fl29)),
+            reinterpret_cast<lv_obj_t *>(id(fl30)), reinterpret_cast<lv_obj_t *>(id(fl31)), reinterpret_cast<lv_obj_t *>(id(fl32)), reinterpret_cast<lv_obj_t *>(id(fl33)), reinterpret_cast<lv_obj_t *>(id(fl34)),
+            reinterpret_cast<lv_obj_t *>(id(fl35)), reinterpret_cast<lv_obj_t *>(id(fl36)) };
+          lv_obj_t *const dotsB[37] = {
+            nullptr, reinterpret_cast<lv_obj_t *>(id(fl01b)), nullptr, nullptr, reinterpret_cast<lv_obj_t *>(id(fl04b)),
+            nullptr, nullptr, reinterpret_cast<lv_obj_t *>(id(fl07b)), nullptr, nullptr,
+            reinterpret_cast<lv_obj_t *>(id(fl10b)), nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr };
+          // Anlauf abwarten: Das Intervall laeuft ab dem ersten Tick, LVGL
+          // baut seine Objekte aber erst auf. Ein Zugriff darauf endet in
+          // einem Load access fault (get_prop_core) und damit im Rollback.
+          static uint16_t anlauf = 0;
+          if (anlauf < 150) { anlauf++; return; }
+          if (!init) { init = true; for (int i = 0; i < 37; i++) live[i] = ROOT[i]; }
+          int bewegt = 0;
+          for (int q = 0; q < 37; q++) {
+            int i = (next + q) % 37;
+            // Verteilstrecken haben keine Kugel (nullptr) und loesen nichts
+            // aus; ihre Abgaenge laufen als ROOT endlos (Regel 4 und 5).
+            if (!dots[i] || !live[i] || WATT[i] == 0) { if (dots[i]) lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }
+
+            float wl = fabsf((float) WATT[i]), umlauf;
+            if (wl <= 500.0f) umlauf = 16.0f / powf(fmaxf(wl, 50.0f) / 50.0f, 0.30103f);
+            else              umlauf = 8.0f / powf(wl / 500.0f, 0.48945f);
+            if (umlauf < 1.0f) umlauf = 1.0f;
+            float total = 0;
+            for (int s = 0; s < CNT[i]; s++) total += SL[OFF[i] + s];
+            umlauf *= powf(total / 490.0f, 0.5f);   // kurze Strecken deutlich schneller
+            float sch = total / umlauf * 20 / 1000.0f;
+            // Langsame Kugeln melden sich seltener: unter 1 px je Tick wird
+            // aufsummiert und erst ab 2 px bewegt. Nachgerechnet ueber alle
+            // Strecken kostet das im Mittel 6,8 Bewegungen je Tick, also
+            // 13,6 von 32 Flaechen -- bei 4 px waeren es 9,8. Die Reserve
+            // traegt das, und die langsamen laufen doppelt so glatt.
+            // 1,5 px waeren 16,1 Flaechen und damit zu knapp am Deckel.
+            // Gestaffelt: sehr langsame Kugeln bewegen sich in 1-px-Schritten,
+            // denn sie kommen ohnehin nur alle paar hundert Millisekunden
+            // dran. Ab 0,3 px je Tick lohnt die groebere Stufe.
+            if (sch < 1.0f) {
+              float grenze = (sch < 0.30f) ? 1.0f : 2.0f;
+              acc[i] += sch;
+              if (acc[i] < grenze) continue;              // noch nicht genug
+              if (bewegt >= 13) continue;          // Deckel: acc BLEIBT stehen
+              // Nicht mehr als eine Stufe auf einmal: sonst sammelt der
+              // Zaehler waehrend einer Drosselung weiter an und die Kugel
+              // springt danach ueber mehrere Pixel.
+              if (acc[i] > grenze) acc[i] = grenze;
+              sch = acc[i]; acc[i] = 0;
+            } else if (bewegt >= 13) {
+              acc[i] += sch;                              // Zeit merken statt verlieren
+              continue;
+            }
+            // Schnelle Kugeln laufen mit kleinen Schritten, dafuer bei jedem
+            // Tick -- fluessiger als grosse Spruenge. Der Deckel bleibt bei
+            // der Kugelgroesse, damit die Spur nicht reisst.
+            if (sch > 8.0f) sch = 8.0f;
+            pos[i] += sch + acc[i];
+            acc[i] = 0;
+            if (pos[i] >= total) {
+              pos[i] = 0; live[i] = ROOT[i];
+              for (int s = 0; s < SCNT[i]; s++) {
+                int t = SUCC[SOFF[i] + s];
+                if (!live[t]) live[t] = true;
+                else if (dotsB[t] && !liveB[t]) { liveB[t] = true; posB[t] = 0; }
+              }
+              if (!live[i]) { lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            }
+            float rest = pos[i];
+            int16_t px = SX[OFF[i]], py = SY[OFF[i]];
+            for (int s = 0; s < CNT[i]; s++) {
+              int k = OFF[i] + s;
+              if (rest <= SL[k] || s == CNT[i] - 1) {
+                float f = SL[k] ? rest / SL[k] : 0;
+                if (f > 1) f = 1;
+                px = SX[k] + (EX[k] - SX[k]) * f;
+                py = SY[k] + (EY[k] - SY[k]) * f;
+                break;
+              }
+              rest -= SL[k];
+            }
+            lv_obj_remove_flag(dots[i], LV_OBJ_FLAG_HIDDEN);
+            if (px != lx[i] || py != ly[i]) {
+              lv_obj_set_pos(dots[i], px - 4, py - 4);
+              lx[i] = px; ly[i] = py; bewegt++;
+            }
+          }
+          for (int i = 0; i < 37; i++) {
+            if (!dotsB[i]) continue;
+            if (!liveB[i] || WATT[i] == 0) { lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            float wl = fabsf((float) WATT[i]), umlauf;
+            if (wl <= 500.0f) umlauf = 16.0f / powf(fmaxf(wl, 50.0f) / 50.0f, 0.30103f);
+            else              umlauf = 8.0f / powf(wl / 500.0f, 0.48945f);
+            if (umlauf < 1.0f) umlauf = 1.0f;
+            float total = 0;
+            for (int s = 0; s < CNT[i]; s++) total += SL[OFF[i] + s];
+            umlauf *= powf(total / 490.0f, 0.5f);   // kurze Strecken deutlich schneller
+            float sch = total / umlauf * 20 / 1000.0f;
+            // Langsame Kugeln melden sich seltener: unter 1 px je Tick wird
+            // aufsummiert und erst ab 2 px bewegt. Nachgerechnet ueber alle
+            // Strecken kostet das im Mittel 6,8 Bewegungen je Tick, also
+            // 13,6 von 32 Flaechen -- bei 4 px waeren es 9,8. Die Reserve
+            // traegt das, und die langsamen laufen doppelt so glatt.
+            // 1,5 px waeren 16,1 Flaechen und damit zu knapp am Deckel.
+            // Gestaffelt: sehr langsame Kugeln bewegen sich in 1-px-Schritten,
+            // denn sie kommen ohnehin nur alle paar hundert Millisekunden
+            // dran. Ab 0,3 px je Tick lohnt die groebere Stufe.
+            if (sch < 1.0f) {
+              float grenze = (sch < 0.30f) ? 1.0f : 2.0f;
+              accB[i] += sch;
+              if (accB[i] < grenze) continue;              // noch nicht genug
+              if (bewegt >= 13) continue;          // Deckel: accB BLEIBT stehen
+              // Nicht mehr als eine Stufe auf einmal: sonst sammelt der
+              // Zaehler waehrend einer Drosselung weiter an und die Kugel
+              // springt danach ueber mehrere Pixel.
+              if (accB[i] > grenze) accB[i] = grenze;
+              sch = accB[i]; accB[i] = 0;
+            } else if (bewegt >= 13) {
+              accB[i] += sch;                              // Zeit merken statt verlieren
+              continue;
+            }
+            // Schnelle Kugeln laufen mit kleinen Schritten, dafuer bei jedem
+            // Tick -- fluessiger als grosse Spruenge. Der Deckel bleibt bei
+            // der Kugelgroesse, damit die Spur nicht reisst.
+            if (sch > 8.0f) sch = 8.0f;
+            posB[i] += sch + accB[i];
+            accB[i] = 0;
+            if (posB[i] >= total) {
+              posB[i] = 0; liveB[i] = false;
+              for (int s = 0; s < SCNT[i]; s++) {
+                int t = SUCC[SOFF[i] + s];
+                if (!live[t]) live[t] = true;
+                else if (dotsB[t] && !liveB[t]) { liveB[t] = true; posB[t] = 0; }
+              }
+              if (!liveB[i]) { lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            }
+            float rest = posB[i];
+            int16_t px = SX[OFF[i]], py = SY[OFF[i]];
+            for (int s = 0; s < CNT[i]; s++) {
+              int k = OFF[i] + s;
+              if (rest <= SL[k] || s == CNT[i] - 1) {
+                float f = SL[k] ? rest / SL[k] : 0;
+                if (f > 1) f = 1;
+                px = SX[k] + (EX[k] - SX[k]) * f;
+                py = SY[k] + (EY[k] - SY[k]) * f;
+                break;
+              }
+              rest -= SL[k];
+            }
+            lv_obj_remove_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN);
+            if (px != lxB[i] || py != lyB[i]) {
+              lv_obj_set_pos(dotsB[i], px - 4, py - 4);
+              lxB[i] = px; lyB[i] = py; bewegt++;
+            }
+          }
+          next = (next + bewegt + 1) % 37;
+  # <<< flow-animation

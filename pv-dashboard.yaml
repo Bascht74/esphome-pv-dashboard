@@ -8,7 +8,9 @@
 #   PSRAM      : 32 MB (im Chip-Package, HEX-Mode)
 #   Flash      : 32 MB NOR
 #
-# Basis-Config "Hello World". Weitere Funktionen kommen als Packages dazu.
+# Dies ist die EINZIGE Datei, die beim Einrichten angefasst wird. Sie enthaelt
+# den Geraetenamen, die Zugangsdaten als Verweis auf die secrets.yaml und die
+# Liste der Pakete. Alles Weitere steht in den Paketen daneben.
 ##############################################################################
 
 substitutions:
@@ -16,251 +18,189 @@ substitutions:
   devicename: pv-dashboard
   device_description: "Waveshare ESP32-P4-WIFI6-Touch-LCD-10.1"
 
+  # Zugangsdaten. Nur hier steht !secret -- die Pakete arbeiten ausschliesslich
+  # mit ${...} und bleiben damit frei von Geheimnissen. Das ist Voraussetzung
+  # dafuer, sie spaeter aus dem GitHub-Repo nachzuladen, waehrend diese Datei
+  # und die secrets.yaml auf dem Rechner bleiben.
+  #
+  # Die Werte selbst stehen in secrets.yaml (nicht im Repo). Welche Schluessel
+  # dort erwartet werden, zeigt secrets.yaml.example.
+  #
+  # Geprueft mit 2026.9.0: ESPHome setzt substitutions erst nach dem
+  # Zusammenfuehren der Pakete ein und merkt sich dabei die Herkunft aus
+  # !secret. "esphome config" zeigt weiterhin nur "!secret '<name>'", nicht den
+  # Wert -- der Umweg ueber substitutions gibt also nichts preis.
+  wifi_ssid:     !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  ap_password:   !secret ap_password
+  api_key:       !secret encryption_key
+  ota_password:  !secret ota_password
+
+  ############################################################################
+  # HIER BESCHREIBEN SIE IHRE ANLAGE
+  #
+  # Die Beschriftungen im Anlagenschema und die drei Tarife. Jeder Wert hat
+  # im zugehoerigen Paket einen Standard; was hier steht, sticht ihn. ESPHome
+  # laesst dabei die Hauptdatei gewinnen -- geprueft mit 2026.9.0, die Pakete
+  # bleiben unangetastet. Eine geloeschte Zeile faellt auf den Demo-Wert
+  # zurueck, eine zusaetzliche Zeile gibt es nicht: Nur die hier genannten
+  # Namen werden im Schema eingesetzt.
+  #
+  # Die Kaesten sind knapp gerechnet. Eine laengere Beschriftung sprengt den
+  # Kasten oder wird von LVGL mit "..." gekuerzt (long_mode DOT). Hinter
+  # jeder Zeile steht deshalb "Breite des Demo-Werts von verfuegbarer
+  # Breite", in Pixeln und in der Schrift des jeweiligen Kastens gemessen.
+  # Die Kontrolle fuer die eigenen Werte ist der Vergleich mit genau diesen
+  # Zahlen: Bleibt die eigene Beschriftung unter der verfuegbaren Breite,
+  # passt sie.
+  #
+  # Der Screenshot-Lauf zeigt die eigenen Werte NICHT. Er baut ueber
+  # pv-dashboard-sim.yaml, und keine der beiden Dateien bindet diese Datei
+  # hier ein -- auf den Bildern stehen immer die Demo-Werte aus den
+  # Seiten-Paketen (geprueft mit 2026.9.0). Wer eine eigene Beschriftung
+  # wirklich gerendert sehen will, traegt sie zum Messen voruebergehend in
+  # das jeweilige Seiten-Paket ein und rendert dann:
+  #
+  #   ~/.venvs/esphome-beta/bin/esphome run pv-dashboard-shots.yaml
+  #   sips -s format png shots/*.bmp --out shots/
+  #
+  # Danach die Checkliste in docs/04 durchgehen.
+  ############################################################################
+
+  # --- Dachflaechen und Module (obere Reihe im Schema, je 88 px) ---------
+  # Reihenfolge von links nach rechts; Platz 3 und 4 sind die zwei
+  # Einzelmodule am Mini-Wechselrichter.
+  name_pv_1: "Dach Süd"        # 56 von 88
+  name_pv_2: "Dach West"       # 63 von 88
+  name_pv_3: "Modul 1"         # 48 von 88
+  name_pv_4: "Modul 2"         # 48 von 88
+  name_pv_5: "Dach Ost"        # 53 von 88
+  name_pv_6: "Nebendach"       # 67 von 88
+  name_pv_7: "Dach Nord"       # 62 von 88
+  name_pv_8: "Garagendach"     # 78 von 88
+
+  # --- Wechselrichter (zweite Reihe, je 132 px) -------------------------
+  # Je Geraet die zwei Flaechen darueber. Die Leistung gehoert in die
+  # Beschriftung, sie steht sonst nirgends auf der Seite.
+  name_inv_1: "Voll-WR 7 kW"       #  81 von 132, Flaechen 1 und 2
+  name_inv_2: "Mini-WR 0,8 kW"     #  94 von 132, Module 3 und 4
+  name_inv_3: "Hybrid 10 kW · A"   #  98 von 132, Flaechen 5 und 6
+  name_inv_4: "Hybrid 10 kW · B"   #  98 von 132, Flaechen 7 und 8
+
+  # --- Rahmen um die Volleinspeisung ------------------------------------
+  # Sitzt auf der unteren Rahmenlinie und stanzt sie frei. Zweizeilig: Das
+  # "\n" im Wert ist der Zeilenumbruch, jede Zeile hat 64 px.
+  name_feedin: "VOLLEIN-\nSPEISUNG"   # 58 / 64 von je 64
+
+  # --- Speicher (je 108 px im Schema, 300 px auf der Speicherseite) -----
+  # Dieselben drei Namen tragen auch die Ringe und die Tabellenkoepfe auf
+  # der Speicherseite; dort stehen sie in Grossbuchstaben.
+  name_bat_1: "Speicher 1"     # 63 von 108
+  name_bat_2: "Speicher 2"     # 63 von 108
+  name_bat_3: "Speicher 3"     # 63 von 108
+  # Zweitzeile unter dem Mittelwert auf der Speicherseite (326 px)
+  name_bat_summary: "Mittel der drei Speicher"   # 139 von 326
+
+  # --- Hausnetz und Verbraucherschiene ----------------------------------
+  name_house: "Hausnetz"       #  64 von 172
+  name_heatpump: "Wärmepumpe"  #  83 von 94
+  name_misc: "Sonstige"        #  50 von 94, Sammelposten fuer alles uebrige
+  name_wb_1: "Wallbox 1"       #  60 von 94
+  name_wb_2: "Wallbox 2"       #  60 von 94
+
+  # --- Zaehler (untere Reihe) -------------------------------------------
+  name_meter_pv: "PV-Zähler"      #  59 von 122, Zaehler des Volleinspeise-Kreises
+  name_grid: "Hausanschluss"      #  86 von 158, Netzpunkt in der Mitte
+  name_meter_house: "Hauszähler"  #  65 von 122, Einspeisung und Bezug des Hauses
+
+  # --- Zweitzeile der Kachel Eigenverbrauch (92 px) ---------------------
+  # Die Quote laesst die Volleinspeisung aussen vor (docs/01). Bewusst ein
+  # eigener Text und kein Verweis auf name_inv_1: Der Name traegt dort die
+  # Leistung mit, "ohne Voll-WR 7 kW" waere 112 px breit und wuerde in der
+  # nur 92 px schmalen Kachel umbrechen. Wer name_inv_1 aendert, zieht
+  # hier von Hand nach.
+  name_selfuse_note: "ohne Voll-WR"   # 79 von 92
+
+  # --- Tarife fuer die Geldrechnung, in Cent je kWh ----------------------
+  # Noch ohne Wirkung: Die Geldrechnung ist nicht gebaut (docs/06), keine
+  # Paketdatei liest diese drei Werte, und die Kachel TAGESERTRAG zeigt
+  # weiter Striche. Sie werden hier nur schon vorgehalten.
+  # Demo-Werte, bewusst rund. Die eigenen Tarife gehoeren hierher. Im Repo
+  # stehen die Demo-Werte; eigene Werte landen nur dann darin, wenn diese
+  # Datei committet wird.
+  tarif_volleinspeisung_ct: "20.0"  # Volleinspeisung
+  tarif_ueberschuss_ct: "10.0"      # Ueberschusseinspeisung
+  tarif_bezug_ct: "30.0"            # Strombezug
+
 esphome:
   name: "${devicename}"
   friendly_name: "${upper_devicename}"
   comment: "${device_description}"
   min_version: 2026.9.0
 
-esp32:
-  # ACHTUNG: Dieses Board hat ECO2-Silizium, kein Serien-Silizium ab Rev. 3.00.
-  # Das Boot-ROM meldet sich mit "ESP-ROM:esp32p4-eco2-20240710".
-  # Mit board: esp32-p4_r3-evboard stuerzt bereits der Bootloader ab
-  # ("Illegal instruction" direkt am entry-Punkt, Dauerneustart).
-  board: esp32-p4-evboard
-  variant: esp32p4
-  # Pflicht fuer Silizium vor Rev. 3.00.
-  engineering_sample: true
-  flash_size: 32MB
-  # ECO2-Engineering-Samples sind laut ESPHome (Code-Kommentar und Doku) auf
-  # 360MHz begrenzt. 400MHz lehnt die Validierung nicht ab, sondern warnt nur
-  # (esphome/esphome#13425) -- fuer dieses Board bleibt es trotzdem bei 360MHz.
-  cpu_frequency: 360MHz
-  # Native ESP-IDF-Toolchain (CMake + idf.py + Espressif-Compiler), kein
-  # PlatformIO. Das ist inzwischen der Default; 'platformio' ist abgekuendigt
-  # und faellt in ESPHome 2027.2.0 weg. Hier explizit gesetzt.
-  toolchain: esp-idf
-  framework:
-    type: esp-idf
-    # Neueste stabile 6.x. Ein 6.1.x gibt es noch nicht -- von 6.1 existiert
-    # bisher nur v6.1-beta1. ESPHome-"recommended" ist weiterhin 5.5.5;
-    # bei Build-Problemen ist das der schnellste Gegentest.
-    version: 6.0.2
-    advanced:
-      # Pflicht fuer 32 MB Flash zusammen mit OTA. Die Warnung "Using
-      # experimental features in ESP-IDF ..." bei der Code-Erzeugung ist
-      # damit gewollt, wie die zur nicht empfohlenen Framework-Version.
-      enable_idf_experimental_features: true
-
-# 32 MB PSRAM im Package - ohne PSRAM kein MIPI-DSI-Framebuffer.
-psram:
-  mode: hex
-  speed: 200MHz
-
-# LDO-Kanal 3 versorgt die MIPI-DSI-PHY (VDD_MIPI_DPHY, 2.5 V).
-# Pflicht-Abhaengigkeit der mipi_dsi-Komponente.
-esp_ldo:
-  - channel: 3
-    voltage: 2.5V
-
-# WLAN/BLE laufen nicht auf dem P4 selbst, sondern auf dem ESP32-C6 daneben.
-# Die Verbindung ist ein 4-Bit-SDIO-Bus.
-esp32_hosted:
-  variant: ESP32C6
-  reset_pin: GPIO54
-  clk_pin: GPIO18
-  cmd_pin: GPIO19
-  d0_pin: GPIO14
-  d1_pin: GPIO15
-  d2_pin: GPIO16
-  d3_pin: GPIO17
-  active_high: true
-  # SDIO-Puffer ins PSRAM statt in den knappen internen RAM.
-  use_psram: true
-
-# Die ESP-Hosted-Firmware des C6 kam ab Werk von Waveshare und ist zu alt:
-# Beim ersten Boot meldete ESPHome
-#   "Co-processor not responding; BLE disabled."
-# Der C6 macht WLAN, antwortet aber nicht auf die Abfrage der Bluetooth-
-# Firmwareversion.
-#
-# ESPHome pflegt dafuer ein eigenes Firmware-Verzeichnis. Der Baustein unten
-# vergleicht die Version auf dem C6 mit dem Manifest und bietet passende
-# Updates an -- als Update-Entity in Home Assistant, uebertragen ueber die
-# bestehende SDIO-Strecke. Der C6 muss dafuer nicht ausgebaut werden.
-#
-# Es wird automatisch die hoechste Version gewaehlt, die zur einkompilierten
-# esp_hosted-Bibliothek passt (seit ESPHome 2026.8.0: 2.12.12).
-http_request:
-  verify_ssl: false
-
-update:
-  - platform: esp32_hosted
-    type: http
-    name: "Co-Prozessor-Firmware"
-    source: "https://esphome.github.io/esp-hosted-firmware/manifest/esp32c6.json"
-    update_interval: 6h
-    # Neue C6-Firmware als Info in die Meldungsliste. x ist das UpdateInfo
-    # (latest_version, current_version, ...). Ausgeloest wird nur beim
-    # Wechsel auf "verfuegbar", nicht bei jeder Pruefung (seit 2026.8.1).
-    on_update_available:
-      - script.execute:
-          id: alert_push
-          severity: 0
-          device: "Co-Prozessor"
-          text: !lambda |-
-            if (x.latest_version.empty())
-              return std::string("Neue Firmware verfügbar");
-            std::string s = "Firmware " + x.latest_version + " verfügbar";
-            if (!x.current_version.empty())
-              s += " (installiert: " + x.current_version + ")";
-            return s;
-
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  ap:
-    ssid: "${upper_devicename} Fallback"
-    password: !secret ap_password
-
-captive_portal:
-
-logger:
-  # I2C-Scan-Ergebnisse (ESP_LOGCONFIG) erscheinen erst ab level: CONFIG
-  # (oder DEBUG).
-  level: INFO
-  # P4: Log geht ueber den USB-UART-Port (Type-C, Beschriftung "UART").
-  hardware_uart: UART0
-
-api:
-  reboot_timeout: 9999 min
-  encryption:
-    key: !secret encryption_key
-  # Wakeword-Start/-Stopp steuert das Audio-Package ueber voice_assistant:
-  # on_client_connected/-disconnected (Halbduplex, siehe dort). Hier nicht:
-  # Die api-Trigger feuern auch fuer Log-Clients -- ein Start mitten in der
-  # Musik belegt den I2S-Bus, ein voice_assistant.stop beim Trennen eines
-  # Log-Clients bricht eine laufende Sprachsitzung ab.
-
-# Zuletzt gezeichnete Zehnerstufe des OTA-Fortschritts (on_progress). on_begin
-# setzt sie zurueck: Sonst fehlte bei einem zweiten Upload in derselben
-# Laufzeit die erste Stufe, wenn sie der letzten des Fehlversuchs gleicht.
-globals:
-  - id: ota_last_step
-    type: int
-    restore_value: false
-    initial_value: '-1'
-
-ota:
-  - platform: esphome
-    # Umstieg auf Noise-Verschluesselung in zwei Schritten:
-    #   1. Jetzt: 'password' bleibt. Den Upload prueft die Firmware, die
-    #      gerade auf dem Geraet laeuft -- die alte kennt nur das Passwort
-    #      und wuerde ein verschluesseltes Update abweisen.
-    #   2. Erst NACH der ersten erfolgreichen OTA-Installation mit 2026.9:
-    #      'password' durch 'encryption: {}' ersetzen (nutzt den API-Schluessel).
-    # Beides zusammen geht nicht, die Optionen schliessen sich aus. Die
-    # 9.0-Warnung zum Passwort (~3,5 KB Flash) ist fuer Schritt 1 in Kauf genommen.
-    password: !secret ota_password
-    # WICHTIG zum Verstaendnis der Blockstruktur unten:
-    #
-    # ESPHome laedt die Firmware in EINER blockierenden Schleife innerhalb
-    # eines einzigen loop()-Durchlaufs (ota_esphome.cpp, "while (total <
-    # ota_size)"). Der Watchdog wird darin gefuettert, App.loop() aber nicht
-    # mehr aufgerufen -- und genau dort laeuft LVGL (lvgl_esphome.cpp ruft
-    # lv_timer_handler() aus loop()).
-    #
-    # Folge: Waehrend des Uploads zeichnet LVGL nichts mehr. lvgl.widget.show
-    # setzt zwar das Flag, aber das Bild aendert sich nie; das Panel wuerde
-    # erst nach dem Upload erscheinen -- also nie, weil dann der Neustart
-    # kommt. Deshalb steht hinter jeder Aenderung ein lv_refr_now(), das
-    # sofort und synchron zeichnet. LVGL laeuft in derselben Schleife wie
-    # OTA, ein Nebenlaeufigkeitsproblem gibt es dabei nicht.
-    on_begin:
-      - globals.set:
-          id: ota_running
-          value: 'true'
-      - globals.set:
-          id: ota_last_step
-          value: '-1'
-      - lvgl.bar.update:
-          id: bar_ota
-          value: 0
-      # Nur die Zahl -- das "%" steht als eigenes Label darunter.
-      - lvgl.label.update:
-          id: lbl_ota_pct
-          text: "0"
-      - lvgl.widget.show: ota_panel
-      - lambda: 'lv_refr_now(nullptr);'
-    on_progress:
-      # x ist der Fortschritt in Prozent (float).
-      #
-      # Nur in Zehnerschritten neu zeichnen: Jedes lv_refr_now() uebertraegt
-      # den kompletten Framebuffer und konkurriert dabei mit dem Upload um
-      # die PSRAM-Bandbreite. Zehn kurze
-      # Aktualisierungen ueber den ganzen Upload sind der Kompromiss aus
-      # Rueckmeldung und Ruhe.
-      - if:
-          condition:
-            lambda: |-
-              int step = ((int) x) / 10;
-              if (step == id(ota_last_step))
-                return false;
-              id(ota_last_step) = step;
-              return true;
-          then:
-            - lvgl.bar.update:
-                id: bar_ota
-                value: !lambda return (int) x;
-            - lvgl.label.update:
-                id: lbl_ota_pct
-                text: !lambda |-
-                  char buf[8];
-                  snprintf(buf, sizeof(buf), "%d", (int) x);
-                  return std::string(buf);
-            - lambda: 'lv_refr_now(nullptr);'
-    on_end:
-      - lvgl.bar.update:
-          id: bar_ota
-          value: 100
-      - lvgl.label.update:
-          id: lbl_ota_pct
-          text: "100"
-      - lvgl.label.update:
-          id: lbl_ota_hint
-          text: "Neustart …"
-      - lambda: 'lv_refr_now(nullptr);'
-    on_error:
-      # x ist der Fehlercode (uint8_t).
-      - lvgl.label.update:
-          id: lbl_ota_title
-          text: "Update fehlgeschlagen"
-      - lvgl.label.update:
-          id: lbl_ota_hint
-          text: !lambda |-
-            char buf[24];
-            snprintf(buf, sizeof(buf), "Fehlercode %d", (int) x);
-            return std::string(buf);
-      - lambda: 'lv_refr_now(nullptr);'
-      # Stehen lassen, damit die Meldung lesbar ist -- danach zurueck zur
-      # Oberflaeche, das Geraet laeuft ja mit der alten Firmware weiter.
-      # Ab hier laeuft loop() wieder, LVGL zeichnet also von selbst.
-      - delay: 10s
-      - globals.set:
-          id: ota_running
-          value: 'false'
-      - lvgl.widget.hide: ota_panel
-      - script.execute: update_clock
-
 packages:
   # Gemeinsam mit dem Simulator (pv-dashboard-sim.yaml) -- hier geaenderte
   # Oberflaeche wirkt dort sofort mit.
-  tokens:      !include .pv-dashboard_tokens.yaml
-  fonts:       !include .pv-dashboard_fonts.yaml
-  ui:          !include .pv-dashboard_ui.yaml
+  utility: !include .pv-dashboard_utility.yaml
+  ui:      !include .pv-dashboard_ui.yaml
   # Nur auf dem Geraet
-  display:     !include .pv-dashboard_display.yaml
-  audio:       !include .pv-dashboard_audio.yaml
-  ble:         !include .pv-dashboard_ble.yaml
-  diagnostics: !include .pv-dashboard_diagnostics.yaml
-  serial:      !include .pv-dashboard_serial.yaml
+  display: !include .pv-dashboard_display.yaml
+  audio:   !include .pv-dashboard_audio.yaml
+  # Chip, Funk, WLAN, API, OTA, Bluetooth, Zeit und Diagnose, serielle
+  # Schnittstellen. Steht bewusst am Ende: ESPHome haengt Listen aus Paketen
+  # in der Reihenfolge der Deklaration aneinander, und die Diagnose-Sensoren
+  # standen auch vorher hinter denen der Oberflaeche.
+  core:    !include .pv-dashboard_core.yaml
+
+##############################################################################
+# SPAETER: dieselben Pakete aus dem GitHub-Repo statt von der Platte
+#
+# Der Block unten ist ausgeschaltet, weil das Repo heute noch privat ist --
+# fuer ein privates Repo muesste hier username/password stehen, also ein
+# Token in genau der Datei, die keine Geheimnisse enthalten soll. Sobald das
+# Repo oeffentlich ist, werden die beiden Bloecke getauscht: den Block oben
+# auskommentieren, den Block unten einkommentieren. Geprueft mit 2026.9.0
+# gegen eine Kopie dieses Repos: Der Dump von "esphome config" ist danach
+# Zeile fuer Zeile derselbe, abgesehen von den Pfaden der beiden Bilder
+# (sie zeigen dann in den Checkout) und dem letzten Punkt unten.
+#
+# Was sich dadurch aendert:
+#   * Das Geraet baut aus dem GESCHOBENEN Stand. Eine Aenderung an einem
+#     Paket wirkt erst nach einem push, nicht schon beim Speichern.
+#   * ESPHome legt den Checkout unter .esphome/packages ab und frischt ihn
+#     nur gemaess refresh auf: bei "1d" fruehestens am naechsten Tag,
+#     "always" holt bei jedem Lauf, "never" gar nicht.
+#   * Simulator und Screenshots bleiben lokal. pv-dashboard-sim.yaml und
+#     pv-dashboard-shots.yaml binden die Dateien weiter von der Platte ein
+#     und zeigen damit den Arbeitsstand schon vor dem push.
+#   * Die Zusage weiter oben gilt dann nicht mehr: "esphome config" zeigt
+#     die Werte aus der secrets.yaml nicht laenger als !secret '<name>',
+#     sondern als Wert -- im Terminal unsichtbar gestellt, in einer
+#     umgeleiteten Datei aber lesbar. Grund ist ESPHome selbst: jede
+#     nachgeladene Paketdatei leert die Merkliste, aus der die Ausgabe den
+#     Namen zurueckholt. Nach der Umstellung die Ausgabe also nicht mehr in
+#     eine Datei schreiben.
+#
+# Die sieben Seitendateien stehen mit Absicht NICHT in der Liste:
+# .pv-dashboard_ui.yaml holt sie selbst ueber !include, und zwar aus
+# demselben Checkout. Wer sie zusaetzlich auflistet, bekommt jede Seite
+# zweimal und der Lauf bricht ab ("ID redraw_curve redefined"). Genauso
+# kommt der Ordner images/ aus dem Checkout: ESPHome sucht eine Bilddatei
+# auch neben der Paketdatei, nicht nur neben dieser Datei hier.
+#
+# Die Kurzform, eine Zeile je Datei, tut es auch:
+#   ui: github://Bascht74/esphome-pv-dashboard/.pv-dashboard_ui.yaml@main
+# Die Langform unten kommt dagegen mit einem einzigen Checkout fuer alle
+# Dateien aus und haelt Repo, Zweig und Auffrischung an einer Stelle.
+##############################################################################
+# packages:
+#   dashboard:
+#     url: https://github.com/Bascht74/esphome-pv-dashboard
+#     ref: main
+#     refresh: 1d
+#     files:
+#       - .pv-dashboard_utility.yaml
+#       - .pv-dashboard_ui.yaml
+#       - .pv-dashboard_display.yaml
+#       - .pv-dashboard_audio.yaml
+#       - .pv-dashboard_core.yaml

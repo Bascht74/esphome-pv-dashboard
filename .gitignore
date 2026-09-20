@@ -7,5 +7,8 @@
 .DS_Store
 secrets.yaml
 __pycache__/
+# Lokale Assistenz-Einstellungen; nicht von einer maschinenweiten
+# Ignore-Datei abhaengig machen
+.claude/settings.local.json
 # Ausgabe von pv-dashboard-shots.yaml
 shots/

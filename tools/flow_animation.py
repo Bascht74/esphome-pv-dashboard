@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Erzeugt die Flussanimation fuer das Anlagenschema in .pv-dashboard_ui.yaml.
+Erzeugt die Flussanimation fuer das Anlagenschema in
+.pv-dashboard_page_overview.yaml (Seite 1, Paket von .pv-dashboard_ui.yaml).
 
     python3 tools/flow_animation.py            # Vorschau, schreibt nichts
     python3 tools/flow_animation.py --write    # baut die Animation ein
 
-Das Skript liest die Leitungen aus der UI-Datei, leitet die Topologie aus den
+Das Skript liest die Leitungen aus der Seitendatei, leitet die Topologie aus den
 Koordinaten ab und erzeugt daraus die Kugel-Widgets samt Steuerlogik. Nach
 jeder Aenderung am Schema einfach erneut laufen lassen -- von Hand gepflegte
 Koordinatenlisten gibt es dadurch nicht.
@@ -71,7 +72,7 @@ import re
 import sys
 from pathlib import Path
 
-UI = Path(__file__).resolve().parent.parent / ".pv-dashboard_ui.yaml"
+UI = Path(__file__).resolve().parent.parent / ".pv-dashboard_page_overview.yaml"
 TICK = 20          # ms -- nah am LVGL-Refresh (16 ms), damit schnelle
                    # Kugeln oft drankommen; langsame melden sich seltener
 DOT = 8            # Kugeldurchmesser in px

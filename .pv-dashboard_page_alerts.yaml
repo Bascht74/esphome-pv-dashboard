@@ -1,0 +1,431 @@
+##############################################################################
+# Package: Seite 7 -- Meldungen
+#
+# Alle Meldungen aller Geraete, neueste oben. Die drei alert_*-Skripte
+# gehoeren dazu: alert_push fuellt die Liste, alert_ack quittiert,
+# alert_refresh zaehlt und schreibt Kopfzeile, Knoepfe und die Meldungszeile
+# oben im top_layer. Aufgerufen werden sie auch von ausserhalb dieser Datei
+# (update_clock im Kern, on_update_available in .pv-dashboard_core.yaml,
+# pv-dashboard-shots.yaml) -- die IDs loest ESPHome ueber alle Pakete hinweg
+# auf, die Seite haengt deshalb immer mit am Kern.
+#
+# Flaeche x 4..1276, y 84..736 wie die Speicherseite. Kopfkachel innen
+# 1250 x 38. Die Liste ist selbst eine Kachel (st_tile), innen 1250 x 562:
+# 9 Zeilen x 56 + 8 x pad_row 6 = 552 sichtbar, Reserve 10. Die Zeilen
+# fuellen die Innenbreite (Schirm 15..1265, buendig mit Titel und
+# Knoepfen der Kopfkachel); der Rollbalken laeuft im Rand rechts.
+# Befuellt wird die Liste von alert_push, siehe dort.
+##############################################################################
+
+script:
+  # ---------------------------------------------------------------------
+  # Meldungen (Seite page_alerts, Liste alert_list)
+  #
+  # Aufbau einer Zeile -- die Skripte greifen per Index auf die Kinder zu,
+  # die Reihenfolge in alert_push also nicht umstellen:
+  #   0 Schweregrad   1 Zeit   2 Geraet   3 Meldung   4 Hinweis
+  #   5 Quelle "Geraet: Meldung", versteckt und ungekuerzt
+  # Die Meldungszeile oben liest nur Kind 5, nie die Labels 2 und 3: Die
+  # kuerzen mit long_mode DOT, und LVGL schreibt das "..." in den
+  # Textpuffer. Auf einer nie gezeigten Seite haben sie keine Breite, der
+  # Text wird ganz zu "..."; nach dem Zeigen steht dort die gekuerzte
+  # Fassung. Kind 5 hat long_mode CLIP, das den Text nie aendert. Es
+  # gehoert zur Zeile und verschwindet mit ihr (list.remove, list.clear)
+  # -- LVGL gibt seinen Text mit der Zeile frei, nichts nachzuhalten.
+  # Die Zeile selbst traegt im user_data den Zeitstempel (Epoche, 32 Bit),
+  # gesetzt von on_add der Liste (siehe alert_list).
+  # Kommt eine Meldung vor der Zeitsynchronisation, steht dort vorlaeufig die
+  # Laufzeit in Sekunden + 1 (immer < 1e9; jede Epoche seit 2001 liegt
+  # darueber). alert_refresh rechnet sie in die Uhrzeit um, sobald die Zeit
+  # gilt -- spaetestens beim ersten gueltigen update_clock (siehe dort).
+  #
+  # Gezaehlt wird ueber on_add/on_remove der Liste (siehe alert_list) -- wer
+  # Zeilen hinzufuegt oder entfernt, ruft danach kein alert_refresh mehr
+  # auf. Der frueher noetige Verzicht auf globals-IDs in on_add/on_remove
+  # (Codegen-Absturz, esphome/esphome#19123) ist mit 2026.9.0 erledigt: Der
+  # Fix aus #19177 steckt drin, es gibt hier keine Einschraenkung mehr.
+  # Die Liste liegt nur im RAM und ist nach einem Neustart leer.
+  # ---------------------------------------------------------------------
+
+  # Neue Meldung oben einfuegen. severity: 0 = Info, 1 = Warnung,
+  # 2 = Stoerung. Aufruf spaeter aus BMS-, Modbus- und HA-Fehlerzustaenden.
+  # Den Zeitstempel setzt on_add der Liste; neu gezaehlt (Zaehler,
+  # Kopfzeile, Meldungszeile) wird ueber on_add und on_remove. Bei voller
+  # Liste zaehlt erst on_remove der Obergrenze unten, on_add laesst es dann
+  # aus -- beide lesen die Grenze aus alert_max (Tokens).
+  - id: alert_push
+    mode: queued
+    # So viele wie die Liste Zeilen hat: Ueberzaehlige Aufrufe verwirft
+    # ESPHome nur mit einer Log-Warnung, die Meldung fehlte dann.
+    max_runs: ${alert_max}
+    parameters:
+      severity: int
+      device: string
+      text: string
+    then:
+      - lvgl.list.add:
+          id: alert_list
+          index: 0
+          button:
+            styles: st_alert_row
+            width: 100%
+            height: 56
+            scrollable: false
+            scroll_dir: NONE
+            border_color: !lambda 'return lv_color_hex(severity >= 2 ? $col_crit : severity == 1 ? $col_warn : $col_batt);'
+            pressed:
+              bg_color: $col_line
+              bg_opa: 30%
+            # Quittiert: gedaempft statt geloescht, bleibt in der Chronologie
+            checked:
+              bg_opa: TRANSP
+              border_color: $col_line
+              text_color: $col_ink3
+            # Zeile 1250 breit: Rahmen links 3, Inhalt 1247. Rand je 16 zur
+            # Aussenkante (13 + Rahmen links, 16 rechts), Abstaende je 12:
+            # 13..97 | 109..233 | 245..425 | 437..1039 | 1051..1231.
+            # DOT kuerzt nur bei fester Hoehe -- ohne height bricht LVGL um
+            # und die Zeile laeuft ueber. Hoehe je Zeile = Zeilenhoehe der
+            # Schrift (f_label/f_unit 17, f_text_s 20, f_val_s 21, f_text 22).
+            widgets:
+              - label:
+                  align: LEFT_MID
+                  x: 13
+                  width: 84
+                  height: 17
+                  long_mode: DOT
+                  styles: st_label
+                  text: !lambda 'return std::string(severity >= 2 ? "STÖRUNG" : severity == 1 ? "WARNUNG" : "INFO");'
+                  text_color: !lambda 'return lv_color_hex(severity >= 2 ? $col_crit : severity == 1 ? $col_warn : $col_batt);'
+                  checked:
+                    text_color: $col_ink3
+              # Zeit: 12 Zeichen "TT.MM. hh:mm" in f_val_s = 120 px
+              - label:
+                  align: LEFT_MID
+                  x: 109
+                  width: 124
+                  height: 21
+                  long_mode: DOT
+                  text: "--:--"
+                  text_font: f_val_s
+              - label:
+                  align: LEFT_MID
+                  x: 245
+                  width: 180
+                  height: 20
+                  long_mode: DOT
+                  text: !lambda 'return device;'
+                  text_font: f_text_s
+              - label:
+                  align: LEFT_MID
+                  x: 437
+                  width: 602
+                  height: 22
+                  long_mode: DOT
+                  text: !lambda 'return text;'
+                  text_font: f_text
+              - label:
+                  align: RIGHT_MID
+                  x: -16
+                  width: 180
+                  height: 17
+                  long_mode: DOT
+                  text_align: RIGHT
+                  styles: st_unit
+                  text: "Antippen zum Quittieren"
+              # Quelle der Meldungszeile (siehe Kopf der Meldungs-Skripte)
+              - label:
+                  hidden: true
+                  long_mode: CLIP
+                  text: !lambda 'return device + ": " + text;'
+            # -1 = Zeile nicht gefunden. alert_ack liest -1 als "alle offenen",
+            # deshalb nur mit gueltigem Index quittieren.
+            on_click:
+              - if:
+                  condition:
+                    lambda: 'return lvgl::lv_list_get_row_index(id(alert_list), static_cast<lv_obj_t *>(lv_event_get_target(event))) >= 0;'
+                  then:
+                    - script.execute:
+                        id: alert_ack
+                        row: !lambda 'return lvgl::lv_list_get_row_index(id(alert_list), static_cast<lv_obj_t *>(lv_event_get_target(event)));'
+      # Hoechstens alert_max Zeilen. Heraus faellt die aelteste QUITTIERTE
+      # Zeile; nur wenn keine quittiert ist, die aelteste ueberhaupt -- dann
+      # kann auch eine offene Meldung verloren gehen.
+      - if:
+          condition:
+            lambda: 'return lv_obj_get_child_count(id(alert_list)) > ${alert_max};'
+          then:
+            - lvgl.list.remove:
+                id: alert_list
+                index: !lambda |-
+                  lv_obj_t *list = id(alert_list);
+                  const int32_t n = (int32_t) lv_obj_get_child_count(list);
+                  for (int32_t i = n - 1; i >= 0; i--)
+                    if (lv_obj_has_state(lv_obj_get_child(list, i), LV_STATE_CHECKED))
+                      return i;
+                  return n - 1;
+
+  # Quittieren: row = Zeilenindex, -1 = alle offenen. Hier spaeter auch die
+  # Quittung an das Geraet bzw. an Home Assistant.
+  - id: alert_ack
+    parameters:
+      row: int
+    then:
+      - lambda: |-
+          lv_obj_t *list = id(alert_list);
+          auto now = id(dash_time).now();
+          char hint[24] = "Quittiert";
+          if (now.is_valid())
+            snprintf(hint, sizeof(hint), "Quittiert %02d:%02d", now.hour, now.minute);
+          const uint32_t n = lv_obj_get_child_count(list);
+          for (uint32_t i = 0; i < n; i++) {
+            if (row >= 0 && (int) i != row)
+              continue;
+            lv_obj_t *entry = lv_obj_get_child(list, i);
+            if (lv_obj_has_state(entry, LV_STATE_CHECKED))
+              continue;
+            // Auch die Kinder: nur so greift der checked-Stil des Schweregrads
+            lv_obj_add_state(entry, LV_STATE_CHECKED);
+            for (uint32_t k = 0; k < lv_obj_get_child_count(entry); k++)
+              lv_obj_add_state(lv_obj_get_child(entry, k), LV_STATE_CHECKED);
+            lv_label_set_text(lv_obj_get_child(entry, 4), hint);  // Hinweis
+          }
+      - script.execute: alert_refresh
+
+  # Zaehlt offene Meldungen, setzt Zeitangaben (heute nur die Uhrzeit, sonst
+  # mit Datum), die Kopfzeile der Seite, die Meldungszeile oben und die
+  # Knoepfe. Laeuft nach jedem Hinzufuegen und Entfernen (on_add/on_remove
+  # der Liste), nach dem Quittieren, beim Tageswechsel und beim ersten
+  # gueltigen Zeitpunkt nach dem Start (update_clock).
+  # Zeilen mit LV_OBJ_FLAG_USER_1 zaehlen nicht mehr: So markiert on_remove
+  # die Zeile, die LVGL gleich danach loescht (siehe alert_list).
+  - id: alert_refresh
+    then:
+      - lambda: |-
+          lv_obj_t *list = id(alert_list);
+          const uint32_t count = lv_obj_get_child_count(list);
+          auto now = id(dash_time).now();
+          uint32_t n = 0;
+          int open = 0;
+          lv_obj_t *newest = nullptr;
+          for (uint32_t i = 0; i < count; i++) {
+            lv_obj_t *entry = lv_obj_get_child(list, i);
+            if (lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_1))
+              continue;
+            n++;
+            uint32_t ts = (uint32_t) (uintptr_t) lv_obj_get_user_data(entry);
+            // Vorlaeufige Laufzeit aus on_add: sobald die Zeit gilt, in die
+            // Uhrzeit der Meldung umrechnen und dauerhaft eintragen.
+            if (ts != 0 && ts < 1000000000u && now.is_valid()) {
+              ts = (uint32_t) now.timestamp - (millis() / 1000 + 1 - ts);
+              lv_obj_set_user_data(entry, (void *) (uintptr_t) ts);
+            }
+            char buf[16] = "--:--";
+            if (ts >= 1000000000u && now.is_valid()) {
+              ESPTime t = ESPTime::from_epoch_local((time_t) ts);
+              if (t.year == now.year && t.day_of_year == now.day_of_year)
+                snprintf(buf, sizeof(buf), "%02d:%02d", t.hour, t.minute);
+              else
+                snprintf(buf, sizeof(buf), "%02d.%02d. %02d:%02d", t.day_of_month, t.month,
+                         t.hour, t.minute);
+            }
+            lv_obj_t *lbl_time = lv_obj_get_child(entry, 1);
+            if (strcmp(lv_label_get_text(lbl_time), buf) != 0)
+              lv_label_set_text(lbl_time, buf);
+            if (!lv_obj_has_state(entry, LV_STATE_CHECKED)) {
+              open++;
+              if (newest == nullptr)
+                newest = entry;
+            }
+          }
+          lv_label_set_text_fmt(id(lbl_alerts_summary), "%d offen · %u %s", open,
+                                (unsigned) n, n == 1 ? "Eintrag" : "Einträge");
+          // Meldungszeile oben: Anzahl zuerst, damit sie beim Kuerzen bleibt.
+          // Geraet und Text aus Kind 5, nie aus den gekuerzten Labels.
+          if (n == 0)
+            lv_label_set_text(id(lbl_alert), "Keine Meldungen");
+          else if (open == 0)
+            lv_label_set_text(id(lbl_alert), "Keine offenen Meldungen");
+          else
+            lv_label_set_text_fmt(id(lbl_alert), "%d %s · %s", open,
+                                  open == 1 ? "offene Meldung" : "offene Meldungen",
+                                  lv_label_get_text(lv_obj_get_child(newest, 5)));
+          if (n == 0)
+            lv_obj_remove_flag(id(lbl_alerts_empty), LV_OBJ_FLAG_HIDDEN);
+          else
+            lv_obj_add_flag(id(lbl_alerts_empty), LV_OBJ_FLAG_HIDDEN);
+          // Leeren erst, wenn alles quittiert ist -- sonst gingen offene
+          // Stoerungen ungelesen verloren.
+          auto set_disabled = [](lv_obj_t *obj, bool off) {
+            if (off)
+              lv_obj_add_state(obj, LV_STATE_DISABLED);
+            else
+              lv_obj_remove_state(obj, LV_STATE_DISABLED);
+          };
+          set_disabled(id(btn_alerts_ack), open == 0);
+          set_disabled(id(btn_alerts_clear), n == 0 || open > 0);
+
+lvgl:
+  pages:
+    - id: page_alerts
+      bg_color: $col_bg
+      scrollable: false
+      scroll_dir: NONE
+      widgets:
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: $pad_page
+            y: 84
+            width: 1272
+            height: 60
+            widgets:
+              - label:
+                  styles: st_label
+                  align: LEFT_MID
+                  width: 260
+                  height: 17
+                  long_mode: DOT
+                  text: "MELDUNGEN · NEUESTE OBEN"
+              - label:
+                  id: lbl_alerts_summary
+                  align: LEFT_MID
+                  x: 280
+                  width: 400
+                  height: 21
+                  long_mode: DOT
+                  text: "0 offen · 0 Einträge"
+                  text_font: f_val_s
+                  text_color: $col_ink
+              # Knoepfe 170 x 36 (innen 38, Reserve 2), Abstand gap_tile.
+              # Beide starten gesperrt; alert_refresh gibt sie frei. Die
+              # Beschriftung ist ein eigenes Label mit align CENTER -- das
+              # text: des Knopfes sitzt am Innenabstand des Themes, nicht
+              # mittig. recolor_opa: TRANSP schaltet das graue Umfaerben ab
+              # (recolor 50 %), das das Theme gesperrten Knoepfen ueberlegt.
+              - button:
+                  id: btn_alerts_ack
+                  styles: st_btn
+                  align: RIGHT_MID
+                  x: -178
+                  width: 170
+                  height: 36
+                  state:
+                    disabled: true
+                  pressed:
+                    bg_color: $col_batt
+                    bg_opa: 20%
+                    text_color: $col_batt
+                  disabled:
+                    text_color: $col_ink3
+                    border_opa: 40%
+                    recolor_opa: TRANSP
+                  widgets:
+                    - label: { align: CENTER, text: "Alle quittieren" }
+                  on_click:
+                    - script.execute:
+                        id: alert_ack
+                        row: -1
+              - button:
+                  id: btn_alerts_clear
+                  styles: st_btn
+                  align: RIGHT_MID
+                  x: 0
+                  width: 170
+                  height: 36
+                  state:
+                    disabled: true
+                  pressed:
+                    bg_color: $col_crit
+                    bg_opa: 20%
+                    text_color: $col_crit
+                  disabled:
+                    text_color: $col_ink3
+                    border_opa: 40%
+                    recolor_opa: TRANSP
+                  widgets:
+                    - label: { align: CENTER, text: "Liste leeren" }
+                  on_click:
+                    # Nur die Langform: "lvgl.list.clear: alert_list" lehnt
+                    # ESPHome ab. Neu gezaehlt wird ueber on_remove der Liste.
+                    - lvgl.list.clear:
+                        id: alert_list
+
+        # Die EINZIGE scrollende Flaeche der Oberflaeche. Die Seite bleibt
+        # scrollable: false; scroll_chain: false reicht einen Wisch am
+        # Listenende nicht an die Seite weiter, scroll_elastic: false laesst
+        # die Liste am Ende nicht nachfedern.
+        - list:
+            id: alert_list
+            styles: st_tile
+            x: $pad_page
+            y: 152
+            width: 1272
+            height: 584
+            pad_row: 6
+            scroll_dir: VER
+            scrollbar_mode: ACTIVE
+            scroll_elastic: false
+            scroll_chain: false
+            scrollbar:
+              bg_color: $col_line
+              bg_opa: 70%
+              width: 4
+              radius: 2
+              pad_right: 3
+              pad_top: 10
+              pad_bottom: 10
+            # Neue Zeile: Zeitstempel eintragen und sofort neu zaehlen, noch
+            # im selben Durchlauf. Die Meldungszeile liest dabei das
+            # versteckte Kind 5, nicht die sichtbaren, spaeter gekuerzten
+            # Labels (siehe Kopf der Meldungs-Skripte).
+            # Ueber alert_max Zeilen nimmt alert_push gleich danach eine
+            # heraus (Obergrenze, siehe dort); dann zaehlt erst deren
+            # on_remove, noch im selben Durchlauf -- sonst liefe
+            # alert_refresh zweimal.
+            on_add:
+              - lambda: |-
+                  auto now = id(dash_time).now();
+                  // Ohne gueltige Zeit (z. B. die Co-Prozessor-Meldung kurz
+                  // nach dem Start) vorlaeufig die Laufzeit merken, siehe
+                  // Kopf der Meldungs-Skripte.
+                  uint32_t ts = now.is_valid() ? (uint32_t) now.timestamp : millis() / 1000 + 1;
+                  lv_obj_set_user_data(lv_obj_get_child(id(alert_list), list_index),
+                                       (void *) (uintptr_t) ts);
+              - if:
+                  condition:
+                    lambda: 'return lv_obj_get_child_count(id(alert_list)) <= ${alert_max};'
+                  then:
+                    - script.execute: alert_refresh
+            # on_remove laeuft, BEVOR LVGL die Zeile loescht. Deshalb wird
+            # sie markiert, alert_refresh zaehlt sie dann nicht mehr mit.
+            # lvgl.list.clear meldet jede Zeile einzeln, von der letzten
+            # abwaerts, und loescht erst danach. Ist die Zeile dahinter schon
+            # markiert, laeuft gerade ein Leeren: Dann zaehlt erst der letzte
+            # Aufruf (list_index 0) -- hoechstens zwei alert_refresh statt
+            # einem je Zeile.
+            on_remove:
+              - lambda: 'lv_obj_add_flag(lv_obj_get_child(id(alert_list), list_index), LV_OBJ_FLAG_USER_1);'
+              - if:
+                  condition:
+                    lambda: |-
+                      lv_obj_t *list = id(alert_list);
+                      const int n = (int) lv_obj_get_child_count(list);
+                      const bool clearing = list_index + 1 < n &&
+                          lv_obj_has_flag(lv_obj_get_child(list, list_index + 1), LV_OBJ_FLAG_USER_1);
+                      return !clearing || list_index == 0;
+                  then:
+                    - script.execute: alert_refresh
+        # Leere Liste: Hinweis mittig ueber der Listenflaeche (Mitte y 444)
+        - label:
+            id: lbl_alerts_empty
+            x: $pad_page
+            y: 436
+            width: 1272
+            height: 17
+            long_mode: DOT
+            text_align: CENTER
+            styles: st_sub
+            text: "Keine Meldungen"
