@@ -164,11 +164,12 @@ in Dokument 05.
 `.esphome/`, `.device-builder*`, `.receiver_peers.json` und `secrets.yaml` sind
 per `.gitignore` aus dem Repo ausgeschlossen. **Zugangsdaten** tragen davon
 `secrets.yaml`, `.device-builder*`, `.receiver_peers.json` und
-`.esphome/storage/` — die gehören weder in Ausgaben noch in Zitate. Die übrigen
-Inhalte von `.esphome/` sind reine Bauartefakte und dürfen gelesen und zitiert
-werden; genau das verlangen Dokument 04 (`line_height` aus
-`.esphome/build/pv-dashboard-sim/src/main.cpp`) und Dokument 05 (ESPHome-Version
-aus den Ordnernamen unter `.esphome/.remote_builds/venvs/`).
+`.esphome/storage/` — die gehören weder in Ausgaben noch in Zitate. Aus dem
+übrigen `.esphome/` sind die Ordnernamen unter `.esphome/.remote_builds/venvs/`
+unbedenklich (ESPHome-Version, Dokument 05). Aus `.esphome/build/…/src/main.cpp`
+darf nur eine einzelne, nachweislich harmlose Zeile gelesen werden, etwa
+`line_height` einer Schrift (Dokument 04) — **nie** die Datei am Stück: Sie
+enthält WLAN-, AP- und OTA-Passwort sowie den API-Schlüssel im Klartext.
 
 ---
 
