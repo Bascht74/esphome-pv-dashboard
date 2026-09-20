@@ -34,18 +34,22 @@ Unter den Einstellungen steht der Block „HIER BESCHREIBEN SIE IHRE ANLAGE“ m
 jeder anlagenabhängigen Beschriftung und den drei Tarifen; welche das sind und
 wie breit sie sein dürfen, steht in Dokument 01. **`!secret` steht
 ausschließlich dort**; die Packages arbeiten mit `${…}` und sind damit frei von
-Geheimnissen. Das ist die Voraussetzung dafür, sie später aus dem GitHub-Repo
+Geheimnissen. Das ist die Voraussetzung dafür, sie aus dem GitHub-Repo
 nachzuladen, während `pv-dashboard.yaml` und `secrets.yaml` auf dem Rechner
 bleiben. Welche Schlüssel `secrets.yaml` braucht, zeigt `secrets.yaml.example`;
-die echte Datei legt in der Regel der Device Builder an. Die Umleitung über
-`substitutions` gibt nichts preis: `esphome config` und der Config-Kommentar in
-`main.cpp` zeigen weiterhin nur `!secret '<name>'` (geprüft mit 2026.9.0,
-20.09.2026).
+die echte Datei legt in der Regel der Device Builder an. Im Repo steht von den Werten nichts, die Packages sehen nur `${…}`.
+Bei der **Ausgabe** gibt es dagegen einen Unterschied: Mit lokal eingebundenen
+Packages zeigen `esphome config` und der Config-Kommentar in `main.cpp` nur
+`!secret '<name>'`; mit dem Bezug aus dem Repo (nächster Abschnitt) zeigt
+`esphome config` die aufgelösten Werte — im Terminal unsichtbar gestellt, in
+einer umgeleiteten Datei aber lesbar. Die Ausgabe deshalb nicht in eine Datei
+schreiben und nicht weitergeben (gemessen mit 2026.9.0, 20.09.2026).
 
-### Später: Packages aus dem GitHub-Repo
+### Packages aus dem GitHub-Repo (aktiv seit 20.09.2026)
 
-Am Ende von `pv-dashboard.yaml` steht der fertige, aber **auskommentierte**
-Fernblock für denselben Satz Packages:
+`pv-dashboard.yaml` lädt die Packages aus diesem Repo statt von der Platte.
+Der Block steht direkt unter `packages:`; die lokale Variante liegt darunter
+auskommentiert als Rückfall:
 
 ```yaml
 packages:

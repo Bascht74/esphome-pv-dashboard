@@ -161,7 +161,7 @@ liegt die Autarkie praktisch nie bei 100 %, weil nachts immer etwas Netzbezug an
 Die Tarife gehören zur Anlage, nicht zur Oberfläche. Sie standen bis zum 20.09.2026
 im Abschnitt „Farben und Maße“ von `.pv-dashboard_utility.yaml` und stehen jetzt bei
 den übrigen Anlagen-Einstellungen in `pv-dashboard.yaml`. Damit bleiben die eigenen
-Tarife auf dem Rechner, auch wenn die Pakete später aus dem GitHub-Repo nachgeladen
+Tarife auf dem Rechner, auch wenn die Pakete aus dem GitHub-Repo nachgeladen
 werden. Ein Standard liegt in `.pv-dashboard_page_overview.yaml`, der Seite mit der
 Kachel „TAGESERTRAG“, damit Simulator und Screenshot-Lauf weiterbauen.
 

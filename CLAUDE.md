@@ -61,6 +61,21 @@ geräteeigenen Pakete, nie mit `--show-secrets`; `run`/`compile` darauf
 **nicht**, das macht der Device Builder. Lokal laufen nur `-sim`
 (**blockiert**), `-shots` und `-demo*`.
 
+## Packages kommen aus dem Repo
+
+`pv-dashboard.yaml` lädt die Packages von GitHub (`ref: main`, `refresh: 1d`);
+die lokale Variante steht darunter auskommentiert. Folgen für die Arbeit:
+
+- Das **Gerät** baut aus dem geschobenen Stand: erst Simulator und Screenshots
+  prüfen, dann `push`, dann im Device Builder bauen. Ohne `push` sieht das
+  Gerät die Änderung nicht.
+- **Simulator und Screenshots bleiben lokal** und zeigen den Arbeitsstand
+  sofort — dort also prüfen, nicht am Gerät.
+- `esphome config pv-dashboard.yaml` zeigt die Werte aus `secrets.yaml` jetzt
+  **aufgelöst** statt als `!secret '<name>'` (ESPHome leert die Merkliste beim
+  Nachladen der Pakete). Die Ausgabe deshalb **nie** in eine Datei umleiten,
+  nie zitieren, nie weitergeben. Im Repo steht davon nichts.
+
 ## Sprache
 
 YAML-Kommentare: Deutsch **ohne Umlaute** (`ae/oe/ue/ss`). Markdown und Chat:

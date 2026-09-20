@@ -187,12 +187,13 @@ erzeugte Flussanimations-Block. Nicht am Stück lesen: `docs/03` hat unter
 Diese Tabelle hier listet die Dateien des Repos; wie die Packages
 zusammenspielen, steht ebenfalls in `docs/03`.
 
-Die Packages liegen heute neben `pv-dashboard.yaml` und werden mit `!include`
-eingebunden. Der Fernblock für dieselben Dateien aus diesem Repo steht am Ende
-von `pv-dashboard.yaml` schon fertig da, aber auskommentiert: Getauscht wird
-erst, wenn die Paketdateien im Repo liegen — und dann baut das Gerät aus dem
-geschobenen Stand. Was das bedeutet, steht in `docs/03` unter „Später: Packages
-aus dem GitHub-Repo“.
+`pv-dashboard.yaml` lädt die Packages **aus diesem Repo** (`ref: main`,
+täglich aufgefrischt); die lokale Variante steht darunter auskommentiert als
+Rückfall. Das heißt: Das Gerät baut aus dem geschobenen Stand, eine Änderung
+wirkt dort erst nach `git push`. Simulator und Screenshots bleiben lokal und
+zeigen den Arbeitsstand schon vorher — die übliche Reihenfolge ist also erst
+Simulator, dann `push`, dann Gerät. Einzelheiten und die Folge für die Ausgabe
+von `esphome config` stehen in `docs/03` unter „Packages aus dem GitHub-Repo“.
 
 ## Weiter lesen
 

@@ -88,11 +88,11 @@ Ein weiterer Punkt bleibt offen; er blockiert das Öffentlichmachen nicht:
   gewählten Namen würde der Satz grammatisch schief. Demo-Prosa, nur im
   Screenshot-Lauf, nie auf dem Gerät.
 
-## Offen: Umschalten auf die Packages aus dem Repo
+## Erledigt: Packages kommen aus dem Repo
 
-`pv-dashboard.yaml` trägt seit dem 20.09.2026 den fertigen Fernblock, aber
-auskommentiert (Dokument 03). Umgeschaltet wird, sobald die Paketdateien im
-Repo liegen: erst `push`, dann die beiden `packages:`-Blöcke tauschen.
+Seit dem 20.09.2026 lädt `pv-dashboard.yaml` die Packages aus dem GitHub-Repo
+(`ref: main`, `refresh: 1d`); die lokale Variante steht auskommentiert als
+Rückfall daneben (Dokument 03).
 
 Offen bleibt die Entscheidung, ob das die Mühe wert ist: Danach baut das
 Gerät aus dem geschobenen Stand, jede Änderung braucht erst einen `push`, und

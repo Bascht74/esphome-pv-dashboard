@@ -139,68 +139,54 @@ esphome:
   min_version: 2026.9.0
 
 packages:
-  # Gemeinsam mit dem Simulator (pv-dashboard-sim.yaml) -- hier geaenderte
-  # Oberflaeche wirkt dort sofort mit.
-  utility: !include .pv-dashboard_utility.yaml
-  ui:      !include .pv-dashboard_ui.yaml
-  # Nur auf dem Geraet
-  display: !include .pv-dashboard_display.yaml
-  audio:   !include .pv-dashboard_audio.yaml
-  # Chip, Funk, WLAN, API, OTA, Bluetooth, Zeit und Diagnose, serielle
-  # Schnittstellen. Steht bewusst am Ende: ESPHome haengt Listen aus Paketen
-  # in der Reihenfolge der Deklaration aneinander, und die Diagnose-Sensoren
-  # standen auch vorher hinter denen der Oberflaeche.
-  core:    !include .pv-dashboard_core.yaml
+  # Die Pakete kommen aus dem GitHub-Repo, nicht von der Platte. Ein einziger
+  # Checkout fuer alle Dateien; Repo, Zweig und Auffrischung stehen hier an
+  # einer Stelle. Statt "ref: main" laesst sich auch ein Release festnageln,
+  # z. B. "ref: v0.2.0" -- dann aendert sich am Geraet nichts, bis jemand die
+  # Zeile anfasst.
+  dashboard:
+    url: https://github.com/Bascht74/esphome-pv-dashboard
+    ref: main
+    refresh: 1d
+    files:
+      - .pv-dashboard_utility.yaml
+      - .pv-dashboard_ui.yaml
+      - .pv-dashboard_display.yaml
+      - .pv-dashboard_audio.yaml
+      - .pv-dashboard_core.yaml
 
 ##############################################################################
-# SPAETER: dieselben Pakete aus dem GitHub-Repo statt von der Platte
+# Was der Bezug aus dem Repo bedeutet
 #
-# Der Block unten ist ausgeschaltet, weil das Repo heute noch privat ist --
-# fuer ein privates Repo muesste hier username/password stehen, also ein
-# Token in genau der Datei, die keine Geheimnisse enthalten soll. Sobald das
-# Repo oeffentlich ist, werden die beiden Bloecke getauscht: den Block oben
-# auskommentieren, den Block unten einkommentieren. Geprueft mit 2026.9.0
-# gegen eine Kopie dieses Repos: Der Dump von "esphome config" ist danach
-# Zeile fuer Zeile derselbe, abgesehen von den Pfaden der beiden Bilder
-# (sie zeigen dann in den Checkout) und dem letzten Punkt unten.
-#
-# Was sich dadurch aendert:
-#   * Das Geraet baut aus dem GESCHOBENEN Stand. Eine Aenderung an einem
-#     Paket wirkt erst nach einem push, nicht schon beim Speichern.
+#   * Das Geraet baut aus dem GESCHOBENEN Stand. Eine Aenderung an einem Paket
+#     wirkt erst nach "git push", nicht schon beim Speichern.
 #   * ESPHome legt den Checkout unter .esphome/packages ab und frischt ihn
-#     nur gemaess refresh auf: bei "1d" fruehestens am naechsten Tag,
-#     "always" holt bei jedem Lauf, "never" gar nicht.
-#   * Simulator und Screenshots bleiben lokal. pv-dashboard-sim.yaml und
-#     pv-dashboard-shots.yaml binden die Dateien weiter von der Platte ein
-#     und zeigen damit den Arbeitsstand schon vor dem push.
-#   * Die Zusage weiter oben gilt dann nicht mehr: "esphome config" zeigt
-#     die Werte aus der secrets.yaml nicht laenger als !secret '<name>',
-#     sondern als Wert -- im Terminal unsichtbar gestellt, in einer
-#     umgeleiteten Datei aber lesbar. Grund ist ESPHome selbst: jede
-#     nachgeladene Paketdatei leert die Merkliste, aus der die Ausgabe den
-#     Namen zurueckholt. Nach der Umstellung die Ausgabe also nicht mehr in
-#     eine Datei schreiben.
+#     gemaess refresh auf: "1d" fruehestens am naechsten Tag, "always" bei
+#     jedem Lauf, "never" gar nicht.
+#   * Simulator und Screenshots bleiben lokal: pv-dashboard-sim.yaml und
+#     pv-dashboard-shots.yaml binden die Dateien weiter von der Platte ein und
+#     zeigen den Arbeitsstand schon vor dem push. Zum Pruefen einer Aenderung
+#     also erst den Simulator, dann pushen, dann das Geraet bauen.
+#   * ACHTUNG bei "esphome config": Die Ausgabe zeigt die Werte aus der
+#     secrets.yaml jetzt aufgeloest statt als !secret '<name>' -- im Terminal
+#     unsichtbar gestellt, in einer umgeleiteten Datei aber lesbar. Grund ist
+#     ESPHome selbst: jede nachgeladene Paketdatei leert die Merkliste, aus der
+#     die Ausgabe den Namen zurueckholt. Die Ausgabe deshalb nicht in eine
+#     Datei schreiben und nicht weitergeben. Im Repo steht davon nichts, die
+#     Werte stehen ausschliesslich in der lokalen secrets.yaml.
+#   * Die sieben Seitendateien stehen mit Absicht NICHT in der Liste:
+#     .pv-dashboard_ui.yaml holt sie selbst ueber !include, aus demselben
+#     Checkout. Wer sie zusaetzlich auflistet, bekommt jede Seite zweimal und
+#     der Lauf bricht ab ("ID redraw_curve redefined"). Genauso kommt images/
+#     aus dem Checkout.
 #
-# Die sieben Seitendateien stehen mit Absicht NICHT in der Liste:
-# .pv-dashboard_ui.yaml holt sie selbst ueber !include, und zwar aus
-# demselben Checkout. Wer sie zusaetzlich auflistet, bekommt jede Seite
-# zweimal und der Lauf bricht ab ("ID redraw_curve redefined"). Genauso
-# kommt der Ordner images/ aus dem Checkout: ESPHome sucht eine Bilddatei
-# auch neben der Paketdatei, nicht nur neben dieser Datei hier.
+# Rueckfall auf die Dateien von der Platte -- zum Ausprobieren ohne push:
+# den Block oben auskommentieren, diesen hier einkommentieren.
 #
-# Die Kurzform, eine Zeile je Datei, tut es auch:
-#   ui: github://Bascht74/esphome-pv-dashboard/.pv-dashboard_ui.yaml@main
-# Die Langform unten kommt dagegen mit einem einzigen Checkout fuer alle
-# Dateien aus und haelt Repo, Zweig und Auffrischung an einer Stelle.
-##############################################################################
 # packages:
-#   dashboard:
-#     url: https://github.com/Bascht74/esphome-pv-dashboard
-#     ref: main
-#     refresh: 1d
-#     files:
-#       - .pv-dashboard_utility.yaml
-#       - .pv-dashboard_ui.yaml
-#       - .pv-dashboard_display.yaml
-#       - .pv-dashboard_audio.yaml
-#       - .pv-dashboard_core.yaml
+#   utility: !include .pv-dashboard_utility.yaml
+#   ui:      !include .pv-dashboard_ui.yaml
+#   display: !include .pv-dashboard_display.yaml
+#   audio:   !include .pv-dashboard_audio.yaml
+#   core:    !include .pv-dashboard_core.yaml
+##############################################################################
