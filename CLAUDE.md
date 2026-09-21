@@ -25,6 +25,13 @@ bis `docs/06`.
 Niemals von sich aus committen oder pushen — auch nicht „gleich mit", nur auf
 ausdrückliche Aufforderung. Nach Änderungen berichten, was geändert wurde.
 
+**Gearbeitet wird auf `dev`, nicht auf `main`.** Jede Änderung geht auf diesen
+Zweig; `main` wird nur angefasst, wenn der Nutzer es ausdrücklich sagt. Das Gerät
+baut aus `main` (`ref: main` im `packages:`-Block), eine Änderung auf `dev` erreicht
+das Panel also nicht — genau das ist der Zweck. Ist eine Änderung geprüft, führt der
+Nutzer sie nach `main`. Sitzungen, denen die Umgebung einen eigenen Zweig zuweist,
+arbeiten trotzdem gegen `dev` und fragen, bevor etwas nach `main` geht.
+
 ## Rückfragen
 
 Als Chattext stellen, Optionen als kurze Liste mit Empfehlung. **Nie** über
