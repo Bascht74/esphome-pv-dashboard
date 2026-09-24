@@ -97,7 +97,7 @@ normales Deutsch mit Umlauten.
 - Zum Anfassen sind `pv-dashboard.yaml` und die lokale
   `.pv-dashboard_anlage.yaml`. Daneben
   `.pv-dashboard_core.yaml`, `_display`, `_audio`, `_utility` und die
-  Oberfläche: Kern `.pv-dashboard_ui.yaml` plus neun Seitendateien in der
+  Oberfläche: Kern `.pv-dashboard_ui.yaml` plus elf Seitendateien in der
   Reihenfolge seines `packages:`-Blocks. Nicht am Stück lesen — Dateitabelle in
   `docs/03`. Ein neues Skript gehört zu der Seite, die es benutzt.
 - Der Block zwischen `# >>> flow-animation` und `# <<< flow-animation` und die
@@ -105,8 +105,8 @@ normales Deutsch mit Umlauten.
   `tools/flow_animation.py` — nie von Hand ändern.
 - Die BMS-Anbindung ist bewusst ein Platzhalter. Nur bauen, wenn der Nutzer
   es verlangt (`docs/06`). Alle Detailseiten sind gebaut (PV & Prognose
-  23.09.2026, Wallboxen, Wärmepumpe und Haus 24.09.2026, Netz und Statistik
-  25.09.2026); ihre Werte kommen über je ein Skript, bis dahin stehen Striche.
+  23.09.2026, Wallboxen, Wärmepumpe und Haus 24.09.2026, Netz, Statistik,
+  Prognose und Wetter 25.09.2026); ihre Werte kommen über je ein Skript, bis dahin stehen Striche.
 - Die sechs `docs/`-Dateien liegen als Kopie im Claude-Projekt; nach einer
   Änderung sagen, welche neu hochzuladen ist (Anleitung im Ordner
   `~/esphome-claude-projekt`).

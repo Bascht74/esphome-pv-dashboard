@@ -1,5 +1,5 @@
 ##############################################################################
-# Package: Seite 3 -- Speicher
+# Package: Seite 5 -- Speicher
 #
 # Ladezustand als Ringe, Zellwerte als Tabelle. storage_update gehoert dazu:
 # Es fuellt Spalte bat + 1 der Tabelle und Ring bat, kuenftige BMS-Sensoren

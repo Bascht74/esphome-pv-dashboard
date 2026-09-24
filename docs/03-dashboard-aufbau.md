@@ -10,7 +10,7 @@ SDL-Fenster 1280 x 800) binden dieselben zwei gemeinsamen Packages ein:
   `idle_timeout`. Die drei Tarife standen bis zum 20.09.2026 hier und gehören
   jetzt zu den Anlagen-Einstellungen (Dokument 01)
 - `.pv-dashboard_ui.yaml` — der Kern der Oberfläche: Tagesreihen, gemeinsame
-  Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`. Die neun Seiten hängen
+  Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`. Die elf Seiten hängen
   als eigene Packages daran (`.pv-dashboard_page_*.yaml`)
 
 Nur am Gerät: `.pv-dashboard_display.yaml` (I2C, Backlight, DSI-Panel, GT911;
@@ -117,18 +117,20 @@ Die Oberfläche steht genau einmal da; Gerät und Simulator erwarten dieselben I
 
 ## Einstieg in die Oberfläche
 
-Die Oberfläche liegt in **zehn** Dateien: dem Kern `.pv-dashboard_ui.yaml` und
+Die Oberfläche liegt in **zwölf** Dateien: dem Kern `.pv-dashboard_ui.yaml` und
 je einer Datei pro Seite. Der Kern bindet die Seiten über einen eigenen
 `packages:`-Block ein — **diese Reihenfolge ist die Reihenfolge der Seiten**.
 ESPHome hängt Listen aus Packages in der Reihenfolge aneinander, in der die
 Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnung:
-Übersicht, PV, Speicher, Wallbox, Wärmepumpe, Haus, Netz, Statistik, Meldungen.
+Übersicht, PV, Prognose, Wetter, Speicher, Wallbox, Wärmepumpe, Haus, Netz, Statistik, Meldungen. Der Reiter der Seite PV & Prognose heißt seit dem 25.09.2026 nur noch „PV“, damit elf Reiter in die Leiste passen (Lücke 6 px statt der Vorgabe, `pad_column`); „Wärmepumpe“ ist der breiteste und hat links und rechts noch etwa 5 px Luft.
 
 | Datei | Zeilen | Blöcke, Zeilennummern |
 | --- | --- | --- |
-| `.pv-dashboard_ui.yaml` | 1182 | `packages:` 31, `text:` 51, `globals:` 81, `script:` 167, `lvgl:` 359, `interval:` 1179 |
+| `.pv-dashboard_ui.yaml` | 1205 | `packages:` 31, `text:` 53, `globals:` 83, `script:` 170, `lvgl:` 362, `interval:` 1202 |
 | `.pv-dashboard_page_overview.yaml` | 1281 | `substitutions:` 35, `globals:` 97, `sensor:` 115, `script:` 149, `lvgl:` 263, `interval:` 1082 |
 | `.pv-dashboard_page_pv.yaml` | 460 | `globals:` 31, `script:` 49, `lvgl:` 229 |
+| `.pv-dashboard_page_forecast.yaml` | 434 | `globals:` 43, `script:` 61, `interval:` 263, `lvgl:` 268 |
+| `.pv-dashboard_page_weather.yaml` | 516 | `globals:` 49, `script:` 96, `lvgl:` 314 |
 | `.pv-dashboard_page_battery.yaml` | 323 | `substitutions:` 35, `script:` 42, `lvgl:` 104 |
 | `.pv-dashboard_page_wallbox.yaml` | 436 | `substitutions:` 48, `script:` 52, `lvgl:` 184 |
 | `.pv-dashboard_page_heatpump.yaml` | 368 | `script:` 49, `lvgl:` 178 |
@@ -138,18 +140,21 @@ Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnun
 | `.pv-dashboard_page_alerts.yaml` | 431 | `script:` 20, `lvgl:` 268 |
 
 Im Kern steht nur, was alle Seiten teilen: die Tagesreihen `day_curve` und
-`forecast_curve`, die Globals `ota_running` 82, `curve_day` 90, `data_seen` 100
-und `data_stale_reported` 105, die Formatierer `fmt_num` 115, `fmt_watt` 129 und
-`fmt_power` 145 (Dezimalkomma, Tausenderpunkt, Striche bei `NAN`; alle Seiten
-benutzen sie), die Skripte `sys_refresh` 174, `record_hour` 249 und
-`update_clock` 304, unter `lvgl:` die Basis, `style_definitions` 406,
-`gradients` 483 und `top_layer` 773, und am Ende das `interval:` für
+`forecast_curve`, die Globals `ota_running` 84, `curve_day` 92, `data_seen` 103
+und `data_stale_reported` 108, die Formatierer `fmt_num` 118, `fmt_watt` 132 und
+`fmt_power` 148 (Dezimalkomma, Tausenderpunkt, Striche bei `NAN`; alle Seiten
+benutzen sie), die Skripte `sys_refresh` 177, `record_hour` 252 und
+`update_clock` 307, unter `lvgl:` die Basis, `style_definitions` 411,
+`gradients` 488 und `top_layer` 778, und am Ende das `interval:` für
 `sys_refresh`. Einen
 `pages:`-Schlüssel hat der Kern **nicht** — die Seiten bringen ihn mit.
 
 **Jedes Skript liegt bei der Seite, die es benutzt:** `money_update` 163 und
 `redraw_curve` 192 in der Übersicht, `pv_status` 59, `pv_update` 104 und
-`pv_redraw_curve` 151 auf der Seite PV & Prognose, `storage_update` 49 im Speicher,
+`pv_redraw_curve` 151 auf der Seite PV & Prognose, `fc_today` 74, `fc_slots` 109,
+`fc_day` 144 und `fc_redraw` 170 in der Prognose, `wx_now` 110, `wx_hour` 160,
+`wx_day` 198, `wx_warning` 241 und `wx_redraw` 262 im Wetter (dazu dort das global
+`wx_cond` 52, das auch die Prognose benutzt), `storage_update` 49 im Speicher,
 `wallbox_update` 73 und `wallbox_month` 170 bei den Wallboxen, `heatpump_update` 72
 und `heatpump_extra` 145 bei der Wärmepumpe, `house_flow` 85, `house_battery` 279,
 `house_loadpoint` 314, `house_update` 358 und `house_history` 405 im Haus,
@@ -183,19 +188,21 @@ Zeilennummern im **Arbeitsstand vom 25.09.2026**. Sie altern mit jeder
 grep -n '^[a-z_]*:'         .pv-dashboard_ui.yaml        # die Bloecke des Kerns
 grep -n '^  [a-z_]*:'       .pv-dashboard_ui.yaml        # Unterbloecke von lvgl:
 grep -n '^  - id: '         .pv-dashboard_*.yaml         # Globals und Skripte
-grep -n '^    - id: page_'  .pv-dashboard_page_*.yaml    # die neun Seiten
+grep -n '^    - id: page_'  .pv-dashboard_page_*.yaml    # die elf Seiten
 grep -n '!include'          .pv-dashboard_ui.yaml        # die Seitenreihenfolge
 ```
 
 ## Seiten
 
-Neun Seiten, Fläche **1280 x 800** (quer). Drei Leisten liegen im `top_layer`, überdecken jede Seite und werden **nie** versteckt: `bar_status` (y 0 bis 44), die Meldungszeile `bar_alert` mit `lbl_alert` (y 44 bis 76) und die Reiterleiste `bar_nav` mit `nav_matrix` (y 744 bis 800).
+Elf Seiten, Fläche **1280 x 800** (quer). Drei Leisten liegen im `top_layer`, überdecken jede Seite und werden **nie** versteckt: `bar_status` (y 0 bis 44), die Meldungszeile `bar_alert` mit `lbl_alert` (y 44 bis 76) und die Reiterleiste `bar_nav` mit `nav_matrix` (y 744 bis 800).
 
 Die Meldungszeile steht auch ohne Meldung da — `lbl_alert` zeigt dann „Keine Meldungen" bzw. „Keine offenen Meldungen", ein Tipp öffnet die Meldungsseite. Für Seiteninhalt bleiben deshalb **1280 x 668**, y 76 bis y 744: die Höhe, gegen die Regel 1 aus Dokument 04 rechnet.
 
 Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — je 8 px Luft zur Meldungszeile und zur Menüleiste. `schema_area` nutzt die Fläche dagegen voll (x 4, y 76, 904 x 668).
 
 - `page_overview` – links das Anlagenschema (`schema_area`, 904 × 668, 28 Leitungen), rechts die Kennzahlenspalte: Tagesverlauf (16 `bar`-Widgets `bar_h00`…`bar_h15` plus Prognoselinie `line_forecast`; ESPHomes LVGL hat kein chart-Widget), vier Kacheln der Energiebilanz, Tagesertrag, Ringe Autarkie und Eigenverbrauch.
+- `page_forecast` – seit 25.09.2026, Prognose nach Solcast, mit den Werten, die der Blueprint ha-pv-optimizer benutzt. Links „Solcast · heute“ (P50 groß, Spanne P10 bis P90, Rest heute, jetzt, nächste Stunde, Spitze mit Uhrzeit, Stand und API-Abrufe), rechts die Halbstunden 05:00 bis 22:00 als Band P10 bis P90 mit P50-Linie und Marke „jetzt“ (zieht jede Minute nach), unten sieben Tage mit Wetterbild (Lage von der Seite Wetter), P50 als Balken, P10 bis P90 als Strich. Geometrie im Kopf der Datei.
+- `page_weather` – seit 25.09.2026, Wetter vom DWD (HACS-Integration „DWD Weather“). Links „jetzt“ mit großem Wetterbild (`f_wx_xl`), Temperatur, Lage, Höchst- und Tiefstwert, Wind mit Richtung, Böen, Feuchte, Luftdruck, Wolken, Regen heute, Sonne auf und unter, Sonnenscheindauer; rechts zwölf Spalten zu 2 Stunden mit Bild, Temperatur als Kurve, Regen als Balken und Wahrscheinlichkeit; unten sieben Tage mit Bild (`f_wx_l`), Lage, Höchst, Tiefst, Regen, Sonne, Wind und oben rechts der DWD-Warnung.
 - `page_battery` – drei SoC-Ringe und Tabelle `tbl_storage`: Ladezustand, Strom, Zelle min/max, Zelldifferenz, Temperatur min/max, Zyklen. Erste fertig gebaute Detailseite — **Vorlage für jede neue**.
 In der Statusleiste stehen seit dem 25.09.2026 rechts neben der Mitte drei Symbole (`sys_icons`, x 700, 110 × 30): WLAN, Home Assistant, Daten aktuell. Ein Tipp öffnet das Fenster `sys_panel` im `top_layer` (600 × 520 bei x 340, y 150), ein Tipp darauf schließt es. Inhalt und Regeln in Dokument 06, „Systemstatus“.
 
@@ -213,9 +220,10 @@ In der Statusleiste stehen seit dem 25.09.2026 rechts neben der Mitte drei Symbo
 - `scrollable: false` **auch auf der Seite selbst** — eine Seite ist ebenfalls
   ein Objekt (Dokument 04, Punkt 4).
 - Nav-Knopf und Screenshot-Eintrag sind **schon da**: `nav_matrix` trägt alle
-  neun Knöpfe (`btn_nav_overview` … `btn_nav_alerts`), und der Screenshot-Lauf
-  nimmt jede Seite auf (`04_wallbox.bmp` und so fort). Eine **zehnte** Seite
-  braucht einen neuen Knopf in `nav_matrix` (Breiten neu rechnen), einen Eintrag in
+  elf Knöpfe (`btn_nav_overview` … `btn_nav_alerts`), und der Screenshot-Lauf
+  nimmt jede Seite auf (`04_wallbox.bmp` und so fort). Eine **zwölfte** Seite
+  passt nicht mehr in die Leiste, ohne die Beschriftungen zu kürzen oder die
+  Leiste zu teilen; sonst braucht sie einen neuen Knopf in `nav_matrix`, einen Eintrag in
   `shots_nav_clear` und einen eigenen Bildschritt in `pv-dashboard-shots.yaml`.
 - Die Flussanimation **nicht** neu erzeugen, solange keine Leitung im Schema
   angefasst wird.
@@ -283,6 +291,20 @@ Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in D
 
 **`stats_update(range, period, labels, prod, cons, imp, exp, money)`** – Seite Statistik: `range` 0 Woche, 1 Monat, 2 Jahr; `period` Zeitraum als Text; `labels` und die vier Reihen (Erzeugung, Verbrauch, Bezug, Einspeisung in kWh) kommagetrennt, gleich viele Werte; `money` Ertrag in €. **`stats_show(range)`** schaltet um und zieht die Knöpfe mit.
 
+**`fc_today(p50, p10, p90, remaining, power_now, next_hour, peak_kw, peak_time, updated, api_used, api_limit)`** – Seite Prognose, Kennzahlen heute aus der Solcast-Integration: Tagesprognose P50, P10, P90 in kWh, Rest heute in kWh, Leistung jetzt in W, nächste Stunde in kWh, Spitze in kW mit Uhrzeit („HH:MM“), Zeit des letzten Abrufs, API-Abrufe heute und Grenze (< 0 = unbekannt). Stempelt `data_seen[6]`.
+
+**`fc_slots(p50, p10, p90)`** – je 48 kommagetrennte Halbstundenwerte in kW ab 00:00, wie `detailedForecast` sie liefert (`pv_estimate`, `pv_estimate10`, `pv_estimate90`); P10 und P90 dürfen leer sein.
+
+**`fc_day(day, label, cond, p50, p10, p90)`** – ein Tag (0 = heute … 6): Beschriftung, Wetterlage nach Home Assistant (für das Bild), Tagesprognose in kWh.
+
+**`wx_now(cond, temp, tmax, tmin, humidity, pressure, wind, bearing, gust, clouds, rain, sun_h, sunrise, sunset, updated)`** – Seite Wetter, Werte jetzt: Lage, °C, %, hPa, km/h, Richtung in Grad, Wolken in %, Regen heute in mm, Sonnenscheindauer in h, Zeiten als „HH:MM“. Stempelt `data_seen[7]`.
+
+**`wx_hour(slot, hour, cond, temp, rain, prob)`** – eine der zwölf 2-Stunden-Spalten (0 = nächste), Uhrzeit, Lage, °C, mm, %.
+
+**`wx_day(day, label, cond, tmax, tmin, rain, prob, sun_h, wind)`** – ein Tag (0 = heute … 6).
+
+**`wx_warning(level, text)`** – DWD-Warnstufe 0 bis 4 und Kurztext; ab Stufe 1 oben rechts in der Kachel Tage, jede neue Warnung einmal als Meldung (Stufe 3 und 4 als Störung).
+
 **`sys_refresh`** – Kern, alle 10 s und beim Öffnen des Systemfensters: Alter der Werte je Quelle aus `data_seen`, Symbole, WLAN, Home Assistant, Laufzeit, Version (Dokument 06). Von Hand ruft es niemand.
 
 **`pv_redraw_curve`** – Seite PV & Prognose, hängt wie `redraw_curve` an `on_value` beider Reihen und schreibt keine. Zeichnet Balken und Linie auf gemeinsamem Maßstab (Legende nennt die Skala) und rechnet die Kennzahlen: „abgeschlossen" sind die Plätze vor der laufenden Stunde (Stunde − 6), Restprognose ist die Prognose ab der laufenden Stunde bis 22 Uhr, „Ist zu Prognose" braucht mindestens 0,1 kWh Prognose in den abgeschlossenen Stunden. Ohne gültige Uhrzeit bleiben diese beiden auf Strichen.
@@ -322,7 +344,7 @@ Projektordner, mit vollem Pfad in die Arbeitsumgebung (ESPHome 2026.9.0):
 
 `pv-dashboard-sim.yaml` öffnet ein SDL-Fenster und **blockiert**, bis das Fenster geschlossen wird; **F12** speichert ein Bild nach `.esphome/snapshots/pv-dashboard-sim/`, `ESPHOME_SNAPSHOT_DIR` lenkt es um.
 
-`pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle neun Seiten, die Statistik zusätzlich als Monat, plus die drei Fenster als BMP (`01_overview.bmp` … `12_system.bmp`) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
+`pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle elf Seiten, die Statistik zusätzlich als Monat, plus die drei Fenster als BMP (`01_overview.bmp` … `12_system.bmp`, dazu `13_forecast.bmp` und `14_weather.bmp`, angehängt statt umnummeriert) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
 
 Beispieldaten für Meldungen, Speicher, PV-Werte, Wallboxen, Wärmepumpe, Haus, Tagesreihen und Ringe stehen in `shots_run`, also **nur** im Screenshot-Lauf. Die Demo-Leistungen der Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen host-Plattform, im Simulator ebenso. Im Gerät steht beides nicht.
 

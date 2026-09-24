@@ -24,13 +24,15 @@ Zugangsdaten stehen ohnehin in `secrets.yaml` außerhalb des Repos.
 
 ## Was das Panel zeigt
 
-Neun Seiten über eine Menüleiste am unteren Rand, dazu eine Statusleiste mit
+Elf Seiten über eine Menüleiste am unteren Rand, dazu eine Statusleiste mit
 Uhr und Systemsymbolen (WLAN, Home Assistant, Daten aktuell) und eine Meldungszeile:
 
 | Seite | Stand |
 | --- | --- |
 | Übersicht | Anlagenschema mit Flussanimation, rechte Kennzahlenspalte, Ringe und Tagesertrag in Euro (auch als Sensoren für Home Assistant) |
 | PV & Prognose | Leistung und Tageswert je Wechselrichter und Fläche, getrennt nach Volleinspeisung und Hausnetz, Status mit Fehlertext und Temperatur; Tagesverlauf Ist gegen Prognose mit vier Kennzahlen |
+| Prognose | Solcast: heute P50 mit P10 bis P90, Rest, jetzt, Spitze; Halbstunden als Band mit Linie; sieben Tage mit Wetterbild |
+| Wetter | DWD: jetzt mit Wind, Feuchte, Druck, Sonne; nächste 24 Stunden mit Temperaturkurve und Regen; sieben Tage; DWD-Warnung |
 | Speicher | Tabelle mit Zellwerten, drei SoC-Ringe |
 | Wallboxen | im Stil von evcc: je Wallbox Modus, Leistung mit Phasen, Geladen, Sonnenanteil, Ladedauer, Fahrzeug mit Ladestand, Ladeplan und Limit; Monatswerte |
 | Wärmepumpe | grafisch im Aufbau des Nilan-Touch-Bedienteils (Compact P, Werte aus dem klassischen CTS700): außen, Raum, Feuchte, CO2, Warmwasser, Lüftungsstufe mit Ventilatoren; Betriebsart, Bypass, Kompressor, Zu-/Fortluft, Filter, Strom |
@@ -45,10 +47,11 @@ Tipp auf die Symbole oben rechts) mit dem Alter der Werte je Quelle.
 
 **Es sind noch keine echten Daten angebunden.** Die Oberfläche wird über feste
 Skript-Schnittstellen gefüttert (`alert_push`, `storage_update`, `pv_update`,
-`pv_status`, `money_update`, `grid_update`, `grid_phase`, `grid_meter`, `grid_rules`,
+`pv_status`, `money_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`, `wx_hour`,
+`wx_day`, `wx_warning`, `grid_update`, `grid_phase`, `grid_meter`, `grid_rules`,
 `stats_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`,
 `house_battery`, `house_loadpoint`, `house_update`, `house_history`, `record_hour`).
-Beispielwerte für Meldungen, Speicher, PV, Wallboxen, Wärmepumpe, Haus, Netz und Statistik gibt es
+Beispielwerte für Meldungen, Speicher, PV, Wallboxen, Wärmepumpe, Haus, Netz, Statistik, Prognose und Wetter gibt es
 nur im Screenshot-Lauf
 (`shots_run` in `pv-dashboard-shots.yaml`). Die Demo-Leistungen der
 Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen
@@ -162,16 +165,18 @@ API-Schlüssel im Klartext.
 | `secrets.yaml.example` | Dokumentiert, welche Schlüssel `secrets.yaml` enthalten muss — die echte Datei legt der Device Builder an |
 | `.pv-dashboard_core.yaml` | Nur Gerät: SoC, PSRAM, LDO, Funkstrecke zum C6, WLAN, API, Logger, OTA, Bluetooth, Zeit und Diagnose, serielle Schnittstellen |
 | `.pv-dashboard_utility.yaml` | Gemeinsam mit dem Simulator: Schriften (IBM Plex Sans/Mono) und die Bilder aus `images/`, dazu die Design-Tokens für Farben, Maße und Abstände — einzige Quelle dafür |
-| `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die neun Seiten ein |
+| `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die elf Seiten ein |
 | `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, `money_update`, erzeugter Flussanimations-Block |
 | `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose: Wechselrichter und Flächen je Kreis, Tagesverlauf mit Kennzahlen, `pv_status` / `pv_update` / `pv_redraw_curve` |
-| `.pv-dashboard_page_battery.yaml` | Seite 3 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
-| `.pv-dashboard_page_wallbox.yaml` | Seite 4 Wallboxen: Ladepunkt-Karten nach evcc, Monatskachel, `wallbox_update` / `wallbox_month` |
-| `.pv-dashboard_page_heatpump.yaml` | Seite 5 Wärmepumpe: Startseite nach dem Nilan-Touch-Bedienteil, Haus aus Flächen, Information, Strom, `heatpump_update` / `heatpump_extra` |
-| `.pv-dashboard_page_house.yaml` | Seite 6 Haus: Energiefluss nach evcc, Tabelle, Verbrauch jetzt und 24 Stunden, `house_*` |
-| `.pv-dashboard_page_grid.yaml` | Seite 7 Netz: Hausanschluss, Phasen, Zähler, Netzvorgaben, `grid_*` |
-| `.pv-dashboard_page_stats.yaml` | Seite 8 Statistik: Woche / Monat / Jahr, `stats_update` / `stats_show` |
-| `.pv-dashboard_page_alerts.yaml` | Seite 9 Meldungen: Liste, Zähler, `alert_push` / `alert_ack` / `alert_refresh` |
+| `.pv-dashboard_page_forecast.yaml` | Seite 3 Prognose: Solcast heute, Halbstunden, sieben Tage, `fc_*` |
+| `.pv-dashboard_page_weather.yaml` | Seite 4 Wetter: DWD jetzt, 24 Stunden, sieben Tage, Warnung, `wx_*` |
+| `.pv-dashboard_page_battery.yaml` | Seite 5 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
+| `.pv-dashboard_page_wallbox.yaml` | Seite 6 Wallboxen: Ladepunkt-Karten nach evcc, Monatskachel, `wallbox_update` / `wallbox_month` |
+| `.pv-dashboard_page_heatpump.yaml` | Seite 7 Wärmepumpe: Startseite nach dem Nilan-Touch-Bedienteil, Haus aus Flächen, Information, Strom, `heatpump_update` / `heatpump_extra` |
+| `.pv-dashboard_page_house.yaml` | Seite 8 Haus: Energiefluss nach evcc, Tabelle, Verbrauch jetzt und 24 Stunden, `house_*` |
+| `.pv-dashboard_page_grid.yaml` | Seite 9 Netz: Hausanschluss, Phasen, Zähler, Netzvorgaben, `grid_*` |
+| `.pv-dashboard_page_stats.yaml` | Seite 10 Statistik: Woche / Monat / Jahr, `stats_update` / `stats_show` |
+| `.pv-dashboard_page_alerts.yaml` | Seite 11 Meldungen: Liste, Zähler, `alert_push` / `alert_ack` / `alert_refresh` |
 | `.pv-dashboard_display.yaml` | Nur Gerät: I2C, Backlight, MIPI-DSI-Panel, GT911, Drehung |
 | `.pv-dashboard_audio.yaml` | Nur Gerät: ES8311/ES7210, Voice Assistant, I2S-Halbduplex |
 | `pv-dashboard-sim.yaml` | Simulator: `host:`-Plattform mit SDL-Fenster und SDL-Touchscreen |
@@ -190,8 +195,8 @@ Gerät und Simulator binden `utility` und `ui` gemeinsam ein: Eine Änderung an
 der Oberfläche, an den Schriften oder an den Farben wirkt auf beiden Seiten.
 Nur am Gerät hängen `display`, `audio` und `core`.
 
-Die Oberfläche liegt in **zehn** Dateien: dem Kern `.pv-dashboard_ui.yaml`
-(1182 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
+Die Oberfläche liegt in **zwölf** Dateien: dem Kern `.pv-dashboard_ui.yaml`
+(1205 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
 eigenen `packages:`-Block ein — **diese Reihenfolge ist die Reihenfolge der
 Seiten**. Jedes Skript liegt bei der Seite, die es benutzt; im Kern bleiben nur
 `sys_refresh`, `record_hour` und `update_clock`, die kein Seiten-Widget anfassen,

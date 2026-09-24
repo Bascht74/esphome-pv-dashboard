@@ -121,7 +121,9 @@ tarif_bezug_ct: "30.0"            # Strombezug
 
 # --- Netzanschluss (Seite Netz) ---------------------------------------
 # pv_kwp: installierte Modulleistung in kWp, auf die sich die
-# Einspeisegrenze bezieht. feed_limit_pct: Grenze in %; 60 fuer eine
+# Einspeisegrenze bezieht -- beide Kreise zusammen, wenn sie am selben
+# Hausanschluss haengen und innerhalb von zwoelf Monaten in Betrieb gehen
+# (§ 9 Abs. 3 EEG). feed_limit_pct: Grenze in %; 60 fuer eine
 # Inbetriebnahme 2026 ohne Smart Meter und Steuerbox (§ 9 Abs. 2 EEG,
 # docs/06). Demo-Werte.
 pv_kwp: "30.0"

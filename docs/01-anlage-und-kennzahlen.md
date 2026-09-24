@@ -210,7 +210,9 @@ feed_limit_pct: "60"    # Einspeisegrenze in %, 60 nach § 9 Abs. 2 EEG
 ```
 
 Die 60 % gelten für eine Inbetriebnahme 2026 ohne Smart Meter und Steuerbox
-(Dokument 06). Sind beide eingebaut und getestet, fällt die Grenze; dann
+(Dokument 06). `pv_kwp` ist die Modulleistung **beider** Kreise zusammen, wenn
+beide am selben Hausanschluss hängen und innerhalb von zwölf Monaten in Betrieb
+gehen (§ 9 Abs. 3 EEG, Dokument 06). Sind beide eingebaut und getestet, fällt die Grenze; dann
 `grid_rules` mit `limit_active` false aufrufen.
 
 ## Regeln für Werte und Einheiten
@@ -242,6 +244,10 @@ Prüfliste in Dokument 04 (LVGL-Checkliste).
   Warmwasser, kein Heizwasserkreis) mit dem klassischen Bedienteil CTS700
   (zwei Textzeilen); ihre Modbus-Register stehen in Dokument 06. Die Seite
   zeigt sie trotzdem grafisch.
+- **Prognose:** Solcast-Integration (HACS) in Home Assistant, dieselben Sensoren
+  wie im Blueprint ha-pv-optimizer (Dokument 06).
+- **Wetter:** HACS-Integration „DWD Weather“, Warnungen über „DWD Weather
+  Warnings“ (Dokument 06).
 - **Netz:** Shelly Pro 3EM am Hausanschluss (Phasen, Leistung, Zählerstände),
   am einfachsten über Home Assistant; Felder in Dokument 06.
 - **Wallboxen:** Werte nach dem Muster von evcc (Dokument 03, `wallbox_update`).
@@ -253,7 +259,8 @@ Angebunden ist bisher nichts davon. Die Oberfläche hat dafür feste Schnittstel
 (`alert_push`, `storage_update`, `pv_update`, `pv_status`, `money_update`, `wallbox_update`,
 `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`, `house_battery`,
 `house_loadpoint`, `house_update`, `house_history`, `grid_update`, `grid_phase`,
-`grid_meter`, `grid_rules`, `stats_update`, `record_hour`, `WATT[]`), siehe Dokument 03
+`grid_meter`, `grid_rules`, `stats_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`,
+`wx_hour`, `wx_day`, `wx_warning`, `record_hour`, `WATT[]`), siehe Dokument 03
 zum Dashboard-Aufbau.
 
 ---

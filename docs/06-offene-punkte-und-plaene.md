@@ -35,6 +35,8 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
       Bild und Schrift `f_icon_l` entfernt, Kommentare zu `!secret` berichtigt.
 - [x] **Nilan: klassisches Bedienteil** (zwei Textzeilen) bestätigt, Registersatz
       entsprechend umgestellt; die Seite bleibt grafisch.
+- [x] **Seiten Prognose (Solcast) und Wetter (DWD)**, auf Zuruf des Nutzers. Siehe
+      „Prognose und Wetter“. Menüleiste mit elf Reitern, der PV-Reiter heißt „PV“.
 
 **Entschieden, nicht zu tun**
 
@@ -279,14 +281,48 @@ vom Februar 2025.
   darunter**, die Nilan Compact P mit ihrer kleinen Leistungsaufnahme
   vermutlich nicht (Einschätzung, nicht geprüft).
 
-**Offen, nur beim Nutzer klärbar:**
+**Beide Kreise zusammen oder nur einer?** Am 25.09.2026 im Gesetzestext
+nachgelesen (§ 9 EEG auf gesetze-im-internet.de): Begrenzt wird „am
+Verknüpfungspunkt“ mit dem Netz auf 60 % der installierten Leistung, und nach
+§ 9 Abs. 3 gelten mehrere Solaranlagen auf demselben Grundstück oder Gebäude,
+die innerhalb von zwölf aufeinanderfolgenden Kalendermonaten in Betrieb gehen,
+für die installierte Leistung als **eine** Anlage. Hängen beide Kreise am selben
+Hausanschluss und gehen beide 2026 in Betrieb, ist die Summe richtig: `pv_kwp` =
+Modulleistung beider Kreise, gemessen wird die Einspeisung am Hausanschluss (so
+rechnet die Seite). Anders nur, wenn ein Kreis mehr als zwölf Monate früher in
+Betrieb ging (dann zählt er nicht mit) oder einen eigenen Netzanschluss hat.
+Ab zusammen 25 kW verlangt § 9 Abs. 2 Nr. 2 zusätzlich eine Einrichtung, mit
+der der Netzbetreiber die Einspeisung fernsteuern kann. Keine Rechtsberatung.
 
-- Bezieht sich die 60-%-Grenze auf beide Kreise zusammen oder nur auf den
-  Kreis, der am Hausanschluss einspeist? Die Seite rechnet mit einer Summe
-  `pv_kwp` (Demo 30,0) gegen die Einspeisung am Hausanschluss; ob der
-  Volleinspeise-Kreis über denselben Anschlusspunkt zählt, weiß der
-  Netzbetreiber bzw. steht im Anschlussbescheid.
-- Was der Wechselrichter als „abgeregelt heute“ liefert, hängt am Fabrikat.
+**Offen:** Was der Wechselrichter als „abgeregelt heute“ liefert, hängt am Fabrikat.
+
+## Prognose und Wetter
+
+Seiten `page_forecast` und `page_weather`, gebaut am 25.09.2026 auf Zuruf des
+Nutzers. Aufbau und Skripte in Dokument 03.
+
+**Prognose (Solcast).** Welche Werte, hat der Nutzer vorgegeben: die, die sein
+Blueprint `ha-pv-optimizer` (github.com/Bascht74/ha-pv-optimizer, am 25.09.2026
+gelesen) benutzt. Das sind aus der Solcast-Integration (HACS) der Sensor „heute“
+mit dem Attribut `detailedForecast` (Halbstunden mit `pv_estimate`,
+`pv_estimate10`, `pv_estimate90` in kW), „verbleibend heute“, „aktuelle Leistung“,
+„nächste Stunde“ (mit `estimate10`) und die Folgetage morgen, Tag 3, Tag 4 (mit
+`estimate10`, optional `detailedForecast`). Die Seite zeigt die Rohwerte P10, P50,
+P90; die Mischung aus P50 und P10, mit der der Blueprint plant, rechnet sie nicht
+nach. Spitze mit Uhrzeit, Tage 5 bis 7 und die API-Zähler benutzt der Blueprint
+nicht; sie stehen hier, weil die Integration sie anbietet (Annahme: Sensoren
+„Peak forecast“, „Peak time“, „API used“, „API limit“; Namen am Gerät prüfen).
+
+**Wetter (DWD).** Quelle ist die HACS-Integration „DWD Weather“ des Nutzers. Die
+Skripte sind nach den Feldern der Home-Assistant-Wettervorhersage benannt
+(`condition`, `temperature`, `templow`, `precipitation`,
+`precipitation_probability`, `wind_speed`, `wind_bearing`, `wind_gust_speed`,
+`cloud_coverage`, `humidity`, `pressure`), geholt über `weather.get_forecasts`
+(stündlich und täglich). **Nicht geprüft:** unter welchem Namen die Integration
+die Sonnenscheindauer liefert und ob stündlich oder nur täglich; Warnungen kommen
+aus der eigenen Integration „DWD Weather Warnings“ (Warnstufe und Text). Der
+Blueprint benutzt das Wetter nur für die Temperatur; Wetterbilder, Regen und Wind
+sind für die Anzeige dazugekommen.
 
 ## Systemstatus
 
@@ -294,7 +330,7 @@ Seit dem 25.09.2026. Oben rechts in der Statusleiste drei Symbole: WLAN,
 Verbindung zu Home Assistant (API), Daten aktuell. Ein Tipp öffnet das
 Systemfenster (`sys_panel`): WLAN, Home Assistant, Laufzeit, ESPHome-Version,
 Grenze für veraltete Werte und das Alter der letzten Werte je Seite (PV,
-Speicher, Wallboxen, Wärmepumpe, Haus, Netz). Jedes Update-Skript stempelt
+Speicher, Wallboxen, Wärmepumpe, Haus, Netz, Prognose, Wetter). Jedes Update-Skript stempelt
 `data_seen[n]`; `sys_refresh` läuft alle 10 s. Älter als `data_stale_s`
 (300 s, `.pv-dashboard_utility.yaml`) färbt das Symbol gelb und legt **einmal**
 je Quelle eine Warnung in die Meldungsliste. Solange eine Quelle noch nie
@@ -525,14 +561,15 @@ Vom 9.0-Umstieg sind noch **zwei** Punkte offen, beide in Dokument 05 beschriebe
 
 Der LVGL-`list`-Bug ist mit 2026.9.0 erledigt.
 
-**Nicht gebaut, bewusst (25.09.2026):** Wettervorhersage und Prognose für morgen
-(keine Quelle festgelegt), Meldungen über einen Neustart hinweg speichern (NVS-Platz,
-Quittung nach HA offen) und Steuern vom Panel aus (Wallbox-Modus, Nilan-Stufe) —
-die Knöpfe der Wallbox-Seite zeigen nur an. Jeweils auf Zuruf.
+**Nicht gebaut, bewusst (25.09.2026):** Meldungen über einen Neustart hinweg speichern
+(NVS-Platz, Quittung nach HA offen) und Steuern vom Panel aus (Wallbox-Modus,
+Nilan-Stufe) — die Knöpfe der Wallbox-Seite zeigen nur an. Jeweils auf Zuruf.
+Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 25.09.2026 (Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
+Stand: 25.09.2026 (Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc
 und dem Nilan-Bedienteil umgebaut, Nilan-Register recherchiert); davor

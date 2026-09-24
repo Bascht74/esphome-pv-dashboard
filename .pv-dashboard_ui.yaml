@@ -26,11 +26,13 @@
 # Listen aus Paketen in der Reihenfolge aneinander, in der die Pakete
 # deklariert sind (config_helpers.merge_config: alt + neu, dazu die
 # Umkehrung in packages._walk_package_dict). Die Reiter unten in der
-# Menueleiste zaehlen auf dieselbe Ordnung: Uebersicht, PV, Speicher,
-# Wallbox, Waermepumpe, Haus, Netz, Statistik, Meldungen.
+# Menueleiste zaehlen auf dieselbe Ordnung: Uebersicht, PV, Prognose,
+# Wetter, Speicher, Wallbox, Waermepumpe, Haus, Netz, Statistik, Meldungen.
 packages:
   page_overview: !include .pv-dashboard_page_overview.yaml
   page_pv:       !include .pv-dashboard_page_pv.yaml
+  page_forecast: !include .pv-dashboard_page_forecast.yaml
+  page_weather:  !include .pv-dashboard_page_weather.yaml
   page_battery:  !include .pv-dashboard_page_battery.yaml
   page_wallbox:  !include .pv-dashboard_page_wallbox.yaml
   page_heatpump: !include .pv-dashboard_page_heatpump.yaml
@@ -95,12 +97,13 @@ globals:
   #   0 PV (pv_update)          1 Speicher (storage_update)
   #   2 Wallboxen (wallbox_update)  3 Waermepumpe (heatpump_update)
   #   4 Haus (house_flow)       5 Netz (grid_update)
+  #   6 Prognose (fc_today)     7 Wetter (wx_now)
   # sys_refresh liest daraus das Datenalter fuer Statusleiste und
   # Systemfenster und meldet ausbleibende Daten.
   - id: data_seen
-    type: std::array<uint32_t, 6>
+    type: std::array<uint32_t, 8>
     restore_value: false
-    initial_value: '{0, 0, 0, 0, 0, 0}'
+    initial_value: '{0, 0, 0, 0, 0, 0, 0, 0}'
   # Quellen, deren Ausbleiben schon gemeldet ist (Bit je Quelle)
   - id: data_stale_reported
     type: int
@@ -174,12 +177,12 @@ script:
   - id: sys_refresh
     then:
       - lambda: |-
-          static const char *const SRC[6] = {"PV", "Speicher", "Wallboxen", "Wärmepumpe", "Haus", "Netz"};
-          lv_obj_t *const age[6] = {id(sys_age_0), id(sys_age_1), id(sys_age_2), id(sys_age_3), id(sys_age_4), id(sys_age_5)};
+          static const char *const SRC[8] = {"PV", "Speicher", "Wallboxen", "Wärmepumpe", "Haus", "Netz", "Prognose", "Wetter"};
+          lv_obj_t *const age[8] = {id(sys_age_0), id(sys_age_1), id(sys_age_2), id(sys_age_3), id(sys_age_4), id(sys_age_5), id(sys_age_6), id(sys_age_7)};
           const uint32_t now = millis();
           const uint32_t limit = (uint32_t) ${data_stale_s} * 1000u;
           int seen = 0, stale = 0;
-          for (int k = 0; k < 6; k++) {
+          for (int k = 0; k < 8; k++) {
             const uint32_t t = id(data_seen)[k];
             if (t == 0) {
               lv_label_set_text(age[k], "noch keine Werte");
@@ -389,6 +392,8 @@ lvgl:
         - lvgl.matrix.button.update:
             id:
               - btn_nav_pv
+              - btn_nav_forecast
+              - btn_nav_weather
               - btn_nav_battery
               - btn_nav_wallbox
               - btn_nav_heatpump
@@ -866,8 +871,9 @@ lvgl:
           on_click:
             - lvgl.page.show: page_alerts
             - lvgl.matrix.button.update:
-                id: [btn_nav_overview, btn_nav_pv, btn_nav_battery, btn_nav_wallbox,
-                     btn_nav_heatpump, btn_nav_house, btn_nav_grid, btn_nav_stats]
+                id: [btn_nav_overview, btn_nav_pv, btn_nav_forecast, btn_nav_weather,
+                     btn_nav_battery, btn_nav_wallbox, btn_nav_heatpump, btn_nav_house,
+                     btn_nav_grid, btn_nav_stats]
                 control:
                   checked: false
             - lvgl.matrix.button.update:
@@ -919,6 +925,9 @@ lvgl:
                 bg_opa: TRANSP
                 border_width: 0
                 pad_all: 0
+                # Elf Reiter seit 25.09.2026: 6 px Luecke statt der Vorgabe,
+                # damit "Waermepumpe" mit Rand in seinen Knopf passt.
+                pad_column: 6
                 # Genau ein Reiter ist markiert: LVGL nimmt beim Antippen dem
                 # vorherigen die Markierung ab. Ohne das bliebe sie kleben.
                 one_checked: true
@@ -950,11 +959,21 @@ lvgl:
                         control: { checkable: true, checked: true }
                         on_press:
                           - lvgl.page.show: page_overview
-                      - text: "PV & Prognose"
+                      - text: "PV"
                         id: btn_nav_pv
                         control: { checkable: true }
                         on_press:
                           - lvgl.page.show: page_pv
+                      - text: "Prognose"
+                        id: btn_nav_forecast
+                        control: { checkable: true }
+                        on_press:
+                          - lvgl.page.show: page_forecast
+                      - text: "Wetter"
+                        id: btn_nav_weather
+                        control: { checkable: true }
+                        on_press:
+                          - lvgl.page.show: page_weather
                       - text: "Speicher"
                         id: btn_nav_battery
                         control: { checkable: true }
@@ -993,16 +1012,16 @@ lvgl:
 
       # Systemfenster: oeffnet ueber die Symbole in der Statusleiste,
       # schliesst auf Tipp. 600 x 520 mittig ueber der Seitenflaeche
-      # (x 340, y 150), innen 578 x 498: Titel 0..17, fuenf Zeilen im
-      # Raster 36 ab 28, Titel Datenalter 222..239, sechs Zeilen ab 250,
-      # Hinweis 476..493.
+      # (x 340, y 114, 600 x 592), innen 578 x 570: Titel 0..17, fuenf
+      # Zeilen im Raster 36 ab 28, Titel Datenalter 222..239, acht Zeilen
+      # ab 250, Hinweis 548..565.
       - obj:
           id: sys_panel
           styles: st_tile
           x: 340
-          y: 150
+          y: 114
           width: 600
-          height: 520
+          height: 592
           border_color: $col_batt
           border_width: 2
           hidden: true
@@ -1037,7 +1056,11 @@ lvgl:
             - label: { id: sys_age_4, x: 270, y: 401, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
             - label: { x: 0, y: 438, width: 260, height: 20, long_mode: DOT, text: "Netz", text_font: f_text_s, text_color: $col_ink2 }
             - label: { id: sys_age_5, x: 270, y: 437, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
-            - label: { x: 0, y: 476, width: 576, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "Tippen schließt das Fenster" }
+            - label: { x: 0, y: 474, width: 260, height: 20, long_mode: DOT, text: "Prognose", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_6, x: 270, y: 473, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 510, width: 260, height: 20, long_mode: DOT, text: "Wetter", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_7, x: 270, y: 509, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 548, width: 576, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "Tippen schließt das Fenster" }
 
       # Sprachassistent: liegt als Overlay ueber der Seite und erscheint nur,
       # solange die Pipeline laeuft. So braucht er keinen festen Platz im

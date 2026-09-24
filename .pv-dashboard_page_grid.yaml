@@ -1,5 +1,5 @@
 ##############################################################################
-# Package: Seite 7 -- Netz und Zaehler
+# Package: Seite 9 -- Netz und Zaehler
 #
 # Auf Wunsch des Nutzers (25.09.2026) nach dem Projekt-Review: was am
 # Netzanschluss passiert, die drei Phasen, die Zaehlerstaende und die
@@ -43,7 +43,9 @@
 ##############################################################################
 # Anlagenwerte (Demo). Eigene Werte gehoeren in .pv-dashboard_anlage.yaml.
 #   pv_kwp          installierte Modulleistung in kWp, auf die sich die
-#                   Einspeisegrenze bezieht
+#                   Einspeisegrenze bezieht; beide Kreise zusammen, wenn
+#                   sie am selben Hausanschluss haengen und innerhalb von
+#                   zwoelf Monaten in Betrieb gehen (§ 9 Abs. 3 EEG)
 #   feed_limit_pct  Einspeisegrenze in % (60 nach Solarspitzengesetz)
 ##############################################################################
 

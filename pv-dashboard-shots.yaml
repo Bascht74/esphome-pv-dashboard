@@ -18,7 +18,7 @@
 #
 # Baut den Simulator (pv-dashboard-sim.yaml, hier als Package eingebunden)
 # mit headless-Display: Es oeffnet sich kein Fenster. Das Programm zeigt
-# nacheinander alle neun Seiten (die Statistik zweimal, Woche und Monat) --
+# nacheinander alle elf Seiten (die Statistik zweimal, Woche und Monat) --
 # der passende Reiter unten ist dabei markiert -- und die drei Fenster
 # Sprachassistent, Firmware-Update und System,
 # legt jedes Bild als BMP ab und beendet sich dann selbst.
@@ -77,9 +77,9 @@ script:
   - id: shots_nav_clear
     then:
       - lvgl.matrix.button.update:
-          id: [btn_nav_overview, btn_nav_pv, btn_nav_battery, btn_nav_wallbox,
-               btn_nav_heatpump, btn_nav_house, btn_nav_grid, btn_nav_stats,
-               btn_nav_alerts]
+          id: [btn_nav_overview, btn_nav_pv, btn_nav_forecast, btn_nav_weather,
+               btn_nav_battery, btn_nav_wallbox, btn_nav_heatpump, btn_nav_house,
+               btn_nav_grid, btn_nav_stats, btn_nav_alerts]
           control:
             checked: false
 
@@ -296,6 +296,99 @@ script:
       - script.wait: pv_status
       - script.execute: { id: pv_status, inv: 3, ok: false, text: "Isolationsfehler 0x2011", temp: !lambda "return NAN;" }
       - script.wait: pv_status
+      # Prognose (Solcast): Kennzahlen, Halbstunden (Glocke um 13 Uhr) und
+      # sieben Tage; die Wetterbilder der Tage kommen als Lage mit.
+      - script.execute:
+          id: fc_today
+          p50: 155.0
+          p10: 128.4
+          p90: 171.9
+          remaining: 12.6
+          power_now: 0
+          next_hour: 0
+          peak_kw: 22.0
+          peak_time: "13:15"
+          updated: "00:15"
+          api_used: 4
+          api_limit: 10
+      - script.execute:
+          id: fc_slots
+          p50: "0,0,0,0,0,0,0,0,0,0,0.1,0.1,0.2,0.5,0.8,1.4,2.2,3.4,5.1,7.1,9.6,12.4,15.2,17.9,20.1,21.5,22,21.5,20.1,17.9,15.2,12.4,9.6,7.1,5.1,3.4,2.2,1.4,0.8,0.5,0.2,0.1,0.1,0,0,0,0,0"
+          p10: "0,0,0,0,0,0,0,0,0,0,0,0.1,0.2,0.4,0.6,1.1,1.8,2.7,4,5.7,7.7,9.9,12.2,14.3,16.1,17.2,17.6,17.2,16.1,14.3,12.2,9.9,7.7,5.7,4,2.7,1.8,1.1,0.6,0.4,0.2,0.1,0,0,0,0,0,0"
+          p90: "0,0,0,0,0,0,0,0,0,0,0.1,0.1,0.3,0.5,0.9,1.5,2.5,3.8,5.7,8,10.8,13.9,17.1,20,22.5,24.1,24.6,24.1,22.5,20,17.1,13.9,10.8,8,5.7,3.8,2.5,1.5,0.9,0.5,0.3,0.1,0.1,0,0,0,0,0"
+      - script.wait: fc_slots
+      - script.execute: { id: fc_day, day: 0, label: "Heute", cond: "partlycloudy", p50: 155.0, p10: 128.4, p90: 171.9 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 1, label: "Morgen", cond: "sunny", p50: 171.2, p10: 150.3, p90: 180.6 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 2, label: "So 27.09.", cond: "rainy", p50: 48.6, p10: 22.1, p90: 90.4 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 3, label: "Mo 28.09.", cond: "cloudy", p50: 72.3, p10: 41.0, p90: 118.2 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 4, label: "Di 29.09.", cond: "partlycloudy", p50: 121.8, p10: 80.5, p90: 152.7 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 5, label: "Mi 30.09.", cond: "lightning-rainy", p50: 66.0, p10: 30.2, p90: 124.9 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 6, label: "Do 01.10.", cond: "sunny", p50: 158.4, p10: 112.0, p90: 175.3 }
+      - script.wait: fc_day
+      # Wetter (DWD): jetzt, zwoelf Stundenspalten, sieben Tage, eine Warnung
+      - script.execute:
+          id: wx_now
+          cond: "clear-night"
+          temp: 11.4
+          tmax: 19.0
+          tmin: 8.0
+          humidity: 82
+          pressure: 1017
+          wind: 14
+          bearing: 225
+          gust: 31
+          clouds: 20
+          rain: 0.4
+          sun_h: 6.2
+          sunrise: "07:12"
+          sunset: "19:18"
+          updated: "00:00"
+      - script.execute: { id: wx_hour, slot: 0, hour: 2, cond: "clear-night", temp: 10, rain: 0, prob: 0 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 1, hour: 4, cond: "clear-night", temp: 9, rain: 0, prob: 0 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 2, hour: 6, cond: "fog", temp: 8, rain: 0, prob: 10 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 3, hour: 8, cond: "partlycloudy", temp: 11, rain: 0, prob: 10 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 4, hour: 10, cond: "sunny", temp: 15, rain: 0, prob: 5 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 5, hour: 12, cond: "sunny", temp: 18, rain: 0, prob: 0 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 6, hour: 14, cond: "partlycloudy", temp: 19, rain: 0, prob: 10 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 7, hour: 16, cond: "cloudy", temp: 17, rain: 0.3, prob: 40 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 8, hour: 18, cond: "rainy", temp: 14, rain: 1.8, prob: 80 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 9, hour: 20, cond: "pouring", temp: 12, rain: 4.2, prob: 90 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 10, hour: 22, cond: "rainy", temp: 11, rain: 0.9, prob: 60 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 11, hour: 0, cond: "cloudy", temp: 10, rain: 0.1, prob: 30 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_day, day: 0, label: "Heute", cond: "partlycloudy", tmax: 19, tmin: 8, rain: 2.4, prob: 70, sun_h: 6.2, wind: 14 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 1, label: "Morgen", cond: "sunny", tmax: 22, tmin: 9, rain: 0, prob: 5, sun_h: 10.1, wind: 9 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 2, label: "So 27.09.", cond: "rainy", tmax: 14, tmin: 10, rain: 11.3, prob: 95, sun_h: 0.4, wind: 28 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 3, label: "Mo 28.09.", cond: "cloudy", tmax: 15, tmin: 9, rain: 1.2, prob: 40, sun_h: 1.8, wind: 19 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 4, label: "Di 29.09.", cond: "partlycloudy", tmax: 17, tmin: 7, rain: 0.3, prob: 20, sun_h: 5.5, wind: 12 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 5, label: "Mi 30.09.", cond: "lightning-rainy", tmax: 18, tmin: 11, rain: 8.7, prob: 85, sun_h: 2.1, wind: 33 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 6, label: "Do 01.10.", cond: "sunny", tmax: 20, tmin: 8, rain: 0, prob: 10, sun_h: 9.4, wind: 8 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_warning, level: 2, text: "Sturmböen bis 70 km/h, So 27.09. 12:00 bis 20:00" }
+      - script.wait: wx_warning
       # Geldrechnung des Tages aus den Demo-Tarifen.
       - script.execute: { id: money_update, full_feed: 88.7, surplus: 30.6, self_use: 17.9, grid_in: 3.4 }
       # Beispielkurven fuer die Kachel Tagesertrag (Ist und Prognose). Das ui-
@@ -322,6 +415,18 @@ script:
       - script.execute: shots_nav_clear
       - lvgl.matrix.button.update: { id: btn_nav_pv, control: { checked: true } }
       - script.execute: { id: shots_take, name: 02_pv.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_forecast
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_forecast, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 13_forecast.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_weather
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_weather, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 14_weather.bmp }
       - script.wait: shots_take
 
       - lvgl.page.show: page_battery

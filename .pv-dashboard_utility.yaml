@@ -147,6 +147,10 @@ font:
   #   \U000F07D0  home-assistant       Home Assistant
   #   \U000F05E1  check-circle-outline Daten frisch
   #   \U000F05CE  clock-alert-outline  Daten ueberfaellig
+  # Seit 25.09.2026 fuer die Seiten Prognose und Wetter (Wetterbilder in
+  # der Stundenleiste, Sonne auf/unter; Liste der Wetterbilder bei f_wx_l):
+  #   \U000F059C  weather-sunset-up    Sonnenaufgang
+  #   \U000F059B  weather-sunset-down  Sonnenuntergang
   - file:
       type: web
       url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
@@ -158,7 +162,33 @@ font:
              "\U000F0D3E", "\U000F140B", "\U000F05A8", "\U000F050F",
              "\U000F058C", "\U000F07E4", "\U000F09A1", "\U000F0210",
              "\U000F0026", "\U000F0084", "\U000F05A9", "\U000F05AA",
-             "\U000F07D0", "\U000F05E1", "\U000F05CE"]
+             "\U000F07D0", "\U000F05E1", "\U000F05CE", "\U000F059C",
+             "\U000F059B",
+             "\U000F0599", "\U000F0594", "\U000F0595", "\U000F0590", "\U000F0591", "\U000F0597", "\U000F0596",
+             "\U000F0598", "\U000F067F", "\U000F0592", "\U000F0593", "\U000F067E", "\U000F059D", "\U000F059E", "\U000F0F2F"]
+
+  # --- Wetterbilder gross (Seiten Wetter und Prognose) -------------------
+  # Dieselben Material Design Icons, nur die Lagen, die wx_cond kennt
+  # (.pv-dashboard_page_weather.yaml; Codepunkte aus @mdi/font 7.4.47):
+  #   F0599 sunny  F0594 clear-night  F0595 partly-cloudy  F0590 cloudy
+  #   F0591 fog  F0597 rainy  F0596 pouring  F0598 snowy  F067F snowy-rainy
+  #   F0592 hail  F0593 lightning  F067E lightning-rainy  F059D windy
+  #   F059E windy-variant  F0F2F cloudy-alert (Unwetter)
+  # f_wx_xl fuer "jetzt", f_wx_l fuer die Tagesspalten.
+  - file:
+      type: web
+      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: f_wx_xl
+    size: 88
+    bpp: 4
+    glyphs: ["\U000F0599", "\U000F0594", "\U000F0595", "\U000F0590", "\U000F0591", "\U000F0597", "\U000F0596", "\U000F0598", "\U000F067F", "\U000F0592", "\U000F0593", "\U000F067E", "\U000F059D", "\U000F059E", "\U000F0F2F"]
+  - file:
+      type: web
+      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: f_wx_l
+    size: 44
+    bpp: 4
+    glyphs: ["\U000F0599", "\U000F0594", "\U000F0595", "\U000F0590", "\U000F0591", "\U000F0597", "\U000F0596", "\U000F0598", "\U000F067F", "\U000F0592", "\U000F0593", "\U000F067E", "\U000F059D", "\U000F059E", "\U000F0F2F"]
 
 
 
