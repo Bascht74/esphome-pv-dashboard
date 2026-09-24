@@ -125,6 +125,14 @@ Am Hausnetz hängen vier Kästen auf der Verbraucherschiene:
 
 Der Knoten darüber heißt `name_house` (Demo `Hausnetz`).
 
+Die Seite Haus zeigt in der Spalte Verbraucher die Wärmepumpe (`name_heatpump`)
+und fünf weitere Posten einzeln, mit eigenen Beschriftungen, die nur dort stehen: `name_oven` (Demo `Backofen`), `name_washer` (`Waschmaschine`),
+`name_dishwasher` (`Spülmaschine`), `name_dryer` (`Trockner`) und `name_baseload`
+(`Grundlast`). Der Standard steht in `.pv-dashboard_page_house.yaml`, eigene Werte
+gehören wie die übrigen in `.pv-dashboard_anlage.yaml`. `name_wb_1` und `name_wb_2`
+tragen zusätzlich die Kacheln der Seite Wallboxen; ihr Standard steht deshalb
+doppelt, wie bei den Speichernamen, und das Wallbox-Paket gewinnt.
+
 ## Zähler
 
 Drei Kästen in der unteren Reihe des Schemas:
@@ -214,18 +222,24 @@ Prüfliste in Dokument 04 (LVGL-Checkliste).
 
 ## Datenquellen
 
-- **Wärmepumpe:** über Home Assistant.
+- **Wärmepumpe:** über Home Assistant. Gerät: Nilan Compact P (Lüftung und
+  Warmwasser, kein Heizwasserkreis) mit Bedienteil CTS700 Touch; ihre
+  Modbus-Register stehen in Dokument 06.
+- **Wallboxen:** Werte nach dem Muster von evcc (Dokument 03, `wallbox_update`).
 - **Alles andere:** möglichst nativ über **Modbus RTU**, nicht über Modbus TCP.
 - **Zeit:** kommt auf dem Gerät von Home Assistant (`time: platform: homeassistant`),
   im Simulator von der Systemuhr.
 
 Angebunden ist bisher nichts davon. Die Oberfläche hat dafür feste Schnittstellen
-(`alert_push`, `storage_update`, `pv_update`, `record_hour`, `WATT[]`), siehe Dokument 03
+(`alert_push`, `storage_update`, `pv_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`,
+`heatpump_extra`, `house_flow`, `house_battery`, `house_loadpoint`, `house_update`,
+`house_history`, `record_hour`, `WATT[]`), siehe Dokument 03
 zum Dashboard-Aufbau.
 
 ---
 
-Stand: 23.09.2026 (eigene Werte in `.pv-dashboard_anlage.yaml` statt in
+Stand: 24.09.2026 (Beschriftungen der Seite Haus, Nilan Compact P, Schnittstellen der Seiten
+Wallboxen, Wärmepumpe und Haus); davor 23.09.2026 (eigene Werte in `.pv-dashboard_anlage.yaml` statt in
 `pv-dashboard.yaml`, `pv_update` ergänzt; davor 20.09.2026:
 Aufbau- und Kennzahlenfestlegungen vom 30.07.2026; die
 Entscheidung zur Autarkie-Zweitzeile vom 20.09.2026; Beschriftungen und Tarife am

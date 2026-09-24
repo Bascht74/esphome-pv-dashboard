@@ -148,6 +148,88 @@ script:
       - script.execute: { id: pv_update, inv: -1, pv: 6, power: 3650, energy: 31.2 }
       # Flaeche 8 (pv: 7) bleibt ohne Aufruf: So steht das Strichmuster mit
       # auf dem Bild.
+      # Wallboxen: Wallbox 2 bleibt ohne Aufruf, auch hier fuer das
+      # Strichmuster. Werte und Texte sind Beispiele im Format der
+      # evcc-API (mode "off" / "smart" / "now").
+      - script.execute:
+          id: wallbox_update
+          wb: 0
+          mode: "smart"
+          charging: true
+          power: 7.4
+          phases: 3
+          energy: 12.8
+          solar: 86
+          minutes: 104
+          vehicle: "Kombi"
+          status: "Ladevorgang aktiv …"
+          soc: 64
+          range: 312
+          limit: 80
+          plan: "Mo 07:00"
+      - script.execute: { id: wallbox_month, energy: 412.6, solar: 71, cost: 38.40, price: 9.3 }
+      # Waermepumpe
+      - script.execute:
+          id: heatpump_update
+          outdoor: 8.4
+          room: 21.6
+          humidity: 48
+          co2: 640
+          dhw: 51.2
+          eheat: true
+          fan: 2
+          vent_mode: "Auto"
+          season: "Winter"
+          bypass: "Geschlossen"
+          compressor: "Warmwasser"
+          supply: 19.8
+          exhaust: 9.1
+          power: 0.62
+          energy: 4.8
+          alarm: 0
+      - script.execute:
+          id: heatpump_extra
+          room_set: 21.5
+          dhw_set: 50
+          fan_supply: 45
+          fan_extract: 48
+          filter_days: 23
+          defrost: false
+          legionella: true
+      # Haus: Energiefluss wie evcc. Wallbox 1 laedt mit 7,4 kW, PV
+      # reicht nicht, der Speicher gibt dazu, der Rest kommt aus dem Netz:
+      # In 6400 + 2000 + 450 = Out 1450 + 7400 = 8850 W.
+      - script.execute:
+          id: house_flow
+          pv: 6400
+          bat_out: 2000
+          grid_in: 450
+          home: 1450
+          loadpoints: 7400
+          bat_in: 0
+          grid_out: 0
+          soc: 71
+          forecast: 12.4
+          price_grid: 32.1
+          price_home: 9.8
+          price_feed: 8.2
+      - script.execute: { id: house_battery, bat: 0, power: 700, soc: 72 }
+      - script.execute: { id: house_battery, bat: 1, power: 650, soc: 70 }
+      - script.execute: { id: house_battery, bat: 2, power: 650, soc: 71 }
+      - script.execute: { id: house_loadpoint, wb: 0, power: 7400, soc: 64 }
+      - script.execute: { id: house_loadpoint, wb: 1, power: 0, soc: !lambda "return NAN;" }
+      # Verbraucher: zusammen 1450 W wie "Verbrauch" oben
+      - script.execute: { id: house_update, dev: 0, power: 620, energy: 4.8 }
+      - script.execute: { id: house_update, dev: 1, power: 0, energy: 1.2 }
+      - script.execute: { id: house_update, dev: 2, power: 180, energy: 0.9 }
+      - script.execute: { id: house_update, dev: 3, power: 0, energy: 1.1 }
+      - script.execute: { id: house_update, dev: 4, power: 338, energy: 0.6 }
+      - script.execute: { id: house_update, dev: 5, power: 312, energy: 7.5 }
+      - script.execute:
+          id: house_history
+          home: "0.4,0.3,0.3,0.3,0.3,0.4,0.6,0.9,0.8,0.7,1.1,2.4,1.9,1.2,0.9,1,1.3,4.8,6.2,7.9,3.1,1.4,1,6.8"
+          solar: "0,0,0,0,0,0,0.1,0.5,0.8,0.7,1.1,2.4,1.9,1.2,0.9,1,1.2,3.6,2.4,0.9,0.1,0,0,0"
+          hour: 23
       # Beispielkurven fuer die Kachel Tagesertrag (Ist und Prognose). Das ui-
       # Package startet mit 16 x 0; publish_state speichert nicht im NVS.
       - lambda: |-

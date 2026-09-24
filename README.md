@@ -32,9 +32,9 @@ Uhr und eine Meldungszeile:
 | Übersicht | Anlagenschema mit Flussanimation, rechte Kennzahlenspalte, Ringe und Tagesertrag |
 | PV & Prognose | Leistung und Tageswert je Wechselrichter und Fläche, getrennt nach Volleinspeisung und Hausnetz; Tagesverlauf Ist gegen Prognose mit vier Kennzahlen |
 | Speicher | Tabelle mit Zellwerten, drei SoC-Ringe |
-| Wallboxen | Platzhalter |
-| Wärmepumpe | Platzhalter |
-| Haus | Platzhalter |
+| Wallboxen | im Stil von evcc: je Wallbox Modus, Leistung mit Phasen, Geladen, Sonnenanteil, Ladedauer, Fahrzeug mit Ladestand, Ladeplan und Limit; Monatswerte |
+| Wärmepumpe | im Aufbau des Nilan-Bedienteils (Compact P): außen, Raum, Feuchte, CO2, Warmwasser, Lüftungsstufe mit Ventilatoren; Betriebsart, Bypass, Kompressor, Zu-/Fortluft, Filter, Strom |
+| Haus | im Stil von evcc: Energiefluss-Balken, Tabelle In / Out / Verbraucher, Verbrauch jetzt mit Herkunft, Verbrauch der letzten 24 Stunden |
 | Meldungen | Liste aller Meldungen, neueste oben, Quittieren per Antippen |
 
 Dazu zwei Overlays über der Oberfläche: Sprachassistent (`voice_panel`) und
@@ -42,8 +42,10 @@ Firmware-Update mit Fortschrittsbalken (`ota_panel`).
 
 **Es sind noch keine echten Daten angebunden.** Die Oberfläche wird über feste
 Skript-Schnittstellen gefüttert (`alert_push`, `storage_update`, `pv_update`,
-`record_hour`).
-Beispielwerte für Meldungen, Speicher und PV gibt es nur im Screenshot-Lauf
+`wallbox_update`, `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`,
+`house_battery`, `house_loadpoint`, `house_update`, `house_history`, `record_hour`).
+Beispielwerte für Meldungen, Speicher, PV, Wallboxen, Wärmepumpe und Haus gibt es
+nur im Screenshot-Lauf
 (`shots_run` in `pv-dashboard-shots.yaml`). Die Demo-Leistungen der
 Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen
 host-Plattform — im Simulator wie im Screenshot-Lauf. **Auf dem Panel steht
@@ -160,9 +162,9 @@ API-Schlüssel im Klartext.
 | `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, erzeugter Flussanimations-Block |
 | `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose: Wechselrichter und Flächen je Kreis, Tagesverlauf mit Kennzahlen, `pv_update` / `pv_redraw_curve` |
 | `.pv-dashboard_page_battery.yaml` | Seite 3 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
-| `.pv-dashboard_page_wallbox.yaml` | Seite 4 Wallboxen — Platzhalter |
-| `.pv-dashboard_page_heatpump.yaml` | Seite 5 Wärmepumpe — Platzhalter |
-| `.pv-dashboard_page_house.yaml` | Seite 6 Haus — Platzhalter |
+| `.pv-dashboard_page_wallbox.yaml` | Seite 4 Wallboxen: Ladepunkt-Karten nach evcc, Monatskachel, `wallbox_update` / `wallbox_month` |
+| `.pv-dashboard_page_heatpump.yaml` | Seite 5 Wärmepumpe: Startseite nach Nilan CTS700 Touch, Information, Strom, `heatpump_update` / `heatpump_extra` |
+| `.pv-dashboard_page_house.yaml` | Seite 6 Haus: Energiefluss nach evcc, Tabelle, Verbrauch jetzt und 24 Stunden, `house_*` |
 | `.pv-dashboard_page_alerts.yaml` | Seite 7 Meldungen: Liste, Zähler, `alert_push` / `alert_ack` / `alert_refresh` |
 | `.pv-dashboard_display.yaml` | Nur Gerät: I2C, Backlight, MIPI-DSI-Panel, GT911, Drehung |
 | `.pv-dashboard_audio.yaml` | Nur Gerät: ES8311/ES7210, Voice Assistant, I2S-Halbduplex |
@@ -172,7 +174,7 @@ API-Schlüssel im Klartext.
 | `pv-dashboard-demo-a.yaml` | Prototyp: Kettenreaktion auf dem echten Schema |
 | `pv-dashboard-demo-b.yaml` | Prototyp: zwei Kennlinien für die Kugelgeschwindigkeit im Vergleich |
 | `tools/flow_animation.py` | Generator der Flussanimation; erzeugt den markierten Block in der Übersichtsseite |
-| `images/` | `solar_panel.png` (Modulfeld) und `solar_module.png` (Einzelmodul) |
+| `images/` | `solar_panel.png` (Modulfeld), `solar_module.png` (Einzelmodul) und `house.png` (Hausumriss der Seite Wärmepumpe) |
 | `patches/` | `pace_bms-check_uart_settings.patch` für die externe PACE-BMS-Komponente, Anleitung in `docs/06` |
 | `docs/` | Projektwissen, siehe unten |
 | `CLAUDE.md` | Regeln für Assistenz-Sitzungen in diesem Repo |

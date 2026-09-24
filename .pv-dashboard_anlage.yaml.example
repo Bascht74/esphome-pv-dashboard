@@ -84,6 +84,19 @@ name_heatpump: "Wärmepumpe"  #  83 von 94
 name_misc: "Sonstige"        #  50 von 94, Sammelposten fuer alles uebrige
 name_wb_1: "Wallbox 1"       #  60 von 94
 name_wb_2: "Wallbox 2"       #  60 von 94
+# name_heatpump steht auch als Titel der Seite Waermepumpe und in der
+# Tabelle der Seite Haus (168 px), name_wb_1 und name_wb_2 auf den
+# Karten der Seite Wallboxen (f_bar, 100 von 266) und ebenfalls in der
+# Tabelle der Seite Haus, dort wie name_bat_1..3 (168 px).
+
+# --- Verbraucher auf der Seite Haus -----------------------------------
+# Spalte Verbraucher der Tabelle, normal geschrieben (f_text_s, 168 px).
+# Dort steht auch name_heatpump (96 von 168).
+name_oven: "Backofen"            #  64 von 168
+name_washer: "Waschmaschine"     # 111 von 168
+name_dishwasher: "Spülmaschine"  #  97 von 168
+name_dryer: "Trockner"           #  62 von 168
+name_baseload: "Grundlast"       #  67 von 168
 
 # --- Zaehler (untere Reihe) -------------------------------------------
 name_meter_pv: "PV-Zähler"      #  59 von 122, Zaehler des Volleinspeise-Kreises

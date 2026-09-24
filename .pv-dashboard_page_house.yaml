@@ -1,9 +1,547 @@
 ##############################################################################
 # Package: Seite 6 -- Haus
 #
-# Platzhalterseite, Inhalt kommt spaeter. y 10: mittig in der sichtbaren
-# Flaeche 76..744 (Mitte 410), nicht auf der Schirmmitte.
+# Aufbau nach dem Energiefluss von evcc (Wunsch des Nutzers, 24.09.2026):
+# oben der Balken wie evcc ihn zeichnet, darunter die ausgeklappte Tabelle
+# In / Out, dazu der aktuelle Verbrauch mit seiner Herkunft und der
+# Verbrauch der letzten 24 Stunden. Die Verbraucher der Festlegung vom
+# 30.07.2026 (vier Geraete und Grundlast, docs/06) stehen als dritte
+# Spalte der Tabelle, so wie evcc den Verbrauch in Verbraucher aufklappt;
+# die Waermepumpe steht dort mit.
+#
+# Vorbild im evcc-Quelltext (Stand 24.09.2026, assets/js/components/
+# Energyflow/): Visualization.vue, LabelBar.vue, Energyflow.vue, Entry.vue.
+# Uebernommen:
+#   - ein Balken aus Eigenverbrauch PV, Eigenverbrauch Speicher, Netzbezug
+#     und Einspeisung, Breite = Anteil an der Summe; Wert im Segment ab
+#     50 px, mit Einheit ab 80 px (evcc: 40 / 60 bei kleinerer Schrift)
+#   - darueber "In" (PV, Speicher entladen, Netz), darunter "Out" (Haus,
+#     Ladepunkte, Speicher laden, Einspeisung) als Klammern mit Symbol;
+#     unter 40 px ohne Symbol, unter 16 px gar nicht
+#   - Legende Eigenverbrauch und Netzbezug bzw. Einspeisung
+#   - Tabelle mit Symbol, Name, Zusatzangabe, Leistung; Zeilen unter 10 W
+#     grau; Unterzeilen je Speicher und je Ladepunkt
+#   - Leistung unter 1000 W ganzzahlig in W, sonst in kW mit einer Stelle
+#   - Farben aus assets/css/app.css (col_evcc*, Dunkelmodus)
+# "In" und "Out" stehen in evcc auch im deutschen Oberflaechentext so da.
+# evcc nennt den Hausverbrauch "Verbrauch"; er enthaelt hier wie dort alles
+# ausser Ladepunkten und Speicher, also auch die Waermepumpe.
+#
+# Fuenf Skripte gehoeren dazu; kuenftige Sensoren rufen nur diese auf,
+# bis dahin stehen Striche:
+#   house_flow     Energiefluss, Tabelle In / Out, Verbrauch jetzt
+#   house_battery  Unterzeile je Speicher
+#   house_loadpoint Unterzeile je Ladepunkt
+#   house_update   Verbraucher (dritte Spalte)
+#   house_history  Verbrauch der letzten 24 Stunden
+#
+# Flaeche x 4..1276, y 84..736.
+#   Fluss        x 4, y 84, 1272 x 150, innen 1250 x 128:
+#                Titel 0..17, obere Klammern 32..44 (Symbol 20..44),
+#                Balken 52..92, untere Klammern 100..112 (Symbol
+#                100..124); Balken 1200 breit, rechts In / Out
+#   Tabelle      x 4, y 242, 1272 x 244, innen 1250 x 222: drei Spalten je
+#                410, Abstand 10; Kopf 0..29 (f_bar), Linie 34, sechs
+#                Zeilen im Raster 30 ab 42 -> letzte endet 222
+#   Jetzt        x 4, y 494, 312 x 242, innen 290 x 220: Titel 0..17,
+#                Wert 34..73 (f_val_xl), Einheit 75..92, Anteilsbalken
+#                104..114, drei Zeilen im Raster 30 ab 128 -> 209
+#   24 Stunden   x 324, y 494, 952 x 242, innen 930 x 220: Titel 0..17,
+#                Balken 30..186 (156), Stunden 193..210
 ##############################################################################
+
+##############################################################################
+# Standardbeschriftungen (Demo-Anlage)
+#
+# Die fuenf Namen stehen nur auf dieser Seite. Eigene Namen gehoeren in
+# .pv-dashboard_anlage.yaml und stechen diese Standards (docs/01).
+# Gemessen gegen die Namensspalte der Tabelle (f_text_s, 168 px).
+##############################################################################
+
+substitutions:
+  name_oven: "Backofen"            #  64 von 168
+  name_washer: "Waschmaschine"     # 111 von 168
+  name_dishwasher: "Spülmaschine"  #  97 von 168
+  name_dryer: "Trockner"           #  62 von 168
+  name_baseload: "Grundlast"       #  67 von 168
+
+script:
+  # ---------------------------------------------------------------------
+  # Energiefluss des Hausnetzes, Leistungen in W (>= 0), wie evcc sie
+  # fuehrt (Site):
+  #   pv          PV-Erzeugung im Hausnetz-Kreis (ohne Volleinspeisung)
+  #   bat_out     Speicher entladen        bat_in    Speicher laden
+  #   grid_in     Netzbezug                grid_out  Einspeisung
+  #   home        Verbrauch (alles ausser Ladepunkten und Speicher)
+  #   loadpoints  beide Ladepunkte zusammen
+  #   soc         Ladestand der Speicher zusammen in %
+  #   forecast    Restprognose PV heute in kWh
+  #   price_grid  Bezugspreis in ct/kWh    price_feed Verguetung in ct/kWh
+  #   price_home  Preis des Verbrauchs in ct/kWh (Mischpreis, wie evcc)
+  #   NAN = kein Wert (Striche). Stimmen In und Out nicht ueberein, zeigt
+  #   der Balken nur, was da ist; einen Unbekannt-Anteil wie evcc gibt es
+  #   hier nicht.
+  # ---------------------------------------------------------------------
+  - id: house_flow
+    parameters:
+      pv: float
+      bat_out: float
+      grid_in: float
+      home: float
+      loadpoints: float
+      bat_in: float
+      grid_out: float
+      soc: float
+      forecast: float
+      price_grid: float
+      price_home: float
+      price_feed: float
+    then:
+      - lambda: |-
+          // Leistung wie evcc: unter 1000 W ganzzahlig in W, sonst kW mit
+          // einer Stelle, Dezimalkomma
+          auto pw = [](float v) -> std::string {
+            if (std::isnan(v))
+              return std::string("--");
+            char b[24];
+            if (fabsf(v) < 999.5f)
+              snprintf(b, sizeof(b), "%.0f W", v);
+            else
+              snprintf(b, sizeof(b), "%.1f kW", v / 1000.0f);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          auto num = [](float v, const char *f, const char *none) -> std::string {
+            if (std::isnan(v))
+              return std::string(none);
+            char b[32];
+            snprintf(b, sizeof(b), f, v);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          // Zeile unter 10 W grau wie in evcc
+          auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
+            const bool on = !std::isnan(v) && v > 10.0f;
+            lv_obj_set_style_text_color(name, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
+            lv_obj_set_style_text_color(val, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
+          };
+          auto z = [](float v) -> float { return std::isnan(v) ? 0.0f : std::max(v, 0.0f); };
+          const float p = z(pv), bo = z(bat_out), gi = z(grid_in), h = z(home), lp = z(loadpoints),
+                      bi = z(bat_in), go = z(grid_out);
+          // Aufteilung wie evcc (Visualization.vue)
+          const float consumption = h + lp + bi;
+          const float self_pv = std::min(p, consumption);
+          const float self_bat = std::min(bo, std::max(consumption - self_pv, 0.0f));
+          const float total = gi + self_pv + self_bat + go;
+
+          // --- Balken: Segmente 0 PV, 1 Speicher, 2 Netz, 3 Einspeisung
+          const int W = 1200;
+          lv_obj_t *const seg[4] = {id(hf_seg_0), id(hf_seg_1), id(hf_seg_2), id(hf_seg_3)};
+          lv_obj_t *const segl[4] = {id(hf_seg_lbl_0), id(hf_seg_lbl_1), id(hf_seg_lbl_2), id(hf_seg_lbl_3)};
+          float part[4] = {self_pv, self_bat, gi, go};
+          if (total <= 0.0f) {
+            // wie evcc: leer = ein graues Netzsegment mit 0 W
+            part[0] = part[1] = part[3] = 0.0f;
+            part[2] = 1.0f;
+          }
+          const float sum = total <= 0.0f ? 1.0f : total;
+          const float peak = std::max(std::max(part[0], part[1]), std::max(part[2], part[3]));
+          int x = 0;
+          for (int i = 0; i < 4; i++) {
+            int sw = (int) lroundf(part[i] / sum * W);
+            if (x + sw > W)
+              sw = W - x;
+            lv_obj_set_x(seg[i], x);
+            lv_obj_set_width(seg[i], sw);
+            if (sw <= 0)
+              lv_obj_add_flag(seg[i], LV_OBJ_FLAG_HIDDEN);
+            else
+              lv_obj_clear_flag(seg[i], LV_OBJ_FLAG_HIDDEN);
+            x += sw;
+            // Wert ab 50 px, Einheit ab 80 px (evcc: 40 / 60 bei kleinerer
+            // Schrift); Einheit nach dem groessten
+            // Segment wie evcc (getPowerUnit)
+            std::string t;
+            if (sw > 50) {
+              const float v = total <= 0.0f ? 0.0f : part[i];
+              char b[24];
+              if (peak < 999.5f || total <= 0.0f)
+                snprintf(b, sizeof(b), sw > 80 ? "%.0f W" : "%.0f", v);
+              else
+                snprintf(b, sizeof(b), sw > 80 ? "%.1f kW" : "%.1f", v / 1000.0f);
+              for (char *q = b; *q; q++)
+                if (*q == '.')
+                  *q = ',';
+              t = b;
+            }
+            lv_label_set_text(segl[i], t.c_str());
+          }
+
+          // --- Klammern: oben In, unten Out
+          auto bracket = [&](lv_obj_t *br, lv_obj_t *ic, int &bx, float v) {
+            const int bw = (int) lroundf(v / sum * W);
+            if (bw < 16 || total <= 0.0f) {
+              lv_obj_add_flag(br, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_add_flag(ic, LV_OBJ_FLAG_HIDDEN);
+            } else {
+              lv_obj_clear_flag(br, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_x(br, bx);
+              lv_obj_set_width(br, std::min(bw, W - bx));
+              if (bw < 40) {
+                lv_obj_add_flag(ic, LV_OBJ_FLAG_HIDDEN);
+              } else {
+                lv_obj_clear_flag(ic, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_x(ic, bx + bw / 2 - 16);
+              }
+            }
+            if (total > 0.0f)
+              bx += bw;
+          };
+          int bx = 0;
+          bracket(id(hf_in_0), id(hf_in_ic_0), bx, p);
+          bracket(id(hf_in_1), id(hf_in_ic_1), bx, bo);
+          bracket(id(hf_in_2), id(hf_in_ic_2), bx, gi);
+          bx = 0;
+          bracket(id(hf_out_0), id(hf_out_ic_0), bx, h);
+          bracket(id(hf_out_1), id(hf_out_ic_1), bx, lp);
+          bracket(id(hf_out_2), id(hf_out_ic_2), bx, bi);
+          bracket(id(hf_out_3), id(hf_out_ic_3), bx, go);
+
+          // Legende rechts: Netzbezug, sonst Einspeisung
+          const bool importing = gi > 0.0f || go <= 0.0f;
+          lv_label_set_text(id(hf_leg_2), importing ? "Netzbezug" : "Einspeisung");
+          lv_obj_set_style_bg_color(id(hf_leg_sq_2), importing ? lv_color_hex($col_evcc_grid) : lv_color_hex($col_evcc_export), 0);
+
+          // --- Tabelle In / Out
+          const bool any_in = !std::isnan(pv) || !std::isnan(bat_out) || !std::isnan(grid_in);
+          const bool any_out = !std::isnan(home) || !std::isnan(loadpoints) || !std::isnan(bat_in) || !std::isnan(grid_out);
+          lv_label_set_text(id(ht_in_total), any_in ? pw(p + bo + gi).c_str() : "--");
+          lv_label_set_text(id(ht_out_total), any_out ? pw(h + lp + bi + go).c_str() : "--");
+          lv_label_set_text(id(ht_pv), pw(pv).c_str());
+          lv_label_set_text(id(ht_bat_out), pw(bat_out).c_str());
+          lv_label_set_text(id(ht_grid_in), pw(grid_in).c_str());
+          lv_label_set_text(id(ht_home), pw(home).c_str());
+          lv_label_set_text(id(ht_lp), pw(loadpoints).c_str());
+          lv_label_set_text(id(ht_bat_in), pw(bat_in).c_str());
+          lv_label_set_text(id(ht_grid_out), pw(grid_out).c_str());
+          shade(id(ht_pv_n), id(ht_pv), pv);
+          shade(id(ht_bat_out_n), id(ht_bat_out), bat_out);
+          shade(id(ht_grid_in_n), id(ht_grid_in), grid_in);
+          shade(id(ht_home_n), id(ht_home), home);
+          shade(id(ht_lp_n), id(ht_lp), loadpoints);
+          shade(id(ht_bat_in_n), id(ht_bat_in), bat_in);
+          shade(id(ht_grid_out_n), id(ht_grid_out), grid_out);
+          lv_label_set_text(id(ht_pv_d), ("Rest " + num(forecast, "%.1f", "--,-") + " kWh").c_str());
+          lv_label_set_text(id(ht_bat_out_d), (num(soc, "%.0f", "--") + " %").c_str());
+          lv_label_set_text(id(ht_bat_in_d), (num(soc, "%.0f", "--") + " %").c_str());
+          lv_label_set_text(id(ht_grid_in_d), (num(price_grid, "%.1f", "--,-") + " ct/kWh").c_str());
+          lv_label_set_text(id(ht_home_d), (num(price_home, "%.1f", "--,-") + " ct/kWh").c_str());
+          lv_label_set_text(id(ht_grid_out_d), (num(price_feed, "%.1f", "--,-") + " ct/kWh").c_str());
+
+          // --- Verbrauch jetzt: Haus und Ladepunkte, Herkunft wie evcc
+          // (erst PV, dann Speicher, Rest Netz); Speicherladen zaehlt nicht
+          const bool known = !std::isnan(home);
+          const float c = h + lp;
+          const float c_pv = std::min(p, c);
+          const float c_bat = std::min(bo, c - c_pv);
+          const float c_grid = std::max(c - c_pv - c_bat, 0.0f);
+          if (!known) {
+            lv_label_set_text(id(hn_value), "--");
+            lv_label_set_text(id(hn_unit), "kW");
+          } else if (c < 999.5f) {
+            lv_label_set_text(id(hn_value), num(c, "%.0f", "--").c_str());
+            lv_label_set_text(id(hn_unit), "W · Haus und Ladepunkte");
+          } else {
+            lv_label_set_text(id(hn_value), num(c / 1000.0f, "%.1f", "--").c_str());
+            lv_label_set_text(id(hn_unit), "kW · Haus und Ladepunkte");
+          }
+          const float cs = c > 0.0f ? c : 1.0f;
+          const int s0 = known ? (int) lroundf(c_pv / cs * 100.0f) : -1;
+          const int s1 = known ? (int) lroundf(c_bat / cs * 100.0f) : -1;
+          const int s2 = known ? std::max(100 - s0 - s1, 0) : -1;
+          lv_obj_t *const pct[3] = {id(hn_pct_0), id(hn_pct_1), id(hn_pct_2)};
+          const int sh[3] = {s0, s1, (known && c > 0.0f) ? s2 : 0};
+          for (int i = 0; i < 3; i++) {
+            if (!known)
+              lv_label_set_text(pct[i], "-- %");
+            else
+              lv_label_set_text_fmt(pct[i], "%d %%", c > 0.0f ? sh[i] : 0);
+          }
+          // Anteilsbalken 290 breit
+          lv_obj_t *const sb[3] = {id(hn_bar_0), id(hn_bar_1), id(hn_bar_2)};
+          int sx = 0;
+          for (int i = 0; i < 3; i++) {
+            int sw = (known && c > 0.0f) ? (int) lroundf(sh[i] * 290 / 100.0f) : 0;
+            if (i == 2 && known && c > 0.0f)
+              sw = 290 - sx;
+            if (sx + sw > 290)
+              sw = 290 - sx;
+            lv_obj_set_x(sb[i], sx);
+            lv_obj_set_width(sb[i], std::max(sw, 0));
+            if (sw <= 0)
+              lv_obj_add_flag(sb[i], LV_OBJ_FLAG_HIDDEN);
+            else
+              lv_obj_clear_flag(sb[i], LV_OBJ_FLAG_HIDDEN);
+            sx += std::max(sw, 0);
+          }
+
+  # ---------------------------------------------------------------------
+  # Unterzeile je Speicher unter "Speicher entladen", wie evcc sie je
+  # Batterie aufklappt:
+  #   bat    0..2 = Speicher 1..3 (name_bat_1..3)
+  #   power  Leistung in W, positiv = entladen, negativ = laden
+  #   soc    Ladestand in %
+  # ---------------------------------------------------------------------
+  - id: house_battery
+    parameters:
+      bat: int
+      power: float
+      soc: float
+    then:
+      - lambda: |-
+          if (bat < 0 || bat > 2)
+            return;
+          // Leistung wie evcc: unter 1000 W ganzzahlig in W, sonst kW mit
+          // einer Stelle, Dezimalkomma
+          auto pw = [](float v) -> std::string {
+            if (std::isnan(v))
+              return std::string("--");
+            char b[24];
+            if (fabsf(v) < 999.5f)
+              snprintf(b, sizeof(b), "%.0f W", v);
+            else
+              snprintf(b, sizeof(b), "%.1f kW", v / 1000.0f);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          auto num = [](float v, const char *f, const char *none) -> std::string {
+            if (std::isnan(v))
+              return std::string(none);
+            char b[32];
+            snprintf(b, sizeof(b), f, v);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          // Zeile unter 10 W grau wie in evcc
+          auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
+            const bool on = !std::isnan(v) && v > 10.0f;
+            lv_obj_set_style_text_color(name, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
+            lv_obj_set_style_text_color(val, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
+          };
+          lv_obj_t *const val[3] = {id(ht_b1), id(ht_b2), id(ht_b3)};
+          lv_obj_t *const nam[3] = {id(ht_b1_n), id(ht_b2_n), id(ht_b3_n)};
+          lv_obj_t *const det[3] = {id(ht_b1_d), id(ht_b2_d), id(ht_b3_d)};
+          lv_label_set_text(val[bat], pw(std::isnan(power) ? NAN : fabsf(power)).c_str());
+          std::string d = num(soc, "%.0f", "--") + " %";
+          if (!std::isnan(power) && fabsf(power) > 10.0f)
+            d += power > 0.0f ? " · entlädt" : " · lädt";
+          lv_label_set_text(det[bat], d.c_str());
+          shade(nam[bat], val[bat], std::isnan(power) ? NAN : fabsf(power));
+
+  # ---------------------------------------------------------------------
+  # Unterzeile je Ladepunkt unter "Ladepunkte":
+  #   wb     0..1 = Wallbox 1..2 (name_wb_1..2)
+  #   power  Ladeleistung in W
+  #   soc    Ladestand des Fahrzeugs in %, NAN = keins verbunden
+  # ---------------------------------------------------------------------
+  - id: house_loadpoint
+    parameters:
+      wb: int
+      power: float
+      soc: float
+    then:
+      - lambda: |-
+          if (wb < 0 || wb > 1)
+            return;
+          // Leistung wie evcc: unter 1000 W ganzzahlig in W, sonst kW mit
+          // einer Stelle, Dezimalkomma
+          auto pw = [](float v) -> std::string {
+            if (std::isnan(v))
+              return std::string("--");
+            char b[24];
+            if (fabsf(v) < 999.5f)
+              snprintf(b, sizeof(b), "%.0f W", v);
+            else
+              snprintf(b, sizeof(b), "%.1f kW", v / 1000.0f);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          auto num = [](float v, const char *f, const char *none) -> std::string {
+            if (std::isnan(v))
+              return std::string(none);
+            char b[32];
+            snprintf(b, sizeof(b), f, v);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          // Zeile unter 10 W grau wie in evcc
+          auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
+            const bool on = !std::isnan(v) && v > 10.0f;
+            lv_obj_set_style_text_color(name, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
+            lv_obj_set_style_text_color(val, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
+          };
+          lv_obj_t *const val[2] = {id(ht_w1), id(ht_w2)};
+          lv_obj_t *const nam[2] = {id(ht_w1_n), id(ht_w2_n)};
+          lv_obj_t *const det[2] = {id(ht_w1_d), id(ht_w2_d)};
+          lv_label_set_text(val[wb], pw(power).c_str());
+          lv_label_set_text(det[wb], std::isnan(soc) ? "kein Fahrzeug" : (num(soc, "%.0f", "--") + " %").c_str());
+          shade(nam[wb], val[wb], power);
+          // Kopfzeile: wie viele laden gerade (evcc zaehlt ab 10 W)
+          static float lpw[2] = {NAN, NAN};
+          lpw[wb] = power;
+          int active = 0;
+          for (float v : lpw)
+            if (!std::isnan(v) && v > 10.0f)
+              active++;
+          lv_label_set_text_fmt(id(ht_lp_d), "%d aktiv", active);
+
+  # ---------------------------------------------------------------------
+  # Werte eines Verbrauchers (dritte Spalte der Tabelle):
+  #   dev 0..5 = Waermepumpe, Backofen, Waschmaschine, Spuelmaschine,
+  #              Trockner, Grundlast (name_heatpump, name_oven ..
+  #              name_baseload)
+  #   power    momentane Leistung in W
+  #   energy   Verbrauch heute in kWh
+  #   NAN = kein Wert (Striche)
+  # Die Kopfzeile zeigt die Summe, sobald alle sechs Werte da sind.
+  # ---------------------------------------------------------------------
+  - id: house_update
+    parameters:
+      dev: int
+      power: float
+      energy: float
+    then:
+      - lambda: |-
+          if (dev < 0 || dev > 5)
+            return;
+          // Leistung wie evcc: unter 1000 W ganzzahlig in W, sonst kW mit
+          // einer Stelle, Dezimalkomma
+          auto pw = [](float v) -> std::string {
+            if (std::isnan(v))
+              return std::string("--");
+            char b[24];
+            if (fabsf(v) < 999.5f)
+              snprintf(b, sizeof(b), "%.0f W", v);
+            else
+              snprintf(b, sizeof(b), "%.1f kW", v / 1000.0f);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          auto num = [](float v, const char *f, const char *none) -> std::string {
+            if (std::isnan(v))
+              return std::string(none);
+            char b[32];
+            snprintf(b, sizeof(b), f, v);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          // Zeile unter 10 W grau wie in evcc
+          auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
+            const bool on = !std::isnan(v) && v > 10.0f;
+            lv_obj_set_style_text_color(name, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
+            lv_obj_set_style_text_color(val, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
+          };
+          lv_obj_t *const val[6] = {id(ht_c1), id(ht_c2), id(ht_c3), id(ht_c4), id(ht_c5), id(ht_c6)};
+          lv_obj_t *const nam[6] = {id(ht_c1_n), id(ht_c2_n), id(ht_c3_n), id(ht_c4_n), id(ht_c5_n), id(ht_c6_n)};
+          lv_obj_t *const det[6] = {id(ht_c1_d), id(ht_c2_d), id(ht_c3_d), id(ht_c4_d), id(ht_c5_d), id(ht_c6_d)};
+          lv_label_set_text(val[dev], pw(power).c_str());
+          lv_label_set_text(det[dev], (num(energy, "%.1f", "--,-") + " kWh heute").c_str());
+          shade(nam[dev], val[dev], power);
+          static float now[6] = {NAN, NAN, NAN, NAN, NAN, NAN};
+          now[dev] = power;
+          float sum = 0.0f;
+          bool all = true;
+          for (float v : now) {
+            if (std::isnan(v))
+              all = false;
+            else
+              sum += v;
+          }
+          lv_label_set_text(id(ht_c_total), all ? pw(sum).c_str() : "--");
+
+  # ---------------------------------------------------------------------
+  # Verbrauch der letzten 24 Stunden, je Stunde in kWh:
+  #   home   24 Werte, kommagetrennt, aelteste zuerst, letzte = laufende
+  #          Stunde; Verbrauch wie in house_flow (Haus und Ladepunkte)
+  #   solar  24 Werte ebenso: davon aus PV gedeckt
+  #   hour   Uhrzeit (Stunde 0..23) des letzten Werts
+  # Fehlende oder leere Werte zaehlen als 0. Beispiel im Screenshot-Lauf.
+  # Die Reihe wird nicht gespeichert; wer sie ueber einen Neustart
+  # braucht, legt sie wie day_curve als text-Entitaet an (docs/06).
+  # ---------------------------------------------------------------------
+  - id: house_history
+    parameters:
+      home: string
+      solar: string
+      hour: int
+    then:
+      - lambda: |-
+          auto parse = [](const std::string &s, float *out) {
+            const char *q = s.c_str();
+            for (int i = 0; i < 24; i++) {
+              char *end = nullptr;
+              const float v = strtof(q, &end);
+              out[i] = (end == q || std::isnan(v)) ? 0.0f : std::max(v, 0.0f);
+              q = end;
+              while (*q == ',' || *q == ' ')
+                q++;
+            }
+          };
+          float hm[24], so[24];
+          parse(home, hm);
+          parse(solar, so);
+          float peak = 0.1f;
+          for (float v : hm)
+            peak = std::max(peak, v);
+          lv_obj_t *const pv[24] = {id(hc_pv_00), id(hc_pv_01), id(hc_pv_02), id(hc_pv_03), id(hc_pv_04), id(hc_pv_05), id(hc_pv_06), id(hc_pv_07), id(hc_pv_08), id(hc_pv_09), id(hc_pv_10), id(hc_pv_11), id(hc_pv_12), id(hc_pv_13), id(hc_pv_14), id(hc_pv_15), id(hc_pv_16), id(hc_pv_17), id(hc_pv_18), id(hc_pv_19), id(hc_pv_20), id(hc_pv_21), id(hc_pv_22), id(hc_pv_23)};
+          lv_obj_t *const rest[24] = {id(hc_rest_00), id(hc_rest_01), id(hc_rest_02), id(hc_rest_03), id(hc_rest_04), id(hc_rest_05), id(hc_rest_06), id(hc_rest_07), id(hc_rest_08), id(hc_rest_09), id(hc_rest_10), id(hc_rest_11), id(hc_rest_12), id(hc_rest_13), id(hc_rest_14), id(hc_rest_15), id(hc_rest_16), id(hc_rest_17), id(hc_rest_18), id(hc_rest_19), id(hc_rest_20), id(hc_rest_21), id(hc_rest_22), id(hc_rest_23)};
+          const int H = 156, BASE = 186;
+          for (int i = 0; i < 24; i++) {
+            const float s = std::min(so[i], hm[i]);
+            const int th = (int) lroundf(hm[i] / peak * H);
+            const int sh = std::min((int) lroundf(s / peak * H), th);
+            lv_obj_set_y(pv[i], BASE - sh);
+            lv_obj_set_height(pv[i], sh);
+            lv_obj_set_y(rest[i], BASE - th);
+            lv_obj_set_height(rest[i], th - sh);
+            if (sh <= 0)
+              lv_obj_add_flag(pv[i], LV_OBJ_FLAG_HIDDEN);
+            else
+              lv_obj_clear_flag(pv[i], LV_OBJ_FLAG_HIDDEN);
+            if (th - sh <= 0)
+              lv_obj_add_flag(rest[i], LV_OBJ_FLAG_HIDDEN);
+            else
+              lv_obj_clear_flag(rest[i], LV_OBJ_FLAG_HIDDEN);
+          }
+          char b[32];
+          snprintf(b, sizeof(b), "max %.1f kWh", peak);
+          for (char *q = b; *q; q++)
+            if (*q == '.')
+              *q = ',';
+          lv_label_set_text(id(hc_max), b);
+          // Stundenmarken unter jedem dritten Balken
+          lv_obj_t *const tick[8] = {id(hc_tick_0), id(hc_tick_1), id(hc_tick_2), id(hc_tick_3), id(hc_tick_4), id(hc_tick_5), id(hc_tick_6), id(hc_tick_7)};
+          const int last = ((hour % 24) + 24) % 24;
+          for (int k = 0; k < 8; k++) {
+            const int i = 2 + 3 * k;
+            lv_label_set_text_fmt(tick[k], "%02d", (last - 23 + i + 48) % 24);
+          }
 
 lvgl:
   pages:
@@ -12,4 +550,305 @@ lvgl:
       scrollable: false
       scroll_dir: NONE
       widgets:
-        - label: { align: CENTER, y: 10, text: "Haus", text_color: $col_ink3 }
+        # ---------------- Energiefluss wie evcc -----------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 84
+            width: 1272
+            height: 150
+            widgets:
+              - label: { x: 0, y: 0, width: 400, height: 17, long_mode: DOT, styles: st_label, text: "ENERGIEFLUSS" }
+              - obj: { x: 1040, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 1058, y: 0, width: 94, height: 17, long_mode: DOT, text: "Eigenverbrauch", text_font: f_unit, text_color: $col_ink3 }
+              - obj: { id: hf_leg_sq_2, x: 1160, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: hf_leg_2, x: 1178, y: 0, width: 72, height: 17, long_mode: DOT, text: "Netzbezug", text_font: f_unit, text_color: $col_ink3 }
+              - label: { x: 1210, y: 29, width: 40, height: 17, text_align: CENTER, text: "In", text_font: f_unit, text_color: $col_ink3 }
+              - label: { x: 1210, y: 103, width: 40, height: 17, text_align: CENTER, text: "Out", text_font: f_unit, text_color: $col_ink3 }
+              - obj: { id: hf_in_0, x: 0, y: 32, width: 16, height: 12, bg_opa: TRANSP, border_color: $col_ink3, border_width: 1, border_side: [TOP, LEFT, RIGHT], radius: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hf_in_1, x: 0, y: 32, width: 16, height: 12, bg_opa: TRANSP, border_color: $col_ink3, border_width: 1, border_side: [TOP, LEFT, RIGHT], radius: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hf_in_2, x: 0, y: 32, width: 16, height: 12, bg_opa: TRANSP, border_color: $col_ink3, border_width: 1, border_side: [TOP, LEFT, RIGHT], radius: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hf_out_0, x: 0, y: 100, width: 16, height: 12, bg_opa: TRANSP, border_color: $col_ink3, border_width: 1, border_side: [BOTTOM, LEFT, RIGHT], radius: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hf_out_1, x: 0, y: 100, width: 16, height: 12, bg_opa: TRANSP, border_color: $col_ink3, border_width: 1, border_side: [BOTTOM, LEFT, RIGHT], radius: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hf_out_2, x: 0, y: 100, width: 16, height: 12, bg_opa: TRANSP, border_color: $col_ink3, border_width: 1, border_side: [BOTTOM, LEFT, RIGHT], radius: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hf_out_3, x: 0, y: 100, width: 16, height: 12, bg_opa: TRANSP, border_color: $col_ink3, border_width: 1, border_side: [BOTTOM, LEFT, RIGHT], radius: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: hf_in_ic_0, x: 0, y: 20, width: 32, height: 24, text_align: CENTER, bg_color: $col_surface, bg_opa: COVER, text: "\U000F05A8", text_font: f_icon, text_color: $col_ink, hidden: true }
+              - label: { id: hf_in_ic_1, x: 0, y: 20, width: 32, height: 24, text_align: CENTER, bg_color: $col_surface, bg_opa: COVER, text: "\U000F12A3", text_font: f_icon, text_color: $col_ink, hidden: true }
+              - label: { id: hf_in_ic_2, x: 0, y: 20, width: 32, height: 24, text_align: CENTER, bg_color: $col_surface, bg_opa: COVER, text: "\U000F0D3E", text_font: f_icon, text_color: $col_ink, hidden: true }
+              - label: { id: hf_out_ic_0, x: 0, y: 100, width: 32, height: 24, text_align: CENTER, bg_color: $col_surface, bg_opa: COVER, text: "\U000F1903", text_font: f_icon, text_color: $col_ink, hidden: true }
+              - label: { id: hf_out_ic_1, x: 0, y: 100, width: 32, height: 24, text_align: CENTER, bg_color: $col_surface, bg_opa: COVER, text: "\U000F05F1", text_font: f_icon, text_color: $col_ink, hidden: true }
+              - label: { id: hf_out_ic_2, x: 0, y: 100, width: 32, height: 24, text_align: CENTER, bg_color: $col_surface, bg_opa: COVER, text: "\U000F0084", text_font: f_icon, text_color: $col_ink, hidden: true }
+              - label: { id: hf_out_ic_3, x: 0, y: 100, width: 32, height: 24, text_align: CENTER, bg_color: $col_surface, bg_opa: COVER, text: "\U000F0D3E", text_font: f_icon, text_color: $col_ink, hidden: true }
+              - obj:
+                  x: 0
+                  y: 52
+                  width: 1200
+                  height: 40
+                  radius: 10
+                  clip_corner: true
+                  bg_color: $col_bg
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj:
+                        id: hf_seg_0
+                        x: 0
+                        y: 0
+                        width: 0
+                        height: 40
+                        radius: 0
+                        bg_color: $col_evcc
+                        bg_opa: COVER
+                        border_width: 0
+                        pad_all: 0
+                        scrollbar_mode: 'off'
+                        scrollable: false
+                        scroll_dir: NONE
+                        clickable: false
+                        hidden: true
+                        widgets:
+                          - label: { id: hf_seg_lbl_0, align: CENTER, text: "", text_font: f_val_s, text_color: $col_bg }
+                    - obj:
+                        id: hf_seg_1
+                        x: 0
+                        y: 0
+                        width: 0
+                        height: 40
+                        radius: 0
+                        bg_color: $col_evcc_battery
+                        bg_opa: COVER
+                        border_width: 0
+                        pad_all: 0
+                        scrollbar_mode: 'off'
+                        scrollable: false
+                        scroll_dir: NONE
+                        clickable: false
+                        hidden: true
+                        widgets:
+                          - label: { id: hf_seg_lbl_1, align: CENTER, text: "", text_font: f_val_s, text_color: $col_bg }
+                    - obj:
+                        id: hf_seg_2
+                        x: 0
+                        y: 0
+                        width: 1200
+                        height: 40
+                        radius: 0
+                        bg_color: $col_evcc_grid
+                        bg_opa: COVER
+                        border_width: 0
+                        pad_all: 0
+                        scrollbar_mode: 'off'
+                        scrollable: false
+                        scroll_dir: NONE
+                        clickable: false
+                        widgets:
+                          - label: { id: hf_seg_lbl_2, align: CENTER, text: "--", text_font: f_val_s, text_color: $col_bg }
+                    - obj:
+                        id: hf_seg_3
+                        x: 0
+                        y: 0
+                        width: 0
+                        height: 40
+                        radius: 0
+                        bg_color: $col_evcc_export
+                        bg_opa: COVER
+                        border_width: 0
+                        pad_all: 0
+                        scrollbar_mode: 'off'
+                        scrollable: false
+                        scroll_dir: NONE
+                        clickable: false
+                        hidden: true
+                        widgets:
+                          - label: { id: hf_seg_lbl_3, align: CENTER, text: "", text_font: f_val_s, text_color: $col_bg }
+        # ---------------- Tabelle In / Out / Verbraucher --------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 242
+            width: 1272
+            height: 244
+            widgets:
+              - label: { x: 0, y: 0, width: 200, height: 29, long_mode: DOT, text: "In", text_font: f_bar, text_color: $col_ink }
+              - label: { id: ht_in_total, x: 210, y: 2, width: 200, height: 25, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 0, y: 34, width: 410, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 45, width: 24, height: 24, text: "\U000F05A8", text_font: f_icon, text_color: $col_ink3 }
+              - label: { id: ht_pv_n, x: 32, y: 47, width: 136, height: 20, long_mode: DOT, text: "Erzeugung", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_pv_d, x: 172, y: 47, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "Rest --,- kWh", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_pv, x: 318, y: 46, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { x: 0, y: 75, width: 24, height: 24, text: "\U000F12A3", text_font: f_icon, text_color: $col_ink3 }
+              - label: { id: ht_bat_out_n, x: 32, y: 77, width: 136, height: 20, long_mode: DOT, text: "Speicher entladen", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_bat_out_d, x: 172, y: 77, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "-- %", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_bat_out, x: 318, y: 76, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_b1_n, x: 32, y: 107, width: 136, height: 20, long_mode: DOT, text: "${name_bat_1}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_b1_d, x: 172, y: 107, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "-- %", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_b1, x: 318, y: 106, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_b2_n, x: 32, y: 137, width: 136, height: 20, long_mode: DOT, text: "${name_bat_2}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_b2_d, x: 172, y: 137, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "-- %", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_b2, x: 318, y: 136, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_b3_n, x: 32, y: 167, width: 136, height: 20, long_mode: DOT, text: "${name_bat_3}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_b3_d, x: 172, y: 167, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "-- %", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_b3, x: 318, y: 166, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { x: 0, y: 195, width: 24, height: 24, text: "\U000F0D3E", text_font: f_icon, text_color: $col_ink3 }
+              - label: { id: ht_grid_in_n, x: 32, y: 197, width: 136, height: 20, long_mode: DOT, text: "Netzbezug", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_grid_in_d, x: 172, y: 197, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "--,- ct/kWh", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_grid_in, x: 318, y: 196, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { x: 420, y: 0, width: 200, height: 29, long_mode: DOT, text: "Out", text_font: f_bar, text_color: $col_ink }
+              - label: { id: ht_out_total, x: 630, y: 2, width: 200, height: 25, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 420, y: 34, width: 410, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 420, y: 45, width: 24, height: 24, text: "\U000F1903", text_font: f_icon, text_color: $col_ink3 }
+              - label: { id: ht_home_n, x: 452, y: 47, width: 136, height: 20, long_mode: DOT, text: "Verbrauch", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_home_d, x: 592, y: 47, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "--,- ct/kWh", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_home, x: 738, y: 46, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { x: 420, y: 75, width: 24, height: 24, text: "\U000F05F1", text_font: f_icon, text_color: $col_ink3 }
+              - label: { id: ht_lp_n, x: 452, y: 77, width: 136, height: 20, long_mode: DOT, text: "Ladepunkte", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_lp_d, x: 592, y: 77, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "0 aktiv", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_lp, x: 738, y: 76, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_w1_n, x: 452, y: 107, width: 136, height: 20, long_mode: DOT, text: "${name_wb_1}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_w1_d, x: 592, y: 107, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "kein Fahrzeug", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_w1, x: 738, y: 106, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_w2_n, x: 452, y: 137, width: 136, height: 20, long_mode: DOT, text: "${name_wb_2}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_w2_d, x: 592, y: 137, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "kein Fahrzeug", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_w2, x: 738, y: 136, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { x: 420, y: 165, width: 24, height: 24, text: "\U000F0084", text_font: f_icon, text_color: $col_ink3 }
+              - label: { id: ht_bat_in_n, x: 452, y: 167, width: 136, height: 20, long_mode: DOT, text: "Speicher laden", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_bat_in_d, x: 592, y: 167, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "-- %", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_bat_in, x: 738, y: 166, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { x: 420, y: 195, width: 24, height: 24, text: "\U000F0D3E", text_font: f_icon, text_color: $col_ink3 }
+              - label: { id: ht_grid_out_n, x: 452, y: 197, width: 136, height: 20, long_mode: DOT, text: "Einspeisung", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_grid_out_d, x: 592, y: 197, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "--,- ct/kWh", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_grid_out, x: 738, y: 196, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { x: 840, y: 0, width: 200, height: 29, long_mode: DOT, text: "Verbraucher", text_font: f_bar, text_color: $col_ink }
+              - label: { id: ht_c_total, x: 1050, y: 2, width: 200, height: 25, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 840, y: 34, width: 410, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: ht_c1_n, x: 872, y: 47, width: 136, height: 20, long_mode: DOT, text: "${name_heatpump}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c1_d, x: 1012, y: 47, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "--,- kWh heute", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c1, x: 1158, y: 46, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_c2_n, x: 872, y: 77, width: 136, height: 20, long_mode: DOT, text: "${name_oven}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c2_d, x: 1012, y: 77, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "--,- kWh heute", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c2, x: 1158, y: 76, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_c3_n, x: 872, y: 107, width: 136, height: 20, long_mode: DOT, text: "${name_washer}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c3_d, x: 1012, y: 107, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "--,- kWh heute", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c3, x: 1158, y: 106, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_c4_n, x: 872, y: 137, width: 136, height: 20, long_mode: DOT, text: "${name_dishwasher}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c4_d, x: 1012, y: 137, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "--,- kWh heute", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c4, x: 1158, y: 136, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_c5_n, x: 872, y: 167, width: 136, height: 20, long_mode: DOT, text: "${name_dryer}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c5_d, x: 1012, y: 167, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "--,- kWh heute", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c5, x: 1158, y: 166, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+              - label: { id: ht_c6_n, x: 872, y: 197, width: 136, height: 20, long_mode: DOT, text: "${name_baseload}", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c6_d, x: 1012, y: 197, width: 140, height: 20, long_mode: DOT, text_align: RIGHT, text: "--,- kWh heute", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: ht_c6, x: 1158, y: 196, width: 92, height: 21, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_s, text_color: $col_ink3 }
+        # ---------------- Verbrauch jetzt -----------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 494
+            width: 312
+            height: 242
+            widgets:
+              - label: { x: 0, y: 0, width: 290, height: 17, long_mode: DOT, styles: st_label, text: "VERBRAUCH JETZT" }
+              - label: { id: hn_value, x: 0, y: 34, width: 290, height: 39, long_mode: DOT, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { id: hn_unit, x: 0, y: 75, width: 290, height: 17, long_mode: DOT, text: "kW", styles: st_unit }
+              - obj: { x: 0, y: 104, width: 290, height: 10, radius: 5, clip_corner: true, bg_color: $col_bg, bg_opa: COVER, border_width: 0, pad_all: 0, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, clickable: false,
+                  widgets: [
+                    { obj: { id: hn_bar_0, x: 0, y: 0, width: 0, height: 10, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
+                    { obj: { id: hn_bar_1, x: 0, y: 0, width: 0, height: 10, radius: 0, bg_color: $col_evcc_battery, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
+                    { obj: { id: hn_bar_2, x: 0, y: 0, width: 0, height: 10, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } }
+                  ] }
+              - obj: { x: 0, y: 132, width: 12, height: 12, radius: 2, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 20, y: 128, width: 180, height: 20, long_mode: DOT, text: "aus PV", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hn_pct_0, x: 190, y: 128, width: 100, height: 21, long_mode: DOT, text_align: RIGHT, text: "-- %", text_font: f_val_s, text_color: $col_ink }
+              - obj: { x: 0, y: 162, width: 12, height: 12, radius: 2, bg_color: $col_evcc_battery, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 20, y: 158, width: 180, height: 20, long_mode: DOT, text: "aus Speicher", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hn_pct_1, x: 190, y: 158, width: 100, height: 21, long_mode: DOT, text_align: RIGHT, text: "-- %", text_font: f_val_s, text_color: $col_ink }
+              - obj: { x: 0, y: 192, width: 12, height: 12, radius: 2, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 20, y: 188, width: 180, height: 20, long_mode: DOT, text: "aus dem Netz", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hn_pct_2, x: 190, y: 188, width: 100, height: 21, long_mode: DOT, text_align: RIGHT, text: "-- %", text_font: f_val_s, text_color: $col_ink }
+        # ---------------- Verbrauch 24 Stunden ------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 324
+            y: 494
+            width: 952
+            height: 242
+            widgets:
+              - label: { x: 0, y: 0, width: 500, height: 17, long_mode: DOT, styles: st_label, text: "VERBRAUCH DER LETZTEN 24 STUNDEN" }
+              - obj: { x: 610, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 628, y: 0, width: 50, height: 17, long_mode: DOT, text: "aus PV", text_font: f_unit, text_color: $col_ink3 }
+              - obj: { x: 690, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 708, y: 0, width: 60, height: 17, long_mode: DOT, text: "übrige", text_font: f_unit, text_color: $col_ink3 }
+              - label: { id: hc_max, x: 780, y: 0, width: 150, height: 17, long_mode: DOT, text_align: RIGHT, text: "max --,- kWh", text_font: f_unit, text_color: $col_ink3 }
+              - obj: { x: 0, y: 186, width: 930, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: hc_rest_00, x: 14, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_00, x: 14, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_01, x: 52, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_01, x: 52, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_02, x: 90, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_02, x: 90, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_03, x: 128, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_03, x: 128, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_04, x: 166, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_04, x: 166, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_05, x: 204, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_05, x: 204, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_06, x: 242, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_06, x: 242, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_07, x: 280, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_07, x: 280, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_08, x: 318, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_08, x: 318, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_09, x: 356, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_09, x: 356, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_10, x: 394, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_10, x: 394, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_11, x: 432, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_11, x: 432, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_12, x: 470, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_12, x: 470, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_13, x: 508, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_13, x: 508, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_14, x: 546, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_14, x: 546, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_15, x: 584, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_15, x: 584, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_16, x: 622, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_16, x: 622, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_17, x: 660, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_17, x: 660, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_18, x: 698, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_18, x: 698, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_19, x: 736, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_19, x: 736, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_20, x: 774, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_20, x: 774, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_21, x: 812, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_21, x: 812, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_22, x: 850, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_22, x: 850, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_rest_23, x: 888, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc_grid, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: hc_pv_23, x: 888, y: 186, width: 28, height: 0, radius: 0, bg_color: $col_evcc, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: hc_tick_0, x: 85, y: 193, width: 38, height: 17, text_align: CENTER, text: "--", text_font: f_unit, text_color: $col_ink3 }
+              - label: { id: hc_tick_1, x: 199, y: 193, width: 38, height: 17, text_align: CENTER, text: "--", text_font: f_unit, text_color: $col_ink3 }
+              - label: { id: hc_tick_2, x: 313, y: 193, width: 38, height: 17, text_align: CENTER, text: "--", text_font: f_unit, text_color: $col_ink3 }
+              - label: { id: hc_tick_3, x: 427, y: 193, width: 38, height: 17, text_align: CENTER, text: "--", text_font: f_unit, text_color: $col_ink3 }
+              - label: { id: hc_tick_4, x: 541, y: 193, width: 38, height: 17, text_align: CENTER, text: "--", text_font: f_unit, text_color: $col_ink3 }
+              - label: { id: hc_tick_5, x: 655, y: 193, width: 38, height: 17, text_align: CENTER, text: "--", text_font: f_unit, text_color: $col_ink3 }
+              - label: { id: hc_tick_6, x: 769, y: 193, width: 38, height: 17, text_align: CENTER, text: "--", text_font: f_unit, text_color: $col_ink3 }
+              - label: { id: hc_tick_7, x: 883, y: 193, width: 38, height: 17, text_align: CENTER, text: "--", text_font: f_unit, text_color: $col_ink3 }

@@ -14,6 +14,13 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
       nur die Vorlage. Siehe „Was das Repo über die Anlage verrät".
 - [x] **Detailseite PV & Prognose gebaut.** Siehe „Detailseiten".
 
+**Erledigt am 24.09.2026**
+
+- [x] **Detailseiten Wallboxen, Wärmepumpe und Haus gebaut**, auf Zuruf des Nutzers.
+      Siehe „Detailseiten".
+- [x] **Wallboxen nach evcc, Wärmepumpe nach dem Nilan-Bedienteil umgebaut**, auf
+      Wunsch des Nutzers; seine Wärmepumpe ist eine Nilan Compact P.
+
 **Entschieden, nicht zu tun**
 
 - [x] **Commit-Historie bereinigen** — am 20.09.2026 verworfen. Nicht erneut
@@ -35,8 +42,6 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 
 - [ ] **Echte Daten anbinden** — vier Anbindungspunkte plus `WATT[37]`. Am 20.09.2026
       vertagt: die neuen Geräte laufen beim Nutzer noch nicht.
-- [ ] **Drei Detailseiten bauen** — Wallboxen, Wärmepumpe, Haus. PV & Prognose
-      steht seit 23.09.2026, die übrigen warten auf Zuruf.
 - [ ] **Kamera** — blockiert durch esphome/esphome#16944. Am 20.09.2026 vertagt, der
       PR-Stand ist seit 11.09.2026 nicht nachgeprüft.
 
@@ -56,8 +61,7 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 
 ## Detailseiten
 
-Drei Seiten sind nur Platzhalter: `page_wallbox`, `page_heatpump`, `page_house`
-tragen je ein einzelnes zentriertes Label. Jede liegt in ihrer eigenen Datei
+Alle vier Detailseiten sind gebaut. Jede liegt in ihrer eigenen Datei
 `.pv-dashboard_page_*.yaml`, eingebunden vom `packages:`-Block in
 `.pv-dashboard_ui.yaml`. **PV & Prognose ist seit dem 23.09.2026 gebaut**, auf
 Zuruf des Nutzers („mit der ersten anfangen"): Wechselrichter und Flächen je
@@ -68,14 +72,71 @@ die sechs Dachflächen und die zwei Einzelmodule am Mini-WR — die Festlegung
 unten nennt nur „sechs Strings"; das ist eine Annahme, die der Nutzer bestätigen
 oder ändern kann.
 
+**Wallboxen, Wärmepumpe und Haus sind seit dem 24.09.2026 gebaut**, auf Zuruf
+des Nutzers („die weiteren Detailseiten bauen“). Aufbau in Dokument 03, die
+Schnittstellen (`wallbox_*`, `heatpump_*`, `house_*`) ebenda;
+bis Sensoren daran hängen, stehen Striche. Annahmen, die der Nutzer bestätigen
+oder ändern kann:
+
+- **Wallboxen:** Inhalt nach der Ladepunkt-Karte von evcc 0.316.0 (Modus,
+  Leistung mit Phasen, Geladen, Sonnenanteil, Ladedauer, Fahrzeug, Status,
+  Ladestand mit Reichweite, Ladeplan, Ladelimit) plus Monatswerte wie unter
+  „Ladevorgänge“. Angenommen ist, dass evcc die Werte liefert (über Home
+  Assistant oder MQTT); welche Felder die Anbindung wirklich bekommt, steht
+  erst dann fest. Kosten und Durchschnittspreis setzen Tarife in evcc voraus.
+- **Wärmepumpe:** Nilan Compact P mit Bedienteil CTS700 Touch. Die Farben sind
+  aus dem Bild der Nilan-Anleitung abgelesen, keine offiziellen Werte. Die
+  Compact P heizt Luft und Warmwasser und hat keinen Heizwasserkreis:
+  **Vorlauf, Rücklauf und COP der Festlegung vom 30.07.2026 entfallen**, dafür
+  Raumtemperatur, Feuchte, CO2, Lüftungsstufe, Zu- und Fortluft, Bypass,
+  Sommer/Winter und Kompressorbetrieb. Leistungsaufnahme und Tagesverbrauch
+  sind elektrisch und kommen nicht aus der Nilan-Steuerung selbst, sondern
+  vermutlich von einem Zähler (offen). Auf Wunsch des Nutzers steht die Seite
+  auf dem Dashboard-Grund; Haus und Warmwasserkachel sind dafür abgedunkelt
+  (weiße Schrift 6,5 bzw. 8,2 : 1, gerechnet). Eine Jahreszeit-Anzeige hat im
+  neuen Registersatz (unten) kein eigenes Register, nur die Umschalttemperatur.
+- **Nilan-Modbus (Recherche 24.09.2026, nicht am Gerät geprüft).** Es gibt drei
+  Registersätze, welcher gilt, hängt am Bedienteil und ist offen:
+  - **CTS700 Touch, „CTS700 Modbus User Guide“ (2018)** – vermutlich der des
+    Nutzers (Annahme): Modbus TCP, Port 502, Slave 1 = Compact P, Temperaturen
+    ×10. Raum 20286 (T3 Abluft), außen 20282 (T1), Zuluft 20284 (T2), Fortluft
+    20288 (T4), Warmwasser oben/unten 20520/20522 (T11/T12), Feuchte 21776,
+    CO2 21778, Betriebszustand 21770 (0 Auto, 1 Kühlen, 2 Heizen), Zu-/Abluft
+    % 21771/21772, Bypass 21773 (0 zu, 1 offen), Kompressor 21775 (nur „0 Aus“
+    lesbar), Zusatzheizung 21788, Enteisung 21789/21790, Legionellen 21785,
+    Lüftungsstufe 20148 (101–104), Sollwerte Raum 20260, Warmwasser 20460,
+    Filtertage 20103/20107, Alarm 22490. Laut Anleitung beim Lesen mit einer
+    SPS +1 auf die Adresse; die Umsetzungen lesen ohne. Quelle: Anleitung auf
+    manualslib (Nr. 1620619) und github.com/pjuzeliunas/nilan.
+  - **Älteres CTS700 ohne Touch (Rev. 2.01)**, Adressen 47xx/51xx/55xx
+    (github.com/matej/homebridge-nilan). Welches Bedienteil diesen Satz nutzt,
+    widersprechen sich die Quellen.
+  - **CTS602** (github.com/veista/nilan), dort Compact P als Gerätetyp 44 –
+    gilt laut dessen README **nicht** für CTS700.
+  - Eine Leistungs- oder Energieangabe hat keiner der drei Sätze.
+  Offen: Der Wärmepumpen-Kasten im Schema der Übersicht trägt noch die
+  Zweitzeile mit COP; die liefert die Compact P nicht (unverändert gelassen).
+- **Haus:** Umgebaut nach dem Energiefluss von evcc (Wunsch des Nutzers,
+  24.09.2026). Annahmen: Alle Leistungen gelten für den Hausnetz-Kreis, die
+  Volleinspeisung bleibt außen vor. „Verbrauch“ ist wie in evcc alles außer
+  Ladepunkten und Speicher, also mit Wärmepumpe; „Verbrauch jetzt“ zählt die
+  Ladepunkte dazu. Die Herkunft rechnet die Seite wie evcc (erst PV, dann
+  Speicher, Rest Netz). Preise kommen als Werte herein (Mischpreis des
+  Verbrauchs wie in evcc). Die Grundlast kommt als eigener Wert, die Seite
+  rechnet sie nicht aus. **Offen:** Die 24-Stunden-Reihe wird nicht
+  gespeichert und ist nach einem Neustart leer, bis die Quelle sie neu
+  liefert; soll sie wie `day_curve` im NVS stehen, braucht sie eine eigene
+  `text`-Entität.
+
 Geplanter Inhalt (Festlegung 30.07.2026):
 
 - **PV & Prognose** — sechs Strings einzeln, Volleinspeise-Kreis getrennt, Prognose gegen Ist-Verlauf (gebaut 23.09.2026)
-- **Wallboxen** — beide: Modus, Ladeleistung, geladene Energie, Fahrzeug-SoC
-- **Wärmepumpe** — Betriebsmodus, Vorlauf/Rücklauf, COP, Leistungsaufnahme, Tagesverbrauch
-- **Haus** — Backofen, Waschmaschine, Spülmaschine, Trockner einzeln, plus Grundlast
+- **Wallboxen** — beide: Modus, Ladeleistung, geladene Energie, Fahrzeug-SoC (gebaut 24.09.2026, nach evcc erweitert)
+- **Wärmepumpe** — Betriebsmodus, Vorlauf/Rücklauf, COP, Leistungsaufnahme, Tagesverbrauch (gebaut 24.09.2026; für die Compact P ohne Vorlauf/Rücklauf/COP, siehe oben)
+- **Haus** — Backofen, Waschmaschine, Spülmaschine, Trockner einzeln, plus Grundlast (gebaut 24.09.2026, nach evcc um Energiefluss, Verbrauch jetzt und 24 Stunden erweitert)
 
-**Entscheidungsstand:** bewusst vertagt. Der Nutzer hat am 30.07.2026 ausdrücklich gesagt, die
+**Entscheidungsstand:** erledigt, alle vier gebaut (23. und 24.09.2026). Vorher
+bewusst vertagt: Der Nutzer hatte am 30.07.2026 ausdrücklich gesagt, die
 Detailseiten kommen später und sollen nicht ungefragt gebaut werden. Am 12.09.2026 für die
 Verläufe wiederholt: Ringe, Tagesbalken und Akzente zuerst nur in der Übersicht, die
 Detailseiten PV, Haus, Wallbox und WP bleiben für später.
@@ -83,9 +144,10 @@ Detailseiten PV, Haus, Wallbox und WP bleiben für später.
 **Schnittstelle je Seite.** Wird eine gebaut, bekommt sie ihre **eigene**
 Skript-Schnittstelle nach dem Muster von `storage_update(...)`: ein Skript mit benannten
 Parametern, das nur Widgets füllt. Bis Sensoren daran hängen, steht in den Widgets das
-Strichmuster aus Dokument 01 (Regel „Fehlender Wert") — keine erfundenen Zahlen. Für die
-Wallbox-Seite hieße das Parameter für Modus, Ladeleistung, geladene Energie und
-Fahrzeug-SoC; der Aufruf kommt erst mit den Sensoren. Was beim Anlegen einer Seite sonst
+Strichmuster aus Dokument 01 (Regel „Fehlender Wert") — keine erfundenen Zahlen. So
+gebaut sind `pv_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`,
+`heatpump_extra` und die fünf `house_*`-Skripte; die
+Aufrufe kommen erst mit den Sensoren. Was beim Anlegen einer Seite sonst
 dazugehört (Kachelkonvention, `scrollable`, nav-Knopf, Screenshots, Flussanimation), steht
 in Dokument 03 unter „Neue Detailseite".
 
@@ -364,7 +426,9 @@ Der LVGL-`list`-Bug ist mit 2026.9.0 erledigt.
 
 ---
 
-Stand: 23.09.2026 (eigene Werte nach `.pv-dashboard_anlage.yaml` verlegt, Seite
+Stand: 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc
+und dem Nilan-Bedienteil umgebaut, Nilan-Register recherchiert); davor
+23.09.2026 (eigene Werte nach `.pv-dashboard_anlage.yaml` verlegt, Seite
 PV & Prognose gebaut, Patch für `check_uart_settings` vorbereitet; davor 20.09.2026:
 Streckenzahlen aus einem Vorschaulauf von
 `tools/flow_animation.py`, Kontrastwerte nachgerechnet; LVGL-`list`-Bug mit 2026.9.0

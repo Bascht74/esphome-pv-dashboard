@@ -1,9 +1,194 @@
 ##############################################################################
-# Package: Seite 5 -- Waermepumpe
+# Package: Seite 5 -- Waermepumpe (Nilan Compact P)
 #
-# Platzhalterseite, Inhalt kommt spaeter. y 10: mittig in der sichtbaren
-# Flaeche 76..744 (Mitte 410), nicht auf der Schirmmitte.
+# Aufbau nach der Startseite des Bedienteils CTS700 Touch der Nilan
+# Compact P (Wunsch des Nutzers, 24.09.2026), wie sie die Nilan-
+# Bedienungsanleitung "CTS700 Touch, Compact P / Compact P Polar"
+# (Version 1.10) zeigt: blaugrauer Grund, gruenes Haus, links oben die
+# Aussentemperatur mit Sonne, im Dach die Raumtemperatur (gemessen in der
+# Abluft), in der Hauswand Luftfeuchte, CO2 und die Warmwasserkachel mit
+# rotem Punkt fuer die Zusatzheizung, rechts die runde Lueftertaste mit der
+# Lueftungsstufe. Den blaugrauen Grund hat der Nutzer am 24.09.2026 gegen
+# den Dashboard-Grund getauscht; Haus und Kachel sind dafuer abgedunkelt
+# (col_nilan_*, .pv-dashboard_utility.yaml). Das Nilan-Logo ist bewusst
+# nicht nachgebaut.
+#
+# Rechts im Dashboard-Stil, was das Bedienteil hinter der Info-Taste
+# zeigt (Betriebsart, Sommer/Winter, Bypass, Kompressor), dazu Zu- und
+# Fortluft, Ventilatoren, Filterwechsel und die elektrischen Werte der
+# Festlegung vom 30.07.2026. Die Compact P heizt Luft und Warmwasser,
+# sie hat keinen Heizwasserkreis: Vorlauf, Ruecklauf und COP der
+# Festlegung entfallen (docs/06).
+#
+# heatpump_update und heatpump_extra gehoeren dazu; kuenftige Sensoren
+# (Home Assistant oder Modbus, docs/01) rufen nur diese auf, bis dahin
+# stehen Striche.
+#
+# Flaeche x 4..1276, y 84..736.
+#   Nilan-Kachel x 4, 760 x 652, innen 738 x 630
+#     Titel, Warnsymbol   0..24
+#     Aussen             60..117  (Wert f_val_xl 39 + 1 + Einheit 17)
+#     Haus              170..530  (Bild 440 x 360 bei x 149: Spitze 369/170,
+#                                  Traufe 320, Wand 149..589)
+#     Raum              232..288  im Dach, mittig auf 369
+#     Wand              350..493  drei Gruppen, Mitten 229 / 369 / 509
+#     Luefter           330..402  Kreis 72 bei x 640, Stufe 410..427,
+#                                 Zu- und Abluft 429..465
+#     Hinweise          560..580  Enteisung, Legionellenschutz
+#     Stand             600..617
+#   Info-Kachel  x 772, 504 x 432, innen 482 x 410: Titel 0..17, acht
+#                Zeilen im Raster 47 ab 30 (Wert f_val_m 25), letzte
+#                endet 396
+#   Strom-Kachel x 772, y 524, 504 x 212, innen 482 x 190: zwei Spalten
+#                je 236, Wert 74..113, Einheit 115..132
+#
+# Der Titel nimmt name_heatpump; der Standard dazu steht in
+# .pv-dashboard_page_overview.yaml (das Paket ist immer dabei).
 ##############################################################################
+
+script:
+  # ---------------------------------------------------------------------
+  # Werte der Compact P. Kuenftige Sensoren rufen nur dieses Skript auf.
+  #   outdoor    Aussentemperatur in °C
+  #   room       Raumtemperatur in °C (Abluft oder externer Fuehler)
+  #   humidity   Luftfeuchte in % (Mittel der letzten 24 h, wie das
+  #              Bedienteil)
+  #   co2        CO2 in ppm; NAN blendet die Gruppe aus wie das Bedienteil
+  #              ohne CO2-Sensor
+  #   dhw        Warmwassertemperatur in °C
+  #   eheat      true = elektrische Zusatzheizung im Warmwasser aktiv
+  #   fan        Lueftungsstufe 0..4 (0 = aus), < 0 = unbekannt
+  #   vent_mode  Betriebsart Lueftung, z. B. "Auto"
+  #   season     "Sommer" / "Winter"
+  #   bypass     z. B. "Offen" / "Geschlossen"
+  #   compressor Kompressorbetrieb, z. B. "Warmwasser", "Aus"
+  #   supply     Zulufttemperatur in °C
+  #   exhaust    Fortlufttemperatur in °C
+  #   power      elektrische Leistungsaufnahme in kW
+  #   energy     elektrischer Verbrauch heute in kWh
+  #   alarm      0 = nichts, 1 = Warnhinweis (gelb), 2 = Alarm (rot)
+  #   Texte "" und NAN = kein Wert (Striche)
+  # ---------------------------------------------------------------------
+  - id: heatpump_update
+    parameters:
+      outdoor: float
+      room: float
+      humidity: float
+      co2: float
+      dhw: float
+      eheat: bool
+      fan: int
+      vent_mode: string
+      season: string
+      bypass: string
+      compressor: string
+      supply: float
+      exhaust: float
+      power: float
+      energy: float
+      alarm: int
+    then:
+      - lambda: |-
+          // Dezimalkomma wie ueberall auf der Oberflaeche
+          auto fmt = [](float v, const char *f, const char *none) -> std::string {
+            if (std::isnan(v))
+              return std::string(none);
+            char b[24];
+            snprintf(b, sizeof(b), f, v);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          auto show = [](lv_obj_t *o, bool on) {
+            if (on)
+              lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
+            else
+              lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+          };
+          auto txt = [](const std::string &s) -> const char * { return s.empty() ? "--" : s.c_str(); };
+          lv_label_set_text(id(hp_outdoor), fmt(outdoor, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(hp_room), fmt(room, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(hp_humidity), fmt(humidity, "%.0f", "--").c_str());
+          show(id(hp_co2_group), !std::isnan(co2));
+          lv_label_set_text(id(hp_co2), fmt(co2, "%.0f", "---").c_str());
+          lv_label_set_text(id(hp_dhw), fmt(dhw, "%.1f", "--,-").c_str());
+          show(id(hp_dhw_dot), eheat);
+          if (fan < 0)
+            lv_label_set_text(id(hp_fan), "Stufe -");
+          else if (fan == 0)
+            lv_label_set_text(id(hp_fan), "Aus");
+          else
+            lv_label_set_text_fmt(id(hp_fan), "Stufe %d", fan);
+          lv_label_set_text(id(hp_vent_mode), txt(vent_mode));
+          lv_label_set_text(id(hp_season), txt(season));
+          lv_label_set_text(id(hp_bypass), txt(bypass));
+          lv_label_set_text(id(hp_compressor), txt(compressor));
+          lv_label_set_text(id(hp_supply), fmt(supply, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(hp_exhaust), fmt(exhaust, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(hp_power), fmt(power, "%.2f", "-,--").c_str());
+          lv_label_set_text(id(hp_energy), fmt(energy, "%.1f", "--,-").c_str());
+          // Warnsymbol wie im Bedienteil: gelb = Hinweis, rot = Alarm
+          show(id(hp_alarm), alarm > 0);
+          lv_obj_set_style_text_color(id(hp_alarm), alarm > 1 ? lv_color_hex($col_crit) : lv_color_hex($col_warn), 0);
+          auto now = id(dash_time).now();
+          if (now.is_valid())
+            lv_label_set_text_fmt(id(hp_stand), "Stand %02d:%02d", now.hour, now.minute);
+
+  # ---------------------------------------------------------------------
+  # Weitere Werte der Compact P, wie sie die Modbus-Beschreibung des
+  # CTS700 fuehrt (Nilan "CTS700 Modbus User Guide", 2018; Adressen in
+  # docs/06, dort auch, was davon unsicher ist):
+  #   room_set     Raum-Sollwert in °C
+  #   dhw_set      Warmwasser-Sollwert in °C
+  #   fan_supply   Zuluftventilator in %
+  #   fan_extract  Abluftventilator in %
+  #   filter_days  Tage bis zum Filterwechsel, < 0 = unbekannt
+  #   defrost      true = Enteisung laeuft (Waermetauscher oder -pumpe)
+  #   legionella   true = Legionellenschutz laeuft
+  #   NAN = kein Wert (Striche)
+  # ---------------------------------------------------------------------
+  - id: heatpump_extra
+    parameters:
+      room_set: float
+      dhw_set: float
+      fan_supply: float
+      fan_extract: float
+      filter_days: int
+      defrost: bool
+      legionella: bool
+    then:
+      - lambda: |-
+          auto fmt = [](float v, const char *f, const char *none) -> std::string {
+            if (std::isnan(v))
+              return std::string(none);
+            char b[24];
+            snprintf(b, sizeof(b), f, v);
+            for (char *p = b; *p; p++)
+              if (*p == '.')
+                *p = ',';
+            return std::string(b);
+          };
+          lv_label_set_text(id(hp_room_unit), ("°C Raum · Soll " + fmt(room_set, "%.1f", "--")).c_str());
+          lv_label_set_text(id(hp_dhw_label), ("Warmwasser · Soll " + fmt(dhw_set, "%.0f", "--")).c_str());
+          lv_label_set_text(id(hp_fan_in), ("Zuluft " + fmt(fan_supply, "%.0f", "--") + " %").c_str());
+          lv_label_set_text(id(hp_fan_out), ("Abluft " + fmt(fan_extract, "%.0f", "--") + " %").c_str());
+          lv_label_set_text(id(hp_fans), (fmt(fan_supply, "%.0f", "--") + " / " + fmt(fan_extract, "%.0f", "--")).c_str());
+          if (filter_days < 0)
+            lv_label_set_text(id(hp_filter), "--");
+          else
+            lv_label_set_text_fmt(id(hp_filter), "%d", filter_days);
+          lv_obj_set_style_text_color(id(hp_filter), filter_days >= 0 && filter_days <= 7 ? lv_color_hex($col_warn) : lv_color_hex($col_ink), 0);
+          std::string f;
+          if (defrost)
+            f = "Enteisung aktiv";
+          if (legionella)
+            f += f.empty() ? "Legionellenschutz aktiv" : " · Legionellenschutz aktiv";
+          lv_label_set_text(id(hp_flags), f.c_str());
+          if (f.empty())
+            lv_obj_add_flag(id(hp_flags), LV_OBJ_FLAG_HIDDEN);
+          else
+            lv_obj_clear_flag(id(hp_flags), LV_OBJ_FLAG_HIDDEN);
 
 lvgl:
   pages:
@@ -12,4 +197,160 @@ lvgl:
       scrollable: false
       scroll_dir: NONE
       widgets:
-        - label: { align: CENTER, y: 10, text: "Wärmepumpe", text_color: $col_ink3 }
+        # ---------------- Startseite wie das CTS700 Touch ----------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 84
+            width: 760
+            height: 652
+            widgets:
+              - label: { x: 0, y: 0, width: 600, height: 17, long_mode: DOT, styles: st_label, text: "${ name_heatpump | upper }" }
+              - label: { id: hp_alarm, x: 714, y: 0, text: "\U000F0026", text_font: f_icon, text_color: $col_warn, hidden: true }
+
+              # Aussen: Wert links oben, Sonne rechts neben der Dachspitze
+              - label: { id: hp_outdoor, x: 40, y: 60, width: 160, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 40, y: 100, width: 160, height: 17, long_mode: DOT, text: "°C außen", text_font: f_unit, text_color: $col_ink }
+              - label: { x: 420, y: 110, text: "\U000F05A8", text_font: f_icon, text_color: $col_nilan_sun }
+
+              - image: { src: img_house, x: 149, y: 170, image_recolor: $col_nilan_house, image_recolor_opa: COVER }
+
+              # Raum im Dach: Wert 232..271, Thermometer daneben, Einheit
+              # 273..290
+              - label: { id: hp_room, x: 269, y: 232, width: 200, height: 39, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 454, y: 239, text: "\U000F050F", text_font: f_icon, text_color: $col_ink }
+              - label: { x: 269, y: 273, width: 200, height: 17, long_mode: DOT, text_align: CENTER, id: hp_room_unit, text: "°C Raum", text_font: f_unit, text_color: $col_ink }
+
+              # Wand: Symbol 360..384, Wert 392..422 (f_val_l), Einheit
+              # 424..441. Gruppen je 140 breit, Mitten 229 / 369 / 509.
+              - label: { x: 217, y: 360, text: "\U000F058C", text_font: f_icon, text_color: $col_ink3 }
+              - label: { id: hp_humidity, x: 159, y: 392, width: 140, height: 30, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_l, text_color: $col_ink }
+              - label: { x: 159, y: 424, width: 140, height: 17, long_mode: DOT, text_align: CENTER, text: "% Feuchte", text_font: f_unit, text_color: $col_ink }
+              - obj:
+                  id: hp_co2_group
+                  x: 299
+                  y: 360
+                  width: 140
+                  height: 81
+                  bg_opa: TRANSP
+                  border_width: 0
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  hidden: true
+                  widgets:
+                    - label: { align: TOP_MID, y: 0, text: "\U000F07E4", text_font: f_icon, text_color: $col_ink3 }
+                    - label: { id: hp_co2, x: 0, y: 32, width: 140, height: 30, long_mode: DOT, text_align: CENTER, text: "---", text_font: f_val_l, text_color: $col_ink }
+                    - label: { x: 0, y: 64, width: 140, height: 17, long_mode: DOT, text_align: CENTER, text: "ppm CO2", text_font: f_unit, text_color: $col_ink }
+              # Warmwasserkachel 110 x 120 bei x 454 (Mitte 509): Dusche
+              # 8..32, Wert 40..70, Einheit 72..89, Wellenlinie 98..100,
+              # roter Punkt rechts neben dem Wert
+              - obj:
+                  x: 454
+                  y: 350
+                  width: 110
+                  height: 120
+                  radius: 14
+                  bg_color: $col_nilan_tank
+                  bg_opa: COVER
+                  border_color: $col_nilan_tank_edge
+                  border_width: 2
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - label: { align: TOP_MID, y: 8, text: "\U000F09A1", text_font: f_icon, text_color: $col_ink3 }
+                    - label: { id: hp_dhw, x: 0, y: 40, width: 110, height: 30, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_l, text_color: $col_ink }
+                    - label: { x: 0, y: 72, width: 110, height: 17, long_mode: DOT, text_align: CENTER, text: "°C", text_font: f_unit, text_color: $col_ink }
+                    - obj: { x: 15, y: 98, width: 80, height: 2, radius: 1, bg_color: $col_ink, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { id: hp_dhw_dot, x: 94, y: 50, width: 10, height: 10, radius: 5, bg_color: $col_crit, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: hp_dhw_label, x: 439, y: 476, width: 140, height: 17, long_mode: DOT, text_align: CENTER, text: "Warmwasser", text_font: f_unit, text_color: $col_ink }
+
+              # Luefter: runde Taste wie im Bedienteil, darunter die Stufe
+              - obj:
+                  x: 640
+                  y: 330
+                  width: 72
+                  height: 72
+                  radius: CIRCLE
+                  bg_color: $col_nilan_button
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - label: { align: CENTER, text: "\U000F0210", text_font: f_icon, text_color: $col_bg }
+              - label: { id: hp_fan, x: 616, y: 410, width: 120, height: 17, long_mode: DOT, text_align: CENTER, text: "Stufe -", text_font: f_unit, text_color: $col_ink }
+              # Ventilatoren in % (heatpump_extra): 429..446 und 448..465
+              - label: { id: hp_fan_in, x: 616, y: 429, width: 120, height: 17, long_mode: DOT, text_align: CENTER, text: "Zuluft -- %", styles: st_unit }
+              - label: { id: hp_fan_out, x: 616, y: 448, width: 120, height: 17, long_mode: DOT, text_align: CENTER, text: "Abluft -- %", styles: st_unit }
+              # Enteisung und Legionellenschutz unter dem Haus (heatpump_extra),
+              # 560..580, nur wenn eins davon laeuft
+              - label: { id: hp_flags, x: 0, y: 560, width: 738, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_warn, hidden: true }
+
+              - label: { id: hp_stand, x: 0, y: 600, width: 738, height: 17, long_mode: DOT, text_align: CENTER, text: "Stand --:--", styles: st_unit }
+
+        # ---------------- Information wie hinter der Info-Taste ----------
+        # Acht Zeilen, Zeile i ab y 30 + 47 i: Beschriftung f_text_s (20)
+        # bei + 14, Wert f_val_m (25) rechtsbuendig bei + 12, Linie bei
+        # + 47; die letzte endet bei 396 von 410.
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 772
+            y: 84
+            width: 504
+            height: 432
+            widgets:
+              - label: { x: 0, y: 0, width: 482, height: 17, long_mode: DOT, styles: st_label, text: "INFORMATION" }
+              - label: { x: 0, y: 44, width: 240, height: 20, long_mode: DOT, text: "Betriebsart Lüftung", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hp_vent_mode, x: 250, y: 42, width: 232, height: 25, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 0, y: 77, width: 482, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 91, width: 240, height: 20, long_mode: DOT, text: "Jahreszeit", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hp_season, x: 250, y: 89, width: 232, height: 25, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 0, y: 124, width: 482, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 138, width: 240, height: 20, long_mode: DOT, text: "Bypass", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hp_bypass, x: 250, y: 136, width: 232, height: 25, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 0, y: 171, width: 482, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 185, width: 240, height: 20, long_mode: DOT, text: "Kompressor", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hp_compressor, x: 250, y: 183, width: 232, height: 25, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 0, y: 218, width: 482, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 232, width: 240, height: 20, long_mode: DOT, text: "Zuluft in °C", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hp_supply, x: 250, y: 230, width: 232, height: 25, long_mode: DOT, text_align: RIGHT, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 0, y: 265, width: 482, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 279, width: 240, height: 20, long_mode: DOT, text: "Fortluft in °C", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hp_exhaust, x: 250, y: 277, width: 232, height: 25, long_mode: DOT, text_align: RIGHT, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 0, y: 312, width: 482, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 326, width: 240, height: 20, long_mode: DOT, text: "Ventilatoren Zu / Ab in %", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hp_fans, x: 250, y: 324, width: 232, height: 25, long_mode: DOT, text_align: RIGHT, text: "-- / --", text_font: f_val_m, text_color: $col_ink }
+              - obj: { x: 0, y: 359, width: 482, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 373, width: 240, height: 20, long_mode: DOT, text: "Filterwechsel in Tagen", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: hp_filter, x: 250, y: 371, width: 232, height: 25, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_m, text_color: $col_ink }
+
+        # ---------------- Strom ------------------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 772
+            y: 524
+            width: 504
+            height: 212
+            widgets:
+              - label: { x: 0, y: 0, width: 482, height: 17, long_mode: DOT, styles: st_label, text: "STROM" }
+              - label: { x: 0, y: 48, width: 236, height: 20, long_mode: DOT, text_align: CENTER, text: "Leistungsaufnahme", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: hp_power, x: 0, y: 74, width: 236, height: 39, long_mode: DOT, text_align: CENTER, text: "-,--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 0, y: 115, width: 236, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "kW" }
+              - label: { x: 246, y: 48, width: 236, height: 20, long_mode: DOT, text_align: CENTER, text: "Verbrauch heute", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: hp_energy, x: 246, y: 74, width: 236, height: 39, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 246, y: 115, width: 236, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "kWh" }

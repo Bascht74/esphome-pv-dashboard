@@ -130,9 +130,9 @@ Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnun
 | `.pv-dashboard_page_overview.yaml` | 1187 | `substitutions:` 35, `script:` 94, `lvgl:` 169, `interval:` 988 |
 | `.pv-dashboard_page_pv.yaml` | 411 | `script:` 31, `lvgl:` 184 |
 | `.pv-dashboard_page_battery.yaml` | 331 | `substitutions:` 35, `script:` 42, `lvgl:` 112 |
-| `.pv-dashboard_page_wallbox.yaml` | 15 | Platzhalter |
-| `.pv-dashboard_page_heatpump.yaml` | 15 | Platzhalter |
-| `.pv-dashboard_page_house.yaml` | 15 | Platzhalter |
+| `.pv-dashboard_page_wallbox.yaml` | 454 | `substitutions:` 48, `script:` 52, `lvgl:` 202 |
+| `.pv-dashboard_page_heatpump.yaml` | 356 | `script:` 49, `lvgl:` 193 |
+| `.pv-dashboard_page_house.yaml` | 854 | `substitutions:` 61, `script:` 68, `lvgl:` 546 |
 | `.pv-dashboard_page_alerts.yaml` | 431 | `script:` 20, `lvgl:` 268 |
 
 Im Kern steht nur, was alle Seiten teilen: die Tagesreihen `day_curve` und
@@ -143,15 +143,19 @@ Im Kern steht nur, was alle Seiten teilen: die Tagesreihen `day_curve` und
 
 **Jedes Skript liegt bei der Seite, die es benutzt:** `redraw_curve` 98 in der
 Übersicht, `pv_update` 40 und `pv_redraw_curve` 99 auf der Seite PV & Prognose,
-`storage_update` 49 im Speicher, `alert_push` 56, `alert_ack` 170 und
+`storage_update` 49 im Speicher, `wallbox_update` 73 und `wallbox_month` 179 bei den Wallboxen,
+`heatpump_update` 72 und `heatpump_extra` 151 bei der Wärmepumpe, `house_flow` 85, `house_battery` 299, `house_loadpoint` 355, `house_update` 420 und `house_history` 488 im Haus, `alert_push` 56, `alert_ack` 170 und
 `alert_refresh` 202 in den Meldungen. Im Kern bleiben nur `record_hour` und
 `update_clock`: Sie fassen kein Seiten-Widget an, sondern die Tagesreihen
 beziehungsweise die Leisten im `top_layer`, und sie werden aus Packages
 gerufen, die keine Seite sind (`_core`, `-sim`, `-shots`).
 
-Zwei Seiten tragen seit dem 20.09.2026 vor ihrem `script:` einen eigenen
-`substitutions:`-Block mit den Standardbeschriftungen (Dokument 01); deshalb
-beginnt der Rest der Datei dort später als vorher.
+Vier Seiten tragen vor ihrem `script:` einen eigenen `substitutions:`-Block
+mit den Standardbeschriftungen (Dokument 01): Übersicht und Speicher seit dem
+20.09.2026, Wallboxen und Haus seit dem 24.09.2026; deshalb beginnt der Rest
+der Datei dort später als vorher. **`name_wb_1` und `name_wb_2` stehen wie die
+Speichernamen doppelt**, in der Übersicht und auf der Seite Wallboxen; es gilt
+dasselbe wie im nächsten Absatz, das Wallbox-Paket steht später und gewinnt.
 
 **`name_bat_1` bis `name_bat_3` stehen in beiden Blöcken** — in der Übersichts-
 und in der Speicherseite. Laufen die zwei Stellen auseinander, gewinnt
@@ -161,7 +165,7 @@ Gemeldet wird das nicht, die drei Zeilen in der Übersicht sind dann tote Zeilen
 Wer eine der beiden Seiten anfasst, zieht die andere mit nach. Ein Wert aus
 `pv-dashboard.yaml` sticht ohnehin beide.
 
-Zeilennummern im **Arbeitsstand vom 23.09.2026**. Sie altern mit jeder
+Zeilennummern im **Arbeitsstand vom 23.09.2026**, für die Seiten Wallboxen, Wärmepumpe und Haus vom 24.09.2026. Sie altern mit jeder
 Änderung, sie sind nur der Einstieg; gefunden wird mit `grep`:
 
 ```
@@ -184,7 +188,9 @@ Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — j
 - `page_battery` – drei SoC-Ringe und Tabelle `tbl_storage`: Ladezustand, Strom, Zelle min/max, Zelldifferenz, Temperatur min/max, Zyklen. Erste fertig gebaute Detailseite — **Vorlage für jede neue**.
 - `page_pv` – seit 23.09.2026. Oben zwei Kacheln wie die zwei Energiekreise: links Volleinspeisung (x 4, 322 breit), rechts Hausnetz (x 334, 942 breit); je Wechselrichter eine Gruppe aus Wechselrichterkasten und seinen zwei Flächen, Leistung in W und Tageswert in kWh. Unten dieselbe Teilung: links vier Kennzahlen (Ist heute, Prognose heute, Restprognose, Ist zu Prognose der abgeschlossenen Stunden), rechts der Tagesverlauf mit 16 Balken und Prognoselinie im großen Maßstab. Geometrie und Höhenrechnung im Kopf der Datei.
 - `page_alerts` – Liste `alert_list`, Kopfkachel mit Zähler, Knöpfe „Alle quittieren“ und „Liste leeren“.
-- Platzhalter: `page_wallbox`, `page_heatpump`, `page_house`.
+- `page_wallbox` – seit 24.09.2026, am selben Tag nach dem Vorbild von evcc (0.316.0) umgebaut. Zwei Ladepunkt-Karten je 632 × 512: Kopf mit Name und Modus-Schalter Aus / Smart / Schnell, Sitzungswerte Leistung (mit Blitz und drei Phasenstrichen), Geladen, Sonne, Ladedauer; nach der Trennlinie Fahrzeug und Statuszeile, Ladestandsbalken mit dunklerem Rest bis zum Limit und Limit-Marke, darunter Ladestand (mit Reichweite), Ladeplan, Ladelimit. Unten die Monatskachel „Ladevorgänge im Monat“ (Geladen, Sonnenanteil, Kosten, Ø Preis). Akzent `col_evcc`, Flächen und Einheitenregel bleiben die des Dashboards. Höhenrechnung im Kopf der Datei.
+- `page_heatpump` – seit 24.09.2026, am selben Tag auf die **Nilan Compact P** umgebaut, im Aufbau der Startseite ihres Bedienteils CTS700 Touch, auf Wunsch des Nutzers aber auf dem Dashboard-Grund (Kachel `st_tile`). Links die Nilan-Kachel (760 × 652): Außentemperatur mit Sonne, grünes Haus (Bild `img_house`, eingefärbt mit `col_nilan_house`), im Dach die Raumtemperatur mit Sollwert, in der Wand Feuchte, CO2 (nur mit Wert sichtbar) und die Warmwasserkachel (`col_nilan_tank`, Rand `col_nilan_tank_edge`) mit rotem Punkt für die Zusatzheizung und Sollwert darunter, rechts die runde Lüftertaste mit Stufe und Zu-/Abluftventilator in %. Unter dem Haus ein gelber Hinweis, solange Enteisung oder Legionellenschutz laufen. Rechts „Information“ wie hinter der Info-Taste (Betriebsart Lüftung, Jahreszeit, Bypass, Kompressor, Zu- und Fortluft, Ventilatoren, Tage bis zum Filterwechsel, ab 7 Tagen gelb) und „Strom“ (Leistungsaufnahme, Verbrauch heute). Das Nilan-Logo ist bewusst nicht nachgebaut.
+- `page_house` – seit 24.09.2026, am selben Tag nach dem Energiefluss von evcc umgebaut. Oben der evcc-Balken (Eigenverbrauch PV, Eigenverbrauch Speicher, Netzbezug, Einspeisung; Breite nach Anteil) mit den Klammern „In“ (PV, Speicher, Netz) und „Out“ (Verbrauch, Ladepunkte, Speicher laden, Einspeisung) samt Symbolen und Legende. Darunter die ausgeklappte Tabelle in drei Spalten: In (Erzeugung mit Restprognose, Speicher entladen mit Unterzeilen je Speicher, Netzbezug mit Preis), Out (Verbrauch mit Preis, Ladepunkte mit Unterzeilen je Wallbox, Speicher laden, Einspeisung mit Vergütung) und Verbraucher (Wärmepumpe, vier Geräte, Grundlast mit kWh heute). Unten links „Verbrauch jetzt“ (Haus und Ladepunkte) mit Herkunft aus PV, Speicher und Netz als Balken und in %, rechts der Verbrauch der letzten 24 Stunden als Stundenbalken, der PV-gedeckte Teil grün. Farben `col_evcc*`. Geometrie im Kopf der Datei.
 
 **Neue Detailseite.** Vorlage ist `page_battery`. Dazu gehört:
 
@@ -230,6 +236,22 @@ Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in D
 
 **`pv_update(inv, pv, power, energy)`** – Seite PV & Prognose. `inv` 0…3 = Wechselrichter 1…4, `pv` 0…7 = Fläche/Modul 1…8, jeweils `-1` = keiner; ein Aufruf setzt einen Wechselrichter, eine Fläche oder beides. `power` in W, ganzzahlig mit Tausenderpunkt; `energy` in kWh heute, eine Nachkommastelle. `NAN` ergibt das Strichmuster (`--.---` bzw. `-.---`, `W · --,- kWh`). Füllt nur die PV-Seite, die Kästen im Schema der Übersicht noch nicht.
 
+**`wallbox_update(wb, mode, charging, power, phases, energy, solar, minutes, vehicle, status, soc, range, limit, plan)`** – Seite Wallboxen, Namen nach der evcc-API. `wb` 0…1 = Wallbox 1…2; `mode` `off`/`smart`/`now` (ältere evcc-Versionen: `pv` und `minpv` leuchten als Smart); `charging` färbt Blitz und Phasen; `power` in kW, `phases` 0…3, `energy` Sitzung in kWh, `solar` Sonnenanteil in %, `minutes` Ladedauer (< 0 = keine); `vehicle` leer = „Kein Fahrzeug“, `status` freie Zeile; `soc` und `limit` in %, `range` in km, `plan` Text wie „Mo 07:00“ (leer = kein Plan). `NAN` ergibt Striche. Füllt nur diese Seite, die Wallbox-Kästen der Übersicht noch nicht.
+
+**`wallbox_month(energy, solar, cost, price)`** – Monatskachel der Wallbox-Seite: geladene kWh, Sonnenanteil in %, Kosten in €, Durchschnittspreis in ct/kWh. `NAN` ergibt Striche.
+
+**`heatpump_update(outdoor, room, humidity, co2, dhw, eheat, fan, vent_mode, season, bypass, compressor, supply, exhaust, power, energy, alarm)`** – Seite Wärmepumpe (Nilan Compact P). Temperaturen in °C: außen, Raum (Abluft), Warmwasser, Zu- und Fortluft; `humidity` in %, `co2` in ppm (`NAN` blendet die CO2-Gruppe aus); `eheat` zeigt den roten Punkt der Zusatzheizung; `fan` Lüftungsstufe 0…4 (0 = „Aus“, < 0 = unbekannt); `vent_mode`, `season`, `bypass`, `compressor` als Text (leer ergibt „--“); `power` in kW und `energy` in kWh heute, beide elektrisch; `alarm` 0 = nichts, 1 = gelbes, 2 = rotes Warnsymbol. Setzt „Stand HH:MM“. Füllt nur diese Seite, den Kasten im Schema noch nicht.
+
+**`heatpump_extra(room_set, dhw_set, fan_supply, fan_extract, filter_days, defrost, legionella)`** – weitere Werte der Compact P aus der Modbus-Beschreibung des CTS700: Sollwerte Raum und Warmwasser in °C, Zu- und Abluftventilator in %, Tage bis zum Filterwechsel (< 0 = unbekannt), Enteisung und Legionellenschutz als Schalter. Adressen und ihre Unsicherheit in Dokument 06.
+
+**`house_flow(pv, bat_out, grid_in, home, loadpoints, bat_in, grid_out, soc, forecast, price_grid, price_home, price_feed)`** – Seite Haus, Energiefluss nach evcc. Leistungen in W (≥ 0) für den Hausnetz-Kreis: PV-Erzeugung, Speicher entladen, Netzbezug, Verbrauch (alles außer Ladepunkten und Speicher, also mit Wärmepumpe), beide Ladepunkte zusammen, Speicher laden, Einspeisung; dazu Speicher-SoC in %, Restprognose in kWh und drei Preise in ct/kWh. Rechnet Eigenverbrauch wie evcc (erst PV, dann Speicher) und füllt Balken, Klammern, die Spalten In und Out und „Verbrauch jetzt“. `NAN` ergibt Striche.
+
+**`house_battery(bat, power, soc)`** und **`house_loadpoint(wb, power, soc)`** – Unterzeilen der Tabelle: je Speicher (0…2, Leistung in W, positiv = entladen) bzw. je Wallbox (0…1, Ladeleistung in W, `soc` des Fahrzeugs, `NAN` = kein Fahrzeug). `house_loadpoint` zählt auch die aktiven Ladepunkte (ab 10 W).
+
+**`house_update(dev, power, energy)`** – Spalte Verbraucher. `dev` 0…5 = Wärmepumpe, Backofen, Waschmaschine, Spülmaschine, Trockner, Grundlast (`name_heatpump`, `name_oven` … `name_baseload`), `power` in W, `energy` in kWh heute. Die Kopfzeile zeigt die Summe, sobald alle sechs da sind.
+
+**`house_history(home, solar, hour)`** – Verbrauch der letzten 24 Stunden: je 24 kommagetrennte kWh-Werte, älteste zuerst, `solar` der aus PV gedeckte Teil, `hour` die Uhrzeit des letzten Werts. Wird nicht gespeichert (Dokument 06).
+
 **`pv_redraw_curve`** – Seite PV & Prognose, hängt wie `redraw_curve` an `on_value` beider Reihen und schreibt keine. Zeichnet Balken und Linie auf gemeinsamem Maßstab (Legende nennt die Skala) und rechnet die Kennzahlen: „abgeschlossen" sind die Plätze vor der laufenden Stunde (Stunde − 6), Restprognose ist die Prognose ab der laufenden Stunde bis 22 Uhr, „Ist zu Prognose" braucht mindestens 0,1 kWh Prognose in den abgeschlossenen Stunden. Ohne gültige Uhrzeit bleiben diese beiden auf Strichen.
 
 **`record_hour`** – läuft zur vollen Stunde um HH:00:05 und schreibt die abgelaufene Stunde in Platz `(HH-1) - 6` (06–07 Uhr → Platz 0, 21–22 Uhr → Platz 15). Angebunden wird an der auskommentierten Zeile `// kwh = id(<Erzeugungssensor>).state;`; solange sie steht, wird 0 eingetragen. Die Tagesreihen `day_curve` und `forecast_curve` sind `text`-Entitäten mit 16 kommagetrennten Werten im NVS: überstehen Neustart und OTA, in HA sichtbar und setzbar. Gespeichert wird nur, was über `control()` kommt – daher `make_call()`, nicht `publish_state()`. Tageswechsel über das global `curve_day` (Jahr × 1000 + Tag): Gehört die Reihe zu einem anderen Tag, startet der Lauf mit 16 × 0.
@@ -269,7 +291,7 @@ Projektordner, mit vollem Pfad in die Arbeitsumgebung (ESPHome 2026.9.0):
 
 `pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle sieben Seiten plus beide Overlays als BMP (`01_overview.bmp` … `09_ota_panel.bmp`) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
 
-Beispieldaten für Meldungen, Speicher, PV-Werte, Tagesreihen und Ringe stehen in `shots_run`, also **nur** im Screenshot-Lauf. Die Demo-Leistungen der Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen host-Plattform, im Simulator ebenso. Im Gerät steht beides nicht.
+Beispieldaten für Meldungen, Speicher, PV-Werte, Wallboxen, Wärmepumpe, Haus, Tagesreihen und Ringe stehen in `shots_run`, also **nur** im Screenshot-Lauf. Die Demo-Leistungen der Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen host-Plattform, im Simulator ebenso. Im Gerät steht beides nicht.
 
 **Laufzeit.** `-sim` und `-shots` sind **getrennte Bauziele** unter `.esphome/build/`. Der erste Lauf eines Ziels ist ein Vollbuild über mehrere Minuten und holt die Schriften über `gfonts://` aus dem Netz; spätere Läufe nutzen den Cache. Ein kurzes Kommando-Zeitlimit bricht den ersten Lauf ab — kein Fehler der Konfiguration.
 
@@ -305,7 +327,8 @@ im YAML:
 
 ---
 
-Stand: 23.09.2026 (eigene Anlage in `.pv-dashboard_anlage.yaml`, Seite PV &
+Stand: 24.09.2026 (Seiten Wallboxen, Wärmepumpe und Haus samt ihren
+Skripten, Tabelle neu abgezählt); davor 23.09.2026 (eigene Anlage in `.pv-dashboard_anlage.yaml`, Seite PV &
 Prognose samt `pv_update` und `pv_redraw_curve`, Tabelle und Zeilennummern neu
 abgezählt; davor 20.09.2026: Streckenzahlen aus einem Vorschaulauf; Zeilennummern gegen
 den **Arbeitsstand** dieses Tages, Umwandlungsbefehle und Bildgrößen

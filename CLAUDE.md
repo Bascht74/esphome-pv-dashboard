@@ -103,9 +103,10 @@ normales Deutsch mit Umlauten.
 - Der Block zwischen `# >>> flow-animation` und `# <<< flow-animation` und die
   Widgets `flNN`/`flNNb` der Übersichtsseite stammen **nur** von
   `tools/flow_animation.py` — nie von Hand ändern.
-- Wallboxen, Wärmepumpe, Haus und die BMS-Anbindung sind bewusst Platzhalter.
-  Nur bauen, wenn der Nutzer es verlangt (`docs/06`). PV & Prognose ist seit
-  dem 23.09.2026 gebaut.
+- Die BMS-Anbindung ist bewusst ein Platzhalter. Nur bauen, wenn der Nutzer
+  es verlangt (`docs/06`). Alle vier Detailseiten sind gebaut (PV & Prognose
+  23.09.2026, Wallboxen, Wärmepumpe und Haus 24.09.2026); ihre Werte kommen
+  über je ein Skript, bis dahin stehen Striche.
 - Die sechs `docs/`-Dateien liegen als Kopie im Claude-Projekt; nach einer
   Änderung sagen, welche neu hochzuladen ist (Anleitung im Ordner
   `~/esphome-claude-projekt`).
