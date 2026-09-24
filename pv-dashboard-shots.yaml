@@ -100,16 +100,17 @@ script:
       # Uhr sofort fuellen, sonst steht bis zur naechsten vollen Minute --:--
       - script.execute: update_clock
 
-      # Beispieldaten, damit Meldungen, Speicher und die Meldungszeile nicht
-      # leer auf den Bildern stehen -- nur hier, nie im Geraet. Aelteste
+      # Beispieldaten, damit Meldungen, Speicher, PV und die Meldungszeile
+      # nicht leer auf den Bildern stehen -- nur hier, nie im Geraet. Aelteste
       # Meldung zuerst: jede neue rutscht oben in die Liste.
       #
       # Die Geraetenamen kommen aus denselben Substitutions wie die Kaesten
       # im Schema, damit die Meldungen zur abgebildeten Anlage passen. Es
       # sind dabei immer die Demo-Standards aus den Seiten-Paketen: Dieser
       # Lauf bindet pv-dashboard-sim.yaml ein, und weder der Simulator noch
-      # dieser Lauf binden pv-dashboard.yaml ein. Eigene Werte von dort
-      # erreichen das Bild also nicht (geprueft mit 2026.9.0). Wer die
+      # dieser Lauf binden pv-dashboard.yaml und damit
+      # .pv-dashboard_anlage.yaml ein. Eigene Werte von dort erreichen das
+      # Bild also nicht (geprueft mit 2026.9.0). Wer die
       # eigene Beschriftung gerendert sehen will, traegt sie zum Messen
       # voruebergehend in das jeweilige Seiten-Paket ein.
       - script.execute: { id: alert_push, severity: 0, device: "${name_heatpump}", text: "Filterwechsel in 14 Tagen fällig" }
@@ -131,6 +132,22 @@ script:
       - script.execute: { id: storage_update, bat: 0, soc: 72, current: 12.4, cell_min: 3.281, cell_max: 3.302, temp_min: 18, temp_max: 21, cycles: 412 }
       - script.execute: { id: storage_update, bat: 1, soc: 38, current: -8.9, cell_min: 3.195, cell_max: 3.377, temp_min: 19, temp_max: 24, cycles: 398 }
       - script.execute: { id: storage_update, bat: 2, soc: 100, current: 0.0, cell_min: 3.402, cell_max: 3.411, temp_min: 17, temp_max: 19, cycles: 1287 }
+      # Seite PV & Prognose: Wechselrichter und Flaechen. Die Tageswerte der
+      # Wechselrichter ergeben zusammen die 147,0 kWh der Beispielkurve
+      # unten.
+      - script.execute: { id: pv_update, inv: 0, pv: -1, power: 6214, energy: 38.5 }
+      - script.execute: { id: pv_update, inv: 1, pv: -1, power: 588, energy: 3.9 }
+      - script.execute: { id: pv_update, inv: 2, pv: -1, power: 7835, energy: 58.2 }
+      - script.execute: { id: pv_update, inv: 3, pv: -1, power: 5231, energy: 46.4 }
+      - script.execute: { id: pv_update, inv: -1, pv: 0, power: 3412, energy: 20.1 }
+      - script.execute: { id: pv_update, inv: -1, pv: 1, power: 2980, energy: 19.2 }
+      - script.execute: { id: pv_update, inv: -1, pv: 2, power: 312, energy: 2.0 }
+      - script.execute: { id: pv_update, inv: -1, pv: 3, power: 298, energy: 2.0 }
+      - script.execute: { id: pv_update, inv: -1, pv: 4, power: 4120, energy: 30.4 }
+      - script.execute: { id: pv_update, inv: -1, pv: 5, power: 3890, energy: 29.1 }
+      - script.execute: { id: pv_update, inv: -1, pv: 6, power: 3650, energy: 31.2 }
+      # Flaeche 8 (pv: 7) bleibt ohne Aufruf: So steht das Strichmuster mit
+      # auf dem Bild.
       # Beispielkurven fuer die Kachel Tagesertrag (Ist und Prognose). Das ui-
       # Package startet mit 16 x 0; publish_state speichert nicht im NVS.
       - lambda: |-

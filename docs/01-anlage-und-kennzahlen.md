@@ -16,14 +16,21 @@ Layout. Jede von ihnen ist eine Substitution:
   `.pv-dashboard_page_overview.yaml`, die drei Speichernamen zusätzlich in
   `.pv-dashboard_page_battery.yaml`. Dadurch bauen Simulator und Screenshot-Lauf
   ohne `pv-dashboard.yaml`.
-- Die **eigene Anlage** wird in `pv-dashboard.yaml` beschrieben, im Block
-  „HIER BESCHREIBEN SIE IHRE ANLAGE“ direkt hinter den Zugangsdaten. Was dort
+- Die **eigene Anlage** wird in `.pv-dashboard_anlage.yaml` beschrieben. Die
+  Datei steht in `.gitignore` und bleibt auf dem Rechner, im Repo liegt nur die
+  Vorlage `.pv-dashboard_anlage.yaml.example` mit den Demo-Werten (seit
+  23.09.2026; vorher stand der Block in `pv-dashboard.yaml` selbst, die
+  versioniert ist). `pv-dashboard.yaml` fügt die Datei mit
+  `<<: !include .pv-dashboard_anlage.yaml` in ihre `substitutions` ein, die
+  Werte zählen damit als Substitutions der Hauptdatei. Was dort
   steht, sticht den Standard: ESPHome trägt die Substitutions der Hauptdatei zuerst
   ein und überspringt beim Einlesen der Pakete jeden Namen, den es schon kennt
   (in `esphome/components/packages` überspringt
   `_update_substitutions_context` bekannte Schlüssel, und
   `merge_config(paket, hauptdatei)` lässt die Hauptdatei gewinnen).
-  Nachgewiesen mit 2026.9.0 im Config-Dump **und** im gerenderten Bild.
+  Nachgewiesen mit 2026.9.0 im Config-Dump **und** im gerenderten Bild; für den
+  Weg über die eingefügte Datei am 23.09.2026 erneut im Config-Dump (ein
+  geänderter Flächenname erschien im Label, der Demo-Wert nirgends).
 
 Die Werte **im Repo sind Demo-Werte** — neutrale Namen und runde Tarife, damit das
 öffentliche Repo nicht die Anlage des Nutzers beschreibt. Dieses Dokument
@@ -31,13 +38,16 @@ beschreibt ebenfalls nur den **Aufbau**, nicht eine bestimmte Anlage: Fabrikate,
 Typenbezeichnungen und die echten Flächennamen stehen im aktuellen Stand nirgends
 mehr. Die Commit-Historie trägt sie noch; wie sie vor dem Veröffentlichen
 bereinigt wird, steht in Dokument 06. Wer das Dashboard auf seine eigene Anlage
-setzt, trägt seine Namen in `pv-dashboard.yaml` ein und hält seine
+setzt, trägt seine Namen in `.pv-dashboard_anlage.yaml` ein und hält seine
 Anlagennotizen außerhalb des Repos.
 
 Die Kästen sind knapp gerechnet. Eine längere Beschriftung kürzt LVGL mit „...“
 (`long_mode: DOT`) oder sie bricht um. Hinter jeder Substitution in
-`pv-dashboard.yaml` steht deshalb die gemessene Breite des Demo-Werts und die
-verfügbare Breite. Nach jeder Änderung neu rendern und Dokument 04 durchgehen.
+`.pv-dashboard_anlage.yaml.example` steht deshalb die gemessene Breite des
+Demo-Werts und die verfügbare Breite. Die Flächen- und Wechselrichternamen
+stehen auch auf der Seite PV & Prognose, dort aber breiter (135 bzw. 284 px);
+die engere Grenze bleibt das Schema. Nach jeder Änderung neu rendern und
+Dokument 04 durchgehen.
 
 ## Zwei getrennte Energiekreise
 
@@ -91,7 +101,7 @@ Dieselben drei Namen tragen auf der Speicherseite die Ringe und die
 Tabellenköpfe, dort in Großbuchstaben: Im YAML steht `${ name_bat_1 | upper }`,
 der Wert selbst bleibt normal geschrieben. Der Standard steht deshalb doppelt —
 in der Übersichts- **und** in der Speicherseite; beide Stellen müssen gleich
-lauten, ein Wert aus `pv-dashboard.yaml` sticht ohnehin beide. Laufen die beiden
+lauten, ein Wert aus `.pv-dashboard_anlage.yaml` sticht ohnehin beide. Laufen die beiden
 Pakete auseinander, gewinnt stillschweigend die Speicherseite: Unter Paketen
 sticht der spätere Eintrag im `packages:`-Block von `.pv-dashboard_ui.yaml`, und
 gemeldet wird das nicht (geprüft mit 2026.9.0) — die Standards in der
@@ -160,9 +170,9 @@ liegt die Autarkie praktisch nie bei 100 %, weil nachts immer etwas Netzbezug an
 
 Die Tarife gehören zur Anlage, nicht zur Oberfläche. Sie standen bis zum 20.09.2026
 im Abschnitt „Farben und Maße“ von `.pv-dashboard_utility.yaml` und stehen jetzt bei
-den übrigen Anlagen-Einstellungen in `pv-dashboard.yaml`. Damit bleiben die eigenen
-Tarife auf dem Rechner, auch wenn die Pakete aus dem GitHub-Repo nachgeladen
-werden. Ein Standard liegt in `.pv-dashboard_page_overview.yaml`, der Seite mit der
+den übrigen Anlagen-Einstellungen in `.pv-dashboard_anlage.yaml`. Damit bleiben die
+eigenen Tarife auf dem Rechner, auch wenn die Pakete aus dem GitHub-Repo nachgeladen
+werden, und ein `git add -A` nimmt sie nicht mit. Ein Standard liegt in `.pv-dashboard_page_overview.yaml`, der Seite mit der
 Kachel „TAGESERTRAG“, damit Simulator und Screenshot-Lauf weiterbauen.
 
 Im Repo stehen runde Demo-Werte:
@@ -210,11 +220,14 @@ Prüfliste in Dokument 04 (LVGL-Checkliste).
   im Simulator von der Systemuhr.
 
 Angebunden ist bisher nichts davon. Die Oberfläche hat dafür feste Schnittstellen
-(`alert_push`, `storage_update`, `record_hour`, `WATT[]`), siehe Dokument 03 zum Dashboard-Aufbau.
+(`alert_push`, `storage_update`, `pv_update`, `record_hour`, `WATT[]`), siehe Dokument 03
+zum Dashboard-Aufbau.
 
 ---
 
-Stand: 20.09.2026 (Aufbau- und Kennzahlenfestlegungen vom 30.07.2026; die
+Stand: 23.09.2026 (eigene Werte in `.pv-dashboard_anlage.yaml` statt in
+`pv-dashboard.yaml`, `pv_update` ergänzt; davor 20.09.2026:
+Aufbau- und Kennzahlenfestlegungen vom 30.07.2026; die
 Entscheidung zur Autarkie-Zweitzeile vom 20.09.2026; Beschriftungen und Tarife am
 20.09.2026 auf Substitutions mit Demo-Werten umgestellt; am selben Tag Fabrikate,
 Typenbezeichnungen und echte Flächennamen aus dem Dokument genommen). Geprüfter Commit:

@@ -433,8 +433,20 @@ usb_uart:
 # aktivieren, wenn das BMS angeschlossen ist -- sonst laufen nur Timeouts ins
 # Log. Die Protokollversion muss zum BMS passen.
 #
+# Nicht direkt von GitHub einbinden: Die Komponente ruft das seit 2026.9.0
+# abgekuendigte check_uart_settings() auf, ab 2027.3.0 bricht der Build. Der
+# Patch dagegen liegt in patches/pace_bms-check_uart_settings.patch; wie die
+# gepatchte Kopie nach .pace-bms/ kommt, steht in docs/06 ("BMS: serielle
+# Anbindung"). Der Pfad gilt relativ zu pv-dashboard.yaml, auch wenn dieses
+# Paket aus dem Repo nachgeladen wird (external_components nimmt
+# CORE.relative_config_path, nachgelesen in 2026.9.0, nicht am Geraet
+# erprobt).
+#
 # external_components:
-#   - source: github://nkinnan/esphome-pace-bms
+#   - source:
+#       type: local
+#       path: .pace-bms/components
+#     components: [pace_bms]
 #
 # pace_bms:
 #   id: bms

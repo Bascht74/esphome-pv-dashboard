@@ -112,12 +112,15 @@ Deshalb trägt jede Zeile der Meldungsliste ein verstecktes Kind 5 mit
 seinen Text von außen bekommen, ohne dass das Layout es merkt. Zwei Pflichten
 folgen daraus:
 
-- Wer einen Standard im Paket **oder** einen Wert in `pv-dashboard.yaml` ändert,
-  misst die neue Breite und rendert neu. Hinter jeder Substitution steht die
+- Wer einen Standard im Paket **oder** einen Wert in `.pv-dashboard_anlage.yaml`
+  ändert, misst die neue Breite und rendert neu. Hinter jeder Substitution steht die
   gemessene Breite des Werts und die verfügbare Breite des Labels.
 - Wer die **Breite eines Kastens** ändert, zieht diese Zahlen in
-  `pv-dashboard.yaml` und im Standardblock des Pakets nach. Sie sind sonst
-  stillschweigend falsch und die nächste Änderung rechnet mit dem alten Wert.
+  `.pv-dashboard_anlage.yaml.example` und im Standardblock des Pakets nach. Sie
+  sind sonst stillschweigend falsch und die nächste Änderung rechnet mit dem
+  alten Wert. Flächen- und Wechselrichternamen stehen zusätzlich auf der Seite
+  PV & Prognose (135 bzw. 284 px); die Zahlen gelten für die engere Stelle,
+  das Schema der Übersicht.
 
 Nachgemessen wird in der Schrift des Labels (`f_unit` 13, `f_text_s` 15,
 `f_label` 13 mit `text_letter_space: 1`): Summe der Glyph-Vorschübe, je Glyph auf

@@ -7,12 +7,12 @@ Was noch aussteht, jeweils mit Entscheidungsstand. Nichts davon wird ungefragt g
 Kurzfassung aller offenen Punkte; die Einzelheiten stehen jeweils im Abschnitt
 darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefragt bauen.
 
-**Offen**
+**Erledigt am 23.09.2026**
 
-- [ ] **Prüfen, wie `pv-dashboard.yaml` die eigenen Werte hält.** Die Datei ist
-      versioniert und steht mit Demo-Werten auf `main`; die eigenen Werte bleiben nur
-      so lange auf dem Rechner, wie sie nicht mitcommittet werden. Siehe „Was das Repo
-      über die Anlage verrät".
+- [x] **Eigene Werte aus `pv-dashboard.yaml` herausgelöst.** Beschriftungen und Tarife
+      stehen in `.pv-dashboard_anlage.yaml`, die in `.gitignore` steht; im Repo liegt
+      nur die Vorlage. Siehe „Was das Repo über die Anlage verrät".
+- [x] **Detailseite PV & Prognose gebaut.** Siehe „Detailseiten".
 
 **Entschieden, nicht zu tun**
 
@@ -27,15 +27,16 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
       Eine Strecke kann drei Packs führen (Master/Slave), aber nur bei 0x25; die
       Topologie nicht raten.
 - [ ] **`check_uart_settings` in `nkinnan/esphome-pace-bms`** — der abgekündigte Aufruf
-      steht noch drin, das Repo ruht seit 11.12.2025. Auf ein Update zu warten ist
-      vermutlich keine Strategie; ab ESPHome 2027.3.0 bricht der Build.
+      steht noch drin, das Repo ruht seit 11.12.2025; ab ESPHome 2027.3.0 bricht der
+      Build. Ein Patch liegt seit 23.09.2026 in `patches/`, eingesetzt wird er mit
+      dem BMS (Anleitung unter „BMS: serielle Anbindung").
 
 **Vertagt (Entscheidung liegt vor, Zeitpunkt offen)**
 
 - [ ] **Echte Daten anbinden** — vier Anbindungspunkte plus `WATT[37]`. Am 20.09.2026
       vertagt: die neuen Geräte laufen beim Nutzer noch nicht.
-- [ ] **Vier Detailseiten bauen** — PV, Wallboxen, Wärmepumpe, Haus. Am 20.09.2026
-      erneut vertagt.
+- [ ] **Drei Detailseiten bauen** — Wallboxen, Wärmepumpe, Haus. PV & Prognose
+      steht seit 23.09.2026, die übrigen warten auf Zuruf.
 - [ ] **Kamera** — blockiert durch esphome/esphome#16944. Am 20.09.2026 vertagt, der
       PR-Stand ist seit 11.09.2026 nicht nachgeprüft.
 
@@ -55,14 +56,21 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 
 ## Detailseiten
 
-Vier Seiten sind nur Platzhalter: `page_pv`, `page_wallbox`, `page_heatpump`,
-`page_house` tragen je ein einzelnes zentriertes Label. Jede liegt in ihrer
-eigenen Datei `.pv-dashboard_page_*.yaml`, eingebunden vom `packages:`-Block in
-`.pv-dashboard_ui.yaml`.
+Drei Seiten sind nur Platzhalter: `page_wallbox`, `page_heatpump`, `page_house`
+tragen je ein einzelnes zentriertes Label. Jede liegt in ihrer eigenen Datei
+`.pv-dashboard_page_*.yaml`, eingebunden vom `packages:`-Block in
+`.pv-dashboard_ui.yaml`. **PV & Prognose ist seit dem 23.09.2026 gebaut**, auf
+Zuruf des Nutzers („mit der ersten anfangen"): Wechselrichter und Flächen je
+Energiekreis, darunter der Tagesverlauf Ist gegen Prognose mit vier Kennzahlen
+(Aufbau in Dokument 03). Die Schnittstelle ist `pv_update(inv, pv, power, energy)`,
+bis Sensoren daran hängen stehen Striche. Angezeigt werden alle acht Plätze, also
+die sechs Dachflächen und die zwei Einzelmodule am Mini-WR — die Festlegung
+unten nennt nur „sechs Strings"; das ist eine Annahme, die der Nutzer bestätigen
+oder ändern kann.
 
 Geplanter Inhalt (Festlegung 30.07.2026):
 
-- **PV & Prognose** — sechs Strings einzeln, Volleinspeise-Kreis getrennt, Prognose gegen Ist-Verlauf
+- **PV & Prognose** — sechs Strings einzeln, Volleinspeise-Kreis getrennt, Prognose gegen Ist-Verlauf (gebaut 23.09.2026)
 - **Wallboxen** — beide: Modus, Ladeleistung, geladene Energie, Fahrzeug-SoC
 - **Wärmepumpe** — Betriebsmodus, Vorlauf/Rücklauf, COP, Leistungsaufnahme, Tagesverbrauch
 - **Haus** — Backofen, Waschmaschine, Spülmaschine, Trockner einzeln, plus Grundlast
@@ -92,8 +100,8 @@ Definitionen in Dokument 01, Abschnitt „Autarkie".
 ## Was das Repo über die Anlage verrät
 
 Seit dem 20.09.2026 sind alle anlagenabhängigen Beschriftungen und die drei Tarife
-`substitutions` mit neutralen Demo-Werten; die eigenen Werte stehen in
-`pv-dashboard.yaml` (Dokument 01). Am selben Tag sind auf Wunsch des Nutzers auch die
+`substitutions` mit neutralen Demo-Werten; die eigenen Werte stehen seit dem
+23.09.2026 in `.pv-dashboard_anlage.yaml` außerhalb des Repos (Dokument 01). Am selben Tag sind auf Wunsch des Nutzers auch die
 Namen nachgezogen worden, die eine Beschriftungsänderung überdauern — **erledigt**:
 
 - **Die Widget-IDs der Übersichtsseite** nannten Fabrikat und echte Dachflächen.
@@ -106,7 +114,7 @@ Namen nachgezogen worden, die eine Beschriftungsänderung überdauern — **erle
   und über `tools/flow_animation.py`). Die neun Screenshots sind nach dem
   Umbenennen unverändert — IDs werden nicht gezeichnet.
 - **Der Tarifschlüssel des Volleinspeise-Kreises** nannte das Fabrikat und heißt
-  jetzt `tarif_volleinspeisung_ct` — in `pv-dashboard.yaml`, im Standard in
+  jetzt `tarif_volleinspeisung_ct` — in der Anlagen-Datei, im Standard in
   `.pv-dashboard_page_overview.yaml` und in Dokument 01.
 - **Die Dokumente beschrieben die echte Anlage** — Fabrikate, Typenbezeichnungen,
   echte Dachflächennamen, Speichergröße, Förderdauer, das BMS-Kit. Dokument 01, die
@@ -114,11 +122,16 @@ Namen nachgezogen worden, die eine Beschriftungsänderung überdauern — **erle
   Aufbau. Was zur Anlage des Nutzers gehört, steht in seinen privaten Notizen
   außerhalb des Repos.
 
-**Achtung, `pv-dashboard.yaml` ist versioniert.** Die Datei steht auf `main`, dort mit
-den Demo-Werten (`name_pv_1: "Dach Süd"`, `tarif_bezug_ct: "30.0"` und so fort). Die
-eigenen Werte bleiben also nur so lange auf dem Rechner, wie die Datei nicht
-mitcommittet wird; ein `git add -A` schiebt sie mit. Wie das dauerhaft abgesichert
-werden soll, ist offen.
+**Erledigt: die eigenen Werte liegen nicht mehr in einer versionierten Datei.** Bis
+zum 23.09.2026 standen sie im Block „HIER BESCHREIBEN SIE IHRE ANLAGE“ von
+`pv-dashboard.yaml`, die versioniert ist; ein `git add -A` hätte sie mitgeschoben.
+Seitdem stehen sie in `.pv-dashboard_anlage.yaml`, die `.gitignore` ausschließt;
+`pv-dashboard.yaml` fügt sie mit `<<: !include` in ihre `substitutions` ein, der
+Vorrang vor den Standards bleibt derselbe (Dokument 01). Im Repo liegt nur die
+Vorlage `.pv-dashboard_anlage.yaml.example` mit den Demo-Werten. Fehlt die eigene
+Datei, bricht `esphome config` mit „Could not find file“ ab — wie bei einer
+fehlenden `secrets.yaml`. `pv-dashboard.yaml` selbst bleibt versioniert, damit
+Änderungen an Paketliste und `min_version` weiter beim Nutzer ankommen.
 
 **Die Commit-Historie bleibt, wie sie ist.** Ältere Commits tragen den Stand vor
 dieser Generalisierung. Am 20.09.2026 hat der Nutzer nach Vorlage der Einzelheiten
@@ -211,6 +224,37 @@ ein Patch der Weg ist.
 
 `external_components`, `pace_bms` und `modbus` liegen auskommentiert bereit — erst aktivieren,
 wenn das BMS angeschlossen ist, sonst laufen nur Timeouts ins Log.
+
+**Patch für `check_uart_settings` (vorbereitet 23.09.2026).** Die Komponente wird nicht
+direkt von GitHub eingebunden, sondern als gepatchte lokale Kopie; ein Fork auf GitHub
+ist bewusst nicht angelegt. Der Patch `patches/pace_bms-check_uart_settings.patch`
+streicht den Aufruf in `PaceBmsMaster::dump_config()` und ersetzt ihn durch einen
+Kommentar. Mehr braucht es nicht: `__init__.py` der Komponente prüft RX und TX schon
+über `uart.final_validate_device_schema()`, Baudrate, Parität, Daten- und Stoppbits
+setzt der Autor dort absichtlich nicht durch. Der gestrichene Aufruf verlangte 9600
+Baud und hätte bei den 115200 von Port D nur einen falschen Fehler ins Log geschrieben.
+Bewusst **nicht** in den Python-Teil übernommen: Stoppbits vergleicht
+`final_validate_device_schema` als Zahl (`1`), `usb_uart` führt sie aber als Text
+(`"1"`) — mit `stop_bits=1` lehnt `esphome config` die FT4232-Konfiguration ab
+(„requires 1 stop bits“, erprobt mit 2026.9.0, 23.09.2026).
+
+Einsetzen, aus dem Projektordner (`.pace-bms/` steht in `.gitignore`):
+
+```
+git clone https://github.com/nkinnan/esphome-pace-bms .pace-bms
+git -C .pace-bms checkout 49985c4
+git -C .pace-bms apply ../patches/pace_bms-check_uart_settings.patch
+```
+
+`49985c4` ist der jüngste Commit vom 11.12.2025, gegen den der Patch geschrieben ist;
+danach in `.pv-dashboard_core.yaml` den `external_components`-Block mit `type: local`
+einkommentieren. Geprüft am 23.09.2026 in einer Cloud-Sitzung: Der Patch lässt sich
+auf `49985c4` anwenden, und `esphome config` (2026.9.0) nimmt eine Testkonfiguration
+mit ESP32-P4, FT4232 und `pace_bms` auf `uart_bms_rs232` (115200) an. **Nicht geprüft:**
+das Kompilieren — die Umgebung durfte das ESP-IDF nicht laden. Die Änderung ist eine
+reine Streichung eines Aufrufs; ob die Komponente sonst unter 2026.9.0 baut, zeigt erst
+der Device Builder. Rührt sich das Repo des Autors, zuerst dort nachsehen, ob der
+Aufruf upstream verschwunden ist.
 
 **Offen: Anzahl der BMS und Zuordnung zu `bat` 0…2.** `storage_update` erwartet `bat` 0…2,
 also **drei** getrennte Datenquellen für Speicher 1…3 (Dokument 03). Die dokumentierte
@@ -320,7 +364,9 @@ Der LVGL-`list`-Bug ist mit 2026.9.0 erledigt.
 
 ---
 
-Stand: 20.09.2026 (Streckenzahlen aus einem Vorschaulauf von
+Stand: 23.09.2026 (eigene Werte nach `.pv-dashboard_anlage.yaml` verlegt, Seite
+PV & Prognose gebaut, Patch für `check_uart_settings` vorbereitet; davor 20.09.2026:
+Streckenzahlen aus einem Vorschaulauf von
 `tools/flow_animation.py`, Kontrastwerte nachgerechnet; LVGL-`list`-Bug mit 2026.9.0
 erledigt, OTA-Schritt 2 und der Audio-Hardware-Test noch offen; neu aufgenommen: die
 BMS-Zuordnung zu `bat` 0…2; am selben Tag auf die fertige Paketstruktur nachgezogen

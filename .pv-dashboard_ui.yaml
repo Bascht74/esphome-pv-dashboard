@@ -15,8 +15,8 @@
 # unten als Paket dran.
 #
 # Stand: Statusleiste, Meldungszeile, rechte Kennzahlenspalte, Menueleiste,
-# Anlagenschema mit Flussanimation, Speicher- und Meldungsseite. PV, Wallboxen,
-# Waermepumpe und Haus sind noch Platzhalter.
+# Anlagenschema mit Flussanimation, Seiten PV & Prognose, Speicher und
+# Meldungen. Wallboxen, Waermepumpe und Haus sind noch Platzhalter.
 ##############################################################################
 
 # Die Seiten, jede in einer eigenen Datei. Wer diesen Kern einbindet, bekommt
@@ -43,6 +43,8 @@ packages:
 # OTA, sie sind in Home Assistant sichtbar, und sie lassen sich dort zur
 # Fehlersuche von Hand setzen. Gespeichert wird nur, was ueber control() kommt
 # (make_call oder Home Assistant) -- publish_state() allein schreibt nichts.
+# Gezeichnet werden sie zweimal: redraw_curve in der Uebersicht,
+# pv_redraw_curve auf der Seite PV & Prognose. Beide lesen nur.
 # Startwert 16 x 0: Beispielkurven gibt es nur in pv-dashboard-shots.yaml.
 text:
   - platform: template
@@ -56,6 +58,7 @@ text:
     initial_value: "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
     on_value:
       - script.execute: redraw_curve
+      - script.execute: pv_redraw_curve
   - platform: template
     id: forecast_curve
     name: "Tagesreihe Prognose"
@@ -67,6 +70,7 @@ text:
     initial_value: "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
     on_value:
       - script.execute: redraw_curve
+      - script.execute: pv_redraw_curve
 
 # Waehrend eines Firmware-Updates ruht die Oberflaeche: Jeder Redraw kostet
 # PSRAM-Bandbreite, die der Upload gerade selbst braucht. Gesetzt wird das

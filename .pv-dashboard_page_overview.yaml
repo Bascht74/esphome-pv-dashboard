@@ -18,7 +18,8 @@
 #
 # Jede Beschriftung, die von der eigenen Anlage abhaengt, steht hier als
 # Substitution mit einem neutralen Demo-Wert. Wer dieselbe Substitution in
-# pv-dashboard.yaml setzt, sticht den Standard: ESPHome traegt die
+# .pv-dashboard_anlage.yaml setzt (von pv-dashboard.yaml in dessen
+# substitutions eingefuegt), sticht den Standard: ESPHome traegt die
 # Substitutions der Hauptdatei zuerst ein und ueberspringt beim Einlesen der
 # Pakete jeden Namen, den es schon kennt (geprueft mit 2026.9.0). Unter
 # Paketen gilt das nicht: Dort sticht der spaetere Eintrag aus dem
@@ -58,7 +59,7 @@ substitutions:
   # es im packages-Block von .pv-dashboard_ui.yaml spaeter steht; unter
   # Paketen sticht der spaetere Eintrag (geprueft mit 2026.9.0). Die drei
   # Zeilen hier sind dann tote Zeilen, gemeldet wird das nicht. Ein Wert aus
-  # pv-dashboard.yaml sticht ohnehin beide.
+  # .pv-dashboard_anlage.yaml sticht ohnehin beide.
   name_bat_1: "Speicher 1"     # 63 von 108
   name_bat_2: "Speicher 2"     # 63 von 108
   name_bat_3: "Speicher 3"     # 63 von 108
@@ -84,7 +85,8 @@ substitutions:
   # --- Tarife fuer die Geldrechnung, in Cent je kWh ---------------------
   # Noch ungenutzt: Die Kachel TAGESERTRAG zeigt Platzhalter. Der Standard
   # steht hier, damit Simulator und Screenshot-Lauf weiterbauen, sobald die
-  # Rechnung dazukommt. Die eigenen Tarife gehoeren in pv-dashboard.yaml.
+  # Rechnung dazukommt. Die eigenen Tarife gehoeren in
+  # .pv-dashboard_anlage.yaml.
   tarif_volleinspeisung_ct: "20.0"  # Volleinspeisung
   tarif_ueberschuss_ct: "10.0"      # Ueberschusseinspeisung
   tarif_bezug_ct: "30.0"            # Strombezug

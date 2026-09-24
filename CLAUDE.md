@@ -10,6 +10,10 @@ bis `docs/06`.
   ausschnittsweise, auch nicht zur Prüfung, ob ein Schlüssel existiert. Bei
   Suchen ausschließen (`grep --exclude=secrets.yaml`).
 - Werte nur über `!secret <name>`, und das steht **nur** in `pv-dashboard.yaml`.
+- `.pv-dashboard_anlage.yaml` hält die eigene Anlage (Beschriftungen, Tarife)
+  und bleibt lokal (`.gitignore`). Zum Messen von Breiten darf sie gelesen
+  werden; ihre Werte aber nie in Repo-Dateien, Commits oder Doku übernehmen.
+  Im Repo steht nur die Vorlage `.pv-dashboard_anlage.yaml.example`.
   Neuer Schlüssel: dem Nutzer den Namen nennen, den er selbst einträgt und in
   `secrets.yaml.example` dokumentiert.
 - Keine Zugangsdaten, WLAN-Namen, Schlüssel, IP- oder MAC-Adressen in Ausgaben.
@@ -90,7 +94,8 @@ normales Deutsch mit Umlauten.
 
 ## Kurz und wichtig
 
-- `pv-dashboard.yaml` ist die einzige Datei zum Anfassen. Daneben
+- Zum Anfassen sind `pv-dashboard.yaml` und die lokale
+  `.pv-dashboard_anlage.yaml`. Daneben
   `.pv-dashboard_core.yaml`, `_display`, `_audio`, `_utility` und die
   Oberfläche: Kern `.pv-dashboard_ui.yaml` plus sieben Seitendateien in der
   Reihenfolge seines `packages:`-Blocks. Nicht am Stück lesen — Dateitabelle in
@@ -98,8 +103,9 @@ normales Deutsch mit Umlauten.
 - Der Block zwischen `# >>> flow-animation` und `# <<< flow-animation` und die
   Widgets `flNN`/`flNNb` der Übersichtsseite stammen **nur** von
   `tools/flow_animation.py` — nie von Hand ändern.
-- PV & Prognose, Wallboxen, Wärmepumpe, Haus und die BMS-Anbindung sind bewusst
-  Platzhalter. Nur bauen, wenn der Nutzer es verlangt (`docs/06`).
+- Wallboxen, Wärmepumpe, Haus und die BMS-Anbindung sind bewusst Platzhalter.
+  Nur bauen, wenn der Nutzer es verlangt (`docs/06`). PV & Prognose ist seit
+  dem 23.09.2026 gebaut.
 - Die sechs `docs/`-Dateien liegen als Kopie im Claude-Projekt; nach einer
   Änderung sagen, welche neu hochzuladen ist (Anleitung im Ordner
   `~/esphome-claude-projekt`).

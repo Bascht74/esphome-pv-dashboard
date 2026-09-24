@@ -16,9 +16,10 @@ nicht. Der Aufbau und die festgelegten Kennzahlen-Definitionen stehen in
 **Die Beschriftungen im Repo sind Demo-Werte.** Jede anlagenabhängige
 Beschriftung — Dachflächen, Wechselrichter, Speicher, Verbraucher, Zähler — und
 die drei Tarife sind `substitutions`. Der Standard steht im jeweiligen Paket, die
-eigene Anlage wird in `pv-dashboard.yaml` beschrieben und sticht ihn. Im Repo
-stehen die Demo-Werte; eigene Angaben gehen nur mit, wenn diese Datei committet
-wird. Zugangsdaten stehen ohnehin in `secrets.yaml` außerhalb des Repos.
+eigene Anlage wird in `.pv-dashboard_anlage.yaml` beschrieben und sticht ihn.
+Diese Datei steht in `.gitignore` und bleibt auf dem Rechner; im Repo liegt nur
+die Vorlage `.pv-dashboard_anlage.yaml.example` mit den Demo-Werten.
+Zugangsdaten stehen ohnehin in `secrets.yaml` außerhalb des Repos.
 
 
 ## Was das Panel zeigt
@@ -29,7 +30,7 @@ Uhr und eine Meldungszeile:
 | Seite | Stand |
 | --- | --- |
 | Übersicht | Anlagenschema mit Flussanimation, rechte Kennzahlenspalte, Ringe und Tagesertrag |
-| PV & Prognose | Platzhalter |
+| PV & Prognose | Leistung und Tageswert je Wechselrichter und Fläche, getrennt nach Volleinspeisung und Hausnetz; Tagesverlauf Ist gegen Prognose mit vier Kennzahlen |
 | Speicher | Tabelle mit Zellwerten, drei SoC-Ringe |
 | Wallboxen | Platzhalter |
 | Wärmepumpe | Platzhalter |
@@ -40,8 +41,9 @@ Dazu zwei Overlays über der Oberfläche: Sprachassistent (`voice_panel`) und
 Firmware-Update mit Fortschrittsbalken (`ota_panel`).
 
 **Es sind noch keine echten Daten angebunden.** Die Oberfläche wird über feste
-Skript-Schnittstellen gefüttert (`alert_push`, `storage_update`, `record_hour`).
-Beispielwerte für Meldungen und Speicher gibt es nur im Screenshot-Lauf
+Skript-Schnittstellen gefüttert (`alert_push`, `storage_update`, `pv_update`,
+`record_hour`).
+Beispielwerte für Meldungen, Speicher und PV gibt es nur im Screenshot-Lauf
 (`shots_run` in `pv-dashboard-shots.yaml`). Die Demo-Leistungen der
 Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen
 host-Plattform — im Simulator wie im Screenshot-Lauf. **Auf dem Panel steht
@@ -62,12 +64,15 @@ Hardware (nächster Abschnitt).
    die die Konfiguration erwartet — kopieren und die eigenen Werte eintragen.
    Wer den ESPHome Device Builder benutzt, bekommt die Datei in aller Regel von
    ihm angelegt. `secrets.yaml` steht in `.gitignore` und gehört nicht ins Repo.
-4. **`pv-dashboard.yaml` anpassen** — die einzige Datei zum Anfassen. Oben der
-   Gerätename, darunter der Block „HIER BESCHREIBEN SIE IHRE ANLAGE“ mit jeder
-   anlagenabhängigen Beschriftung und den drei Tarifen. Hinter jeder Zeile
-   stehen die gemessene Breite des Demo-Werts und die verfügbare Breite; wer
-   sie überschreitet, bekommt einen gekürzten oder umgebrochenen Text. Jede
-   nicht angepasste Zeile bleibt auf dem Demo-Wert aus dem jeweiligen Paket.
+4. **Die eigene Anlage beschreiben.** `cp .pv-dashboard_anlage.yaml.example
+   .pv-dashboard_anlage.yaml`, dann dort jede anlagenabhängige Beschriftung
+   und die drei Tarife eintragen. Die Datei steht in `.gitignore`, ein
+   `git add -A` nimmt sie nicht mit. Hinter jeder Zeile stehen die gemessene
+   Breite des Demo-Werts und die verfügbare Breite; wer sie überschreitet,
+   bekommt einen gekürzten oder umgebrochenen Text. Jede gelöschte Zeile
+   fällt auf den Demo-Wert aus dem jeweiligen Paket zurück. In
+   `pv-dashboard.yaml` steht oben nur noch der Gerätename; sie bindet die
+   Datei ein und bricht ohne sie mit „Could not find file“ ab.
 5. **Prüfen** mit `esphome config pv-dashboard.yaml` — nie mit
    `--show-secrets`. Das ist die einzige lokale Kontrolle für die
    geräteeigenen Packages. (In dieser Arbeitsumgebung gehört der volle Pfad
@@ -146,13 +151,14 @@ API-Schlüssel im Klartext.
 
 | Datei | Inhalt |
 | --- | --- |
-| `pv-dashboard.yaml` | Die einzige Datei zum Anfassen: Gerätename, die Verweise auf `secrets.yaml` als `substitutions`, der Block „HIER BESCHREIBEN SIE IHRE ANLAGE“ mit allen Beschriftungen und den drei Tarifen, Liste der Packages; am Ende der auskommentierte Block, der dieselben Packages aus dem GitHub-Repo lädt |
+| `pv-dashboard.yaml` | Gerät: Gerätename, die Verweise auf `secrets.yaml` als `substitutions`, das Einbinden von `.pv-dashboard_anlage.yaml`, die Packages aus dem GitHub-Repo; am Ende auskommentiert der Rückfall auf die Dateien von der Platte |
+| `.pv-dashboard_anlage.yaml.example` | Vorlage für die eigene Anlage: alle Beschriftungen und die drei Tarife mit Demo-Werten und Breiten. Die eigene Fassung `.pv-dashboard_anlage.yaml` steht in `.gitignore` |
 | `secrets.yaml.example` | Dokumentiert, welche Schlüssel `secrets.yaml` enthalten muss — die echte Datei legt der Device Builder an |
 | `.pv-dashboard_core.yaml` | Nur Gerät: SoC, PSRAM, LDO, Funkstrecke zum C6, WLAN, API, Logger, OTA, Bluetooth, Zeit und Diagnose, serielle Schnittstellen |
 | `.pv-dashboard_utility.yaml` | Gemeinsam mit dem Simulator: Schriften (IBM Plex Sans/Mono) und die Bilder aus `images/`, dazu die Design-Tokens für Farben, Maße und Abstände — einzige Quelle dafür |
 | `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die sieben Seiten ein |
 | `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, erzeugter Flussanimations-Block |
-| `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose — Platzhalter |
+| `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose: Wechselrichter und Flächen je Kreis, Tagesverlauf mit Kennzahlen, `pv_update` / `pv_redraw_curve` |
 | `.pv-dashboard_page_battery.yaml` | Seite 3 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
 | `.pv-dashboard_page_wallbox.yaml` | Seite 4 Wallboxen — Platzhalter |
 | `.pv-dashboard_page_heatpump.yaml` | Seite 5 Wärmepumpe — Platzhalter |
@@ -167,6 +173,7 @@ API-Schlüssel im Klartext.
 | `pv-dashboard-demo-b.yaml` | Prototyp: zwei Kennlinien für die Kugelgeschwindigkeit im Vergleich |
 | `tools/flow_animation.py` | Generator der Flussanimation; erzeugt den markierten Block in der Übersichtsseite |
 | `images/` | `solar_panel.png` (Modulfeld) und `solar_module.png` (Einzelmodul) |
+| `patches/` | `pace_bms-check_uart_settings.patch` für die externe PACE-BMS-Komponente, Anleitung in `docs/06` |
 | `docs/` | Projektwissen, siehe unten |
 | `CLAUDE.md` | Regeln für Assistenz-Sitzungen in diesem Repo |
 | `LICENSE` | MIT-Lizenz |

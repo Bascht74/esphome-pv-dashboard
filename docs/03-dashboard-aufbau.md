@@ -27,16 +27,20 @@ Simulator läuft auf `host`. Bindet er das Package ein, bricht schon
 (geprüft mit 2026.9.0, 20.09.2026). Audio bleibt deshalb ein eigenes Package,
 das nur das Gerät einbindet.
 
-`pv-dashboard.yaml` selbst enthält nur noch den `esphome:`-Block, die
-Einstellungen und Zugangsdaten als `substitutions` und die Package-Liste — es
-ist die einzige Datei, die beim Einrichten angefasst wird.
-Unter den Einstellungen steht der Block „HIER BESCHREIBEN SIE IHRE ANLAGE“ mit
-jeder anlagenabhängigen Beschriftung und den drei Tarifen; welche das sind und
-wie breit sie sein dürfen, steht in Dokument 01. **`!secret` steht
-ausschließlich dort**; die Packages arbeiten mit `${…}` und sind damit frei von
-Geheimnissen. Das ist die Voraussetzung dafür, sie aus dem GitHub-Repo
-nachzuladen, während `pv-dashboard.yaml` und `secrets.yaml` auf dem Rechner
-bleiben. Welche Schlüssel `secrets.yaml` braucht, zeigt `secrets.yaml.example`;
+`pv-dashboard.yaml` selbst enthält nur noch den `esphome:`-Block, Gerätename und
+Zugangsdaten als `substitutions` und die Package-Liste. Die eigene Anlage — jede
+anlagenabhängige Beschriftung und die drei Tarife — steht seit dem 23.09.2026 in
+`.pv-dashboard_anlage.yaml`, die `pv-dashboard.yaml` mit
+`<<: !include .pv-dashboard_anlage.yaml` in ihre `substitutions` einfügt. Diese
+Datei steht in `.gitignore` und bleibt auf dem Rechner, im Repo liegt die Vorlage
+`.pv-dashboard_anlage.yaml.example`; welche Werte das sind und wie breit sie sein
+dürfen, steht in Dokument 01. Beim Einrichten angefasst werden damit diese zwei
+Dateien. Der führende Punkt hält die Datei aus der Geräteliste des Device
+Builders heraus (`filter_yaml_files` überspringt versteckte Dateien, nachgelesen
+in 2026.9.0). **`!secret` steht ausschließlich in `pv-dashboard.yaml`**; die
+Packages arbeiten mit `${…}` und sind damit frei von Geheimnissen. Das ist die
+Voraussetzung dafür, sie aus dem GitHub-Repo nachzuladen, während
+`secrets.yaml` und die eigene Anlage auf dem Rechner bleiben. Welche Schlüssel `secrets.yaml` braucht, zeigt `secrets.yaml.example`;
 die echte Datei legt in der Regel der Device Builder an. Im Repo steht von den Werten nichts, die Packages sehen nur `${…}`.
 Bei der **Ausgabe** gibt es dagegen einen Unterschied: Mit lokal eingebundenen
 Packages zeigen `esphome config` und der Config-Kommentar in `main.cpp` nur
@@ -122,23 +126,24 @@ Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnun
 
 | Datei | Zeilen | Blöcke, Zeilennummern |
 | --- | --- | --- |
-| `.pv-dashboard_ui.yaml` | 951 | `packages:` 31, `text:` 47, `globals:` 75, `script:` 93, `lvgl:` 216 |
-| `.pv-dashboard_page_overview.yaml` | 1185 | `substitutions:` 34, `script:` 92, `lvgl:` 167, `interval:` 986 |
-| `.pv-dashboard_page_pv.yaml` | 15 | Platzhalter |
-| `.pv-dashboard_page_battery.yaml` | 330 | `substitutions:` 34, `script:` 41, `lvgl:` 111 |
+| `.pv-dashboard_ui.yaml` | 955 | `packages:` 31, `text:` 49, `globals:` 79, `script:` 97, `lvgl:` 220 |
+| `.pv-dashboard_page_overview.yaml` | 1187 | `substitutions:` 35, `script:` 94, `lvgl:` 169, `interval:` 988 |
+| `.pv-dashboard_page_pv.yaml` | 411 | `script:` 31, `lvgl:` 184 |
+| `.pv-dashboard_page_battery.yaml` | 331 | `substitutions:` 35, `script:` 42, `lvgl:` 112 |
 | `.pv-dashboard_page_wallbox.yaml` | 15 | Platzhalter |
 | `.pv-dashboard_page_heatpump.yaml` | 15 | Platzhalter |
 | `.pv-dashboard_page_house.yaml` | 15 | Platzhalter |
 | `.pv-dashboard_page_alerts.yaml` | 431 | `script:` 20, `lvgl:` 268 |
 
 Im Kern steht nur, was alle Seiten teilen: die Tagesreihen `day_curve` und
-`forecast_curve`, die Globals `ota_running` 76 und `curve_day` 84, die Skripte
-`record_hour` 106 und `update_clock` 161 und unter `lvgl:` die Basis,
-`style_definitions` 261, `gradients` 338 und `top_layer` 628. Einen
+`forecast_curve`, die Globals `ota_running` 80 und `curve_day` 88, die Skripte
+`record_hour` 110 und `update_clock` 165 und unter `lvgl:` die Basis,
+`style_definitions` 265, `gradients` 342 und `top_layer` 632. Einen
 `pages:`-Schlüssel hat der Kern **nicht** — die Seiten bringen ihn mit.
 
-**Jedes Skript liegt bei der Seite, die es benutzt:** `redraw_curve` 96 in der
-Übersicht, `storage_update` 48 im Speicher, `alert_push` 56, `alert_ack` 170 und
+**Jedes Skript liegt bei der Seite, die es benutzt:** `redraw_curve` 98 in der
+Übersicht, `pv_update` 40 und `pv_redraw_curve` 99 auf der Seite PV & Prognose,
+`storage_update` 49 im Speicher, `alert_push` 56, `alert_ack` 170 und
 `alert_refresh` 202 in den Meldungen. Im Kern bleiben nur `record_hour` und
 `update_clock`: Sie fassen kein Seiten-Widget an, sondern die Tagesreihen
 beziehungsweise die Leisten im `top_layer`, und sie werden aus Packages
@@ -156,7 +161,7 @@ Gemeldet wird das nicht, die drei Zeilen in der Übersicht sind dann tote Zeilen
 Wer eine der beiden Seiten anfasst, zieht die andere mit nach. Ein Wert aus
 `pv-dashboard.yaml` sticht ohnehin beide.
 
-Zeilennummern im **Arbeitsstand vom 20.09.2026**. Sie altern mit jeder
+Zeilennummern im **Arbeitsstand vom 23.09.2026**. Sie altern mit jeder
 Änderung, sie sind nur der Einstieg; gefunden wird mit `grep`:
 
 ```
@@ -176,9 +181,10 @@ Die Meldungszeile steht auch ohne Meldung da — `lbl_alert` zeigt dann „Keine
 Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — je 8 px Luft zur Meldungszeile und zur Menüleiste. `schema_area` nutzt die Fläche dagegen voll (x 4, y 76, 904 x 668).
 
 - `page_overview` – links das Anlagenschema (`schema_area`, 904 × 668, 28 Leitungen), rechts die Kennzahlenspalte: Tagesverlauf (16 `bar`-Widgets `bar_h00`…`bar_h15` plus Prognoselinie `line_forecast`; ESPHomes LVGL hat kein chart-Widget), vier Kacheln der Energiebilanz, Tagesertrag, Ringe Autarkie und Eigenverbrauch.
-- `page_battery` – drei SoC-Ringe und Tabelle `tbl_storage`: Ladezustand, Strom, Zelle min/max, Zelldifferenz, Temperatur min/max, Zyklen. Einzige fertig gebaute Detailseite — **Vorlage für jede neue**.
+- `page_battery` – drei SoC-Ringe und Tabelle `tbl_storage`: Ladezustand, Strom, Zelle min/max, Zelldifferenz, Temperatur min/max, Zyklen. Erste fertig gebaute Detailseite — **Vorlage für jede neue**.
+- `page_pv` – seit 23.09.2026. Oben zwei Kacheln wie die zwei Energiekreise: links Volleinspeisung (x 4, 322 breit), rechts Hausnetz (x 334, 942 breit); je Wechselrichter eine Gruppe aus Wechselrichterkasten und seinen zwei Flächen, Leistung in W und Tageswert in kWh. Unten dieselbe Teilung: links vier Kennzahlen (Ist heute, Prognose heute, Restprognose, Ist zu Prognose der abgeschlossenen Stunden), rechts der Tagesverlauf mit 16 Balken und Prognoselinie im großen Maßstab. Geometrie und Höhenrechnung im Kopf der Datei.
 - `page_alerts` – Liste `alert_list`, Kopfkachel mit Zähler, Knöpfe „Alle quittieren“ und „Liste leeren“.
-- Platzhalter: `page_pv`, `page_wallbox`, `page_heatpump`, `page_house`.
+- Platzhalter: `page_wallbox`, `page_heatpump`, `page_house`.
 
 **Neue Detailseite.** Vorlage ist `page_battery`. Dazu gehört:
 
@@ -222,6 +228,10 @@ Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in D
 
 **`storage_update(bat, soc, current, cell_min, cell_max, temp_min, temp_max, cycles)`** – `bat` 0…2 = Speicher 1…3, `current` positiv = Laden, `NAN` bzw. `cycles < 0` ergibt „--“. Füllt Spalte `bat + 1` der Tabelle, den Ring und den Mittelwert (nur bei allen drei Werten), die Batteriekästen der Übersicht noch nicht.
 
+**`pv_update(inv, pv, power, energy)`** – Seite PV & Prognose. `inv` 0…3 = Wechselrichter 1…4, `pv` 0…7 = Fläche/Modul 1…8, jeweils `-1` = keiner; ein Aufruf setzt einen Wechselrichter, eine Fläche oder beides. `power` in W, ganzzahlig mit Tausenderpunkt; `energy` in kWh heute, eine Nachkommastelle. `NAN` ergibt das Strichmuster (`--.---` bzw. `-.---`, `W · --,- kWh`). Füllt nur die PV-Seite, die Kästen im Schema der Übersicht noch nicht.
+
+**`pv_redraw_curve`** – Seite PV & Prognose, hängt wie `redraw_curve` an `on_value` beider Reihen und schreibt keine. Zeichnet Balken und Linie auf gemeinsamem Maßstab (Legende nennt die Skala) und rechnet die Kennzahlen: „abgeschlossen" sind die Plätze vor der laufenden Stunde (Stunde − 6), Restprognose ist die Prognose ab der laufenden Stunde bis 22 Uhr, „Ist zu Prognose" braucht mindestens 0,1 kWh Prognose in den abgeschlossenen Stunden. Ohne gültige Uhrzeit bleiben diese beiden auf Strichen.
+
 **`record_hour`** – läuft zur vollen Stunde um HH:00:05 und schreibt die abgelaufene Stunde in Platz `(HH-1) - 6` (06–07 Uhr → Platz 0, 21–22 Uhr → Platz 15). Angebunden wird an der auskommentierten Zeile `// kwh = id(<Erzeugungssensor>).state;`; solange sie steht, wird 0 eingetragen. Die Tagesreihen `day_curve` und `forecast_curve` sind `text`-Entitäten mit 16 kommagetrennten Werten im NVS: überstehen Neustart und OTA, in HA sichtbar und setzbar. Gespeichert wird nur, was über `control()` kommt – daher `make_call()`, nicht `publish_state()`. Tageswechsel über das global `curve_day` (Jahr × 1000 + Tag): Gehört die Reihe zu einem anderen Tag, startet der Lauf mit 16 × 0.
 
 **`redraw_curve`** – hängt an `on_value` beider Reihen, zeichnet Balken (Ist) und Linie (Prognose) auf gemeinsamem Maßstab und setzt die Unterzeile mit beiden Tagessummen. Schreibt keine Reihe: keine Schleife.
@@ -259,7 +269,7 @@ Projektordner, mit vollem Pfad in die Arbeitsumgebung (ESPHome 2026.9.0):
 
 `pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle sieben Seiten plus beide Overlays als BMP (`01_overview.bmp` … `09_ota_panel.bmp`) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
 
-Beispieldaten für Meldungen, Speicher, Tagesreihen und Ringe stehen in `shots_run`, also **nur** im Screenshot-Lauf. Die Demo-Leistungen der Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen host-Plattform, im Simulator ebenso. Im Gerät steht beides nicht.
+Beispieldaten für Meldungen, Speicher, PV-Werte, Tagesreihen und Ringe stehen in `shots_run`, also **nur** im Screenshot-Lauf. Die Demo-Leistungen der Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen host-Plattform, im Simulator ebenso. Im Gerät steht beides nicht.
 
 **Laufzeit.** `-sim` und `-shots` sind **getrennte Bauziele** unter `.esphome/build/`. Der erste Lauf eines Ziels ist ein Vollbuild über mehrere Minuten und holt die Schriften über `gfonts://` aus dem Netz; spätere Läufe nutzen den Cache. Ein kurzes Kommando-Zeitlimit bricht den ersten Lauf ab — kein Fehler der Konfiguration.
 
@@ -295,7 +305,9 @@ im YAML:
 
 ---
 
-Stand: 20.09.2026 (Streckenzahlen aus einem Vorschaulauf; Zeilennummern gegen
+Stand: 23.09.2026 (eigene Anlage in `.pv-dashboard_anlage.yaml`, Seite PV &
+Prognose samt `pv_update` und `pv_redraw_curve`, Tabelle und Zeilennummern neu
+abgezählt; davor 20.09.2026: Streckenzahlen aus einem Vorschaulauf; Zeilennummern gegen
 den **Arbeitsstand** dieses Tages, Umwandlungsbefehle und Bildgrößen
 nachgemessen; Tabelle nach den Standardblöcken in Übersichts- und Speicherseite
 neu abgezählt; am selben Tag auf die fertige Paketstruktur samt Lizenz und

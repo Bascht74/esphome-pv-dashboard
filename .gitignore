@@ -12,3 +12,8 @@ __pycache__/
 .claude/settings.local.json
 # Ausgabe von pv-dashboard-shots.yaml
 shots/
+# Eigene Anlage (Beschriftungen, Tarife) -- bleibt auf dem Rechner. Vorlage
+# im Repo: .pv-dashboard_anlage.yaml.example
+.pv-dashboard_anlage.yaml
+# Gepatchte Kopie der PACE-BMS-Komponente (docs/06), eigenes git-Repo
+.pace-bms/
