@@ -112,10 +112,17 @@ name_meter_house: "Hauszähler"  #  65 von 122, Einspeisung und Bezug des Hauses
 name_selfuse_note: "ohne Voll-WR"   # 79 von 92
 
 # --- Tarife fuer die Geldrechnung, in Cent je kWh ----------------------
-# Noch ohne Wirkung: Die Geldrechnung ist nicht gebaut (docs/06), keine
-# Paketdatei liest diese drei Werte, und die Kachel TAGESERTRAG zeigt
-# weiter Striche. Sie werden hier nur schon vorgehalten.
-# Demo-Werte, bewusst rund. Die eigenen Tarife gehoeren hierher.
+# Genutzt von money_update (Kachel TAGESERTRAG und die Sensoren "Ertrag
+# heute" usw., docs/06). Demo-Werte, bewusst rund. Die eigenen Tarife
+# gehoeren hierher.
 tarif_volleinspeisung_ct: "20.0"  # Volleinspeisung
 tarif_ueberschuss_ct: "10.0"      # Ueberschusseinspeisung
 tarif_bezug_ct: "30.0"            # Strombezug
+
+# --- Netzanschluss (Seite Netz) ---------------------------------------
+# pv_kwp: installierte Modulleistung in kWp, auf die sich die
+# Einspeisegrenze bezieht. feed_limit_pct: Grenze in %; 60 fuer eine
+# Inbetriebnahme 2026 ohne Smart Meter und Steuerbox (§ 9 Abs. 2 EEG,
+# docs/06). Demo-Werte.
+pv_kwp: "30.0"
+feed_limit_pct: "60"

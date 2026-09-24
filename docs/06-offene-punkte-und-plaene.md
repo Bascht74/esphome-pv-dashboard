@@ -21,6 +21,21 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 - [x] **Wallboxen nach evcc, Wärmepumpe nach dem Nilan-Bedienteil umgebaut**, auf
       Wunsch des Nutzers; seine Wärmepumpe ist eine Nilan Compact P.
 
+**Erledigt am 25.09.2026** (nach dem Projekt-Review, auf Zuruf des Nutzers)
+
+- [x] **Seite Netz und Zähler** (Shelly Pro 3EM, Einspeisegrenze, Zählerstände,
+      Netzvorgaben) und **Seite Statistik** (Woche, Monat, Jahr). Siehe „Netz,
+      Zähler und Netzvorgaben“ und Dokument 03.
+- [x] **Systemstatus und Alter der Daten**: Symbole oben rechts, Systemfenster,
+      Meldung bei veralteten Werten. Siehe „Systemstatus“.
+- [x] **Wechselrichter-Status mit Fehlertext** (`pv_status`).
+- [x] **Geldrechnung Tagesertrag** (`money_update`), Werte als globals und
+      Sensoren für Home Assistant. Siehe „Geldwerte“.
+- [x] **Haus der Wärmepumpenseite aus Flächen** statt aus `images/house.png`;
+      Bild und Schrift `f_icon_l` entfernt, Kommentare zu `!secret` berichtigt.
+- [x] **Nilan: klassisches Bedienteil** (zwei Textzeilen) bestätigt, Registersatz
+      entsprechend umgestellt; die Seite bleibt grafisch.
+
 **Entschieden, nicht zu tun**
 
 - [x] **Commit-Historie bereinigen** — am 20.09.2026 verworfen. Nicht erneut
@@ -40,7 +55,8 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 
 **Vertagt (Entscheidung liegt vor, Zeitpunkt offen)**
 
-- [ ] **Echte Daten anbinden** — vier Anbindungspunkte plus `WATT[37]`. Am 20.09.2026
+- [ ] **Echte Daten anbinden** — über die Skript-Schnittstellen der Seiten (Dokument 03)
+      plus `WATT[37]`. Am 20.09.2026
       vertagt: die neuen Geräte laufen beim Nutzer noch nicht.
 - [ ] **Kamera** — blockiert durch esphome/esphome#16944. Am 20.09.2026 vertagt, der
       PR-Stand ist seit 11.09.2026 nicht nachgeprüft.
@@ -84,8 +100,12 @@ oder ändern kann:
   „Ladevorgänge“. Angenommen ist, dass evcc die Werte liefert (über Home
   Assistant oder MQTT); welche Felder die Anbindung wirklich bekommt, steht
   erst dann fest. Kosten und Durchschnittspreis setzen Tarife in evcc voraus.
-- **Wärmepumpe:** Nilan Compact P mit Bedienteil CTS700 Touch. Die Farben sind
-  aus dem Bild der Nilan-Anleitung abgelesen, keine offiziellen Werte. Die
+- **Wärmepumpe:** Nilan Compact P mit dem **klassischen Bedienteil CTS700**
+  (zwei Textzeilen, Angabe des Nutzers vom 25.09.2026). Die Seite bleibt auf
+  seinen Wunsch grafisch, im Aufbau der Startseite des Touch-Bedienteils; die
+  Farben sind aus dem Bild der Nilan-Anleitung abgelesen, keine offiziellen
+  Werte. Das Haus ist seit dem 25.09.2026 aus LVGL-Flächen gebaut (ein um 45°
+  gedrehtes Quadrat, gestaucht, darunter die Wand), nicht mehr aus einem Bild. Die
   Compact P heizt Luft und Warmwasser und hat keinen Heizwasserkreis:
   **Vorlauf, Rücklauf und COP der Festlegung vom 30.07.2026 entfallen**, dafür
   Raumtemperatur, Feuchte, CO2, Lüftungsstufe, Zu- und Fortluft, Bypass,
@@ -93,29 +113,32 @@ oder ändern kann:
   sind elektrisch und kommen nicht aus der Nilan-Steuerung selbst, sondern
   vermutlich von einem Zähler (offen). Auf Wunsch des Nutzers steht die Seite
   auf dem Dashboard-Grund; Haus und Warmwasserkachel sind dafür abgedunkelt
-  (weiße Schrift 6,5 bzw. 8,2 : 1, gerechnet). Eine Jahreszeit-Anzeige hat im
-  neuen Registersatz (unten) kein eigenes Register, nur die Umschalttemperatur.
-- **Nilan-Modbus (Recherche 24.09.2026, nicht am Gerät geprüft).** Es gibt drei
-  Registersätze, welcher gilt, hängt am Bedienteil und ist offen:
-  - **CTS700 Touch, „CTS700 Modbus User Guide“ (2018)** – vermutlich der des
-    Nutzers (Annahme): Modbus TCP, Port 502, Slave 1 = Compact P, Temperaturen
-    ×10. Raum 20286 (T3 Abluft), außen 20282 (T1), Zuluft 20284 (T2), Fortluft
-    20288 (T4), Warmwasser oben/unten 20520/20522 (T11/T12), Feuchte 21776,
-    CO2 21778, Betriebszustand 21770 (0 Auto, 1 Kühlen, 2 Heizen), Zu-/Abluft
-    % 21771/21772, Bypass 21773 (0 zu, 1 offen), Kompressor 21775 (nur „0 Aus“
-    lesbar), Zusatzheizung 21788, Enteisung 21789/21790, Legionellen 21785,
-    Lüftungsstufe 20148 (101–104), Sollwerte Raum 20260, Warmwasser 20460,
-    Filtertage 20103/20107, Alarm 22490. Laut Anleitung beim Lesen mit einer
-    SPS +1 auf die Adresse; die Umsetzungen lesen ohne. Quelle: Anleitung auf
-    manualslib (Nr. 1620619) und github.com/pjuzeliunas/nilan.
-  - **Älteres CTS700 ohne Touch (Rev. 2.01)**, Adressen 47xx/51xx/55xx
-    (github.com/matej/homebridge-nilan). Welches Bedienteil diesen Satz nutzt,
-    widersprechen sich die Quellen.
-  - **CTS602** (github.com/veista/nilan), dort Compact P als Gerätetyp 44 –
-    gilt laut dessen README **nicht** für CTS700.
-  - Eine Leistungs- oder Energieangabe hat keiner der drei Sätze.
-  Offen: Der Wärmepumpen-Kasten im Schema der Übersicht trägt noch die
-  Zweitzeile mit COP; die liefert die Compact P nicht (unverändert gelassen).
+  (weiße Schrift 6,5 bzw. 8,2 : 1, gerechnet).
+- **Nilan-Modbus (Recherche 24./25.09.2026, nicht am Gerät geprüft).** Mit dem
+  klassischen Bedienteil gilt der **ältere CTS700-Satz (Rev. 2.01)**, Adressen
+  1xxx/2xxx/4xxx/5xxx. In `src/cts700Data.ts` von github.com/matej/homebridge-nilan
+  (am 25.09.2026 nachgelesen) stehen: Betriebsart der Anlage 1047 (0 Idle,
+  1 Auto, 2 Verlängert, 3 Manuell, 4 LON, 5 Service), Pause 4727, gewünschte
+  Lüftungsstufe 4747, Raum-Sollwert 4746 (°C × 10), Außen 5152, Feuchte 4716,
+  Zuluftventilator 4699 (Abluft 4700 laut `docs/cts700-diagnostics.md` dort),
+  Filter-Intervall Zu-/Abluft 1326/1327 und verstrichene Tage 1328/1329,
+  Warmwasser oben/unten 5162/5163, Warmwasser-Sollwert 5548, Lüftungsmodus
+  2402, Regelmodus 5432, Softwarestand 5065. **Nicht in dieser Quelle belegt**
+  und deshalb offen, bis jemand am Gerät liest: Zuluft-, Abluft- und
+  Fortlufttemperatur (in der Recherche vom 24.09.2026 als 5153 bis 5155
+  notiert), Enteisung (5450), Legionellenschutz (4748) und die
+  Sommer/Winter-Umschalttemperatur (2406); Bypass, Kompressor und
+  Zusatzheizung sind gar nicht gefunden. **CO2, eine Jahreszeit und ein
+  Alarmregister gibt es in diesem Satz nicht**: Die CO2-Gruppe bleibt ohne Wert
+  ausgeblendet, Jahreszeit und Warnsymbol bleiben leer, solange keine andere
+  Quelle sie liefert (Home Assistant kann die Jahreszeit aus Außentemperatur
+  und Umschaltwert ableiten).
+  Die zwei anderen Sätze gelten damit **nicht**: der neuere Satz des
+  Touch-Bedienteils („CTS700 Modbus User Guide“, 2018, Adressen 2xxxx) und der
+  CTS602-Satz (github.com/veista/nilan, laut dessen README nicht für CTS700).
+  Eine Leistungs- oder Energieangabe hat keiner der drei Sätze.
+  Der Wärmepumpen-Kasten im Schema zeigt deshalb statt COP die
+  Warmwassertemperatur („kW · WW 51°C“, gesetzt von `heatpump_update`).
 - **Haus:** Umgebaut nach dem Energiefluss von evcc (Wunsch des Nutzers,
   24.09.2026). Annahmen: Alle Leistungen gelten für den Hausnetz-Kreis, die
   Volleinspeisung bleibt außen vor. „Verbrauch“ ist wie in evcc alles außer
@@ -214,17 +237,88 @@ Seit dem 20.09.2026 lädt `pv-dashboard.yaml` die Packages aus dem GitHub-Repo
 (`ref: main`, `refresh: 1d`); die lokale Variante steht auskommentiert als
 Rückfall daneben (Dokument 03).
 
-Offen bleibt die Entscheidung, ob das die Mühe wert ist: Danach baut das
-Gerät aus dem geschobenen Stand, jede Änderung braucht erst einen `push`, und
-`esphome config` zeigt die Werte aus `secrets.yaml` nicht mehr als
-`!secret '<name>'`. Beides ist in Dokument 03 belegt. Solange der Block aus ist,
-ändert sich für den Nutzer nichts — die `!include`-Zeilen bleiben in Kraft.
+Folgen, beide in Dokument 03 belegt: Das Gerät baut aus dem geschobenen Stand,
+jede Änderung braucht erst einen `push`; und `esphome config` zeigt die Werte aus
+`secrets.yaml` aufgelöst statt als `!secret '<name>'` — die Ausgabe deshalb nie in
+eine Datei umleiten und nie weitergeben.
+
+## Netz, Zähler und Netzvorgaben
+
+Seite `page_grid`, gebaut am 25.09.2026 auf Zuruf des Nutzers („Fehlende Infos
+können wir vom Shelly Pro 3EM nehmen“). Aufbau in Dokument 03.
+
+**Shelly Pro 3EM (Hausanschluss).** Die Phasenwerte sind nach `EM.GetStatus`
+benannt (Shelly-API-Dokumentation Gen2, Komponente EM): `a_voltage`,
+`a_current`, `a_act_power`, `a_aprt_power`, `a_pf` (b, c ebenso), `n_current`,
+`total_act_power`; die Zählerstände nach `EMData.GetStatus`
+(`total_act`, `total_act_ret`). Vorzeichen: positiv = Bezug. Die Frequenz
+liefert je nach Firmware `a_freq` usw.; nicht am Gerät geprüft. Angebunden
+wird am einfachsten über die Home-Assistant-Integration des Shelly; Modbus TCP
+kann der Shelly auch, dort ist die Adresszählung (ab 0 oder 1) in den Quellen
+nicht eindeutig.
+
+**Rechtslage (Recherche 25.09.2026, keine Rechtsberatung; was gilt, sagt der
+Netzbetreiber).** Quellen: EEG 2023 §§ 9, 51, 51a und EnWG § 14a auf
+gesetze-im-internet.de, Stand der Änderungen durch das „Solarspitzengesetz“
+vom Februar 2025.
+
+- **60 % ist für Inbetriebnahme 2026 richtig.** § 9 Abs. 2 EEG: Anlagen unter
+  100 kW mit Einspeisevergütung, die ohne intelligentes Messsystem und
+  Steuerbox in Betrieb gehen, dürfen höchstens 60 % der installierten Leistung
+  einspeisen, **bis** Messsystem und Steuerung eingebaut und getestet sind.
+  Danach fällt die Grenze. `feed_limit_pct` steht deshalb auf 60.
+- **Negative Preise:** Neue Anlagen bekommen für Viertelstunden mit negativem
+  Börsenpreis keine Vergütung (§ 51); die ausgefallenen Zeiten werden nach
+  § 51a am Ende des Förderzeitraums angehängt. Kleine Anlagen ohne
+  intelligentes Messsystem sind davon ausgenommen **bis zum Ende des Jahres,
+  in dem es eingebaut wird** (Übergang, deshalb `neg_paid`).
+- **§ 14a EnWG:** Steuerbar sind Wallboxen, Wärmepumpen und netzladende
+  Speicher über 4,2 kW; im Signal darf der Netzbetreiber auf mindestens 4,2 kW
+  je Gerät drosseln (bei einem Energiemanagement für mehrere Geräte nach
+  Formel mehr, für zwei Wallboxen rund 7,6 kW). Die **Wallboxen fallen
+  darunter**, die Nilan Compact P mit ihrer kleinen Leistungsaufnahme
+  vermutlich nicht (Einschätzung, nicht geprüft).
+
+**Offen, nur beim Nutzer klärbar:**
+
+- Bezieht sich die 60-%-Grenze auf beide Kreise zusammen oder nur auf den
+  Kreis, der am Hausanschluss einspeist? Die Seite rechnet mit einer Summe
+  `pv_kwp` (Demo 30,0) gegen die Einspeisung am Hausanschluss; ob der
+  Volleinspeise-Kreis über denselben Anschlusspunkt zählt, weiß der
+  Netzbetreiber bzw. steht im Anschlussbescheid.
+- Was der Wechselrichter als „abgeregelt heute“ liefert, hängt am Fabrikat.
+
+## Systemstatus
+
+Seit dem 25.09.2026. Oben rechts in der Statusleiste drei Symbole: WLAN,
+Verbindung zu Home Assistant (API), Daten aktuell. Ein Tipp öffnet das
+Systemfenster (`sys_panel`): WLAN, Home Assistant, Laufzeit, ESPHome-Version,
+Grenze für veraltete Werte und das Alter der letzten Werte je Seite (PV,
+Speicher, Wallboxen, Wärmepumpe, Haus, Netz). Jedes Update-Skript stempelt
+`data_seen[n]`; `sys_refresh` läuft alle 10 s. Älter als `data_stale_s`
+(300 s, `.pv-dashboard_utility.yaml`) färbt das Symbol gelb und legt **einmal**
+je Quelle eine Warnung in die Meldungsliste. Solange eine Quelle noch nie
+geliefert hat, gilt sie nicht als veraltet (sonst stünden vor der Anbindung
+sechs Warnungen da).
+
+## Geldwerte
+
+Seit dem 25.09.2026 rechnet `money_update(full_feed, surplus, self_use,
+grid_in)` in der Übersicht aus den drei Tarifen (Dokument 01): Förderung =
+Volleinspeisung × Tarif + Überschuss × Tarif, Gespart = Eigenverbrauch ×
+Bezugstarif, Bezug = Netzbezug × Bezugstarif, Ertrag = Förderung + Gespart −
+Bezug. Auf Wunsch des Nutzers stehen die Werte als **globals**
+(`money_subsidy`, `money_saved`, `money_import`, `money_total`) für andere
+Lambdas bereit und als **Sensoren** („Ertrag heute“, „Förderung heute“,
+„Ersparnis heute“, „Bezugskosten heute“, Einheit €) in Home Assistant. Die
+Energien kommen von außen; die Seite Statistik nimmt den Ertrag eines
+Zeitraums als fertigen Wert (`stats_update`).
 
 ## Echte Daten anbinden
 
-Übersicht, Speicher und Meldungen sind gebaut, die Datenquellen fehlen. Für diese drei
-Flächen gibt es genau vier Anbindungspunkte. Sie decken die **Detailseiten nicht** ab —
-jede neue bringt ihre eigene Schnittstelle mit (siehe oben).
+Alle Seiten sind gebaut, die Datenquellen fehlen. Für Übersicht, Speicher und
+Meldungen gibt es die vier Anbindungspunkte unten; jede Detailseite bringt ihre eigene
+Schnittstelle mit (Dokument 03, „Skripte und ihre Schnittstellen“).
 
 **Tagesreihe.** In `record_hour` steht eine einzige auskommentierte Quellzeile für die
 Erzeugung der abgelaufenen Stunde in kWh: `// kwh = id(<Erzeugungssensor>).state;`. Solange
@@ -243,6 +337,13 @@ nie den Strom samt Vorzeichen.
 
 **Meldungen.** `alert_push(severity, device, text)` — Aufruf später aus BMS-, Modbus- und
 HA-Fehlerzuständen. Die Liste liegt nur im RAM und ist nach einem Neustart leer.
+`pv_status` und `sys_refresh` rufen es schon selbst (Störung eines Wechselrichters,
+veraltete Werte).
+
+**Gerätewerte vom Nutzer.** Die Beschriftungen und Leistungen der eigenen Anlage
+(`name_*`, `pv_kwp`, Tarife) trägt der Nutzer in `.pv-dashboard_anlage.yaml` ein und
+misst sie dort gegen die Breiten aus Dokument 01; die Demo-Werte im Repo sind rund
+und erfunden.
 
 **Flussanimation.** Die Leistungen je Teilstrecke stehen in `WATT[]` — „hier binden später die
 Sensoren an". Das Feld hat **37 Einträge**, einen je Teilstrecke; die Reihenfolge erzeugt
@@ -424,9 +525,16 @@ Vom 9.0-Umstieg sind noch **zwei** Punkte offen, beide in Dokument 05 beschriebe
 
 Der LVGL-`list`-Bug ist mit 2026.9.0 erledigt.
 
+**Nicht gebaut, bewusst (25.09.2026):** Wettervorhersage und Prognose für morgen
+(keine Quelle festgelegt), Meldungen über einen Neustart hinweg speichern (NVS-Platz,
+Quittung nach HA offen) und Steuern vom Panel aus (Wallbox-Modus, Nilan-Stufe) —
+die Knöpfe der Wallbox-Seite zeigen nur an. Jeweils auf Zuruf.
+
 ---
 
-Stand: 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc
+Stand: 25.09.2026 (Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
+Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
+recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc
 und dem Nilan-Bedienteil umgebaut, Nilan-Register recherchiert); davor
 23.09.2026 (eigene Werte nach `.pv-dashboard_anlage.yaml` verlegt, Seite
 PV & Prognose gebaut, Patch für `check_uart_settings` vorbereitet; davor 20.09.2026:

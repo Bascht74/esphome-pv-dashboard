@@ -88,19 +88,10 @@ script:
       plan: string
     then:
       - lambda: |-
+          id(data_seen)[2] = millis();  // Datenalter, sys_refresh
           if (wb < 0 || wb > 1)
             return;
-          // Dezimalkomma wie ueberall auf der Oberflaeche
-          auto fmt = [](float v, const char *f, const char *none) -> std::string {
-            if (std::isnan(v))
-              return std::string(none);
-            char b[24];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
           struct Card {
             lv_obj_t *seg[3], *seg_lbl[3], *bolt, *power, *ph[3], *energy, *solar, *dur,
                      *vehicle, *status, *bar_limit, *bar_soc, *marker, *soc, *soc_sub, *plan,
@@ -184,16 +175,7 @@ script:
       price: float
     then:
       - lambda: |-
-          auto fmt = [](float v, const char *f, const char *none) -> std::string {
-            if (std::isnan(v))
-              return std::string(none);
-            char b[24];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
           lv_label_set_text(id(wbm_energy), fmt(energy, "%.1f", "---,-").c_str());
           lv_label_set_text(id(wbm_solar), fmt(solar, "%.0f", "--").c_str());
           lv_label_set_text(id(wbm_cost), fmt(cost, "%.2f", "--,--").c_str());

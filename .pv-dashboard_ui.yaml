@@ -27,7 +27,7 @@
 # deklariert sind (config_helpers.merge_config: alt + neu, dazu die
 # Umkehrung in packages._walk_package_dict). Die Reiter unten in der
 # Menueleiste zaehlen auf dieselbe Ordnung: Uebersicht, PV, Speicher,
-# Wallbox, Waermepumpe, Haus, Meldungen.
+# Wallbox, Waermepumpe, Haus, Netz, Statistik, Meldungen.
 packages:
   page_overview: !include .pv-dashboard_page_overview.yaml
   page_pv:       !include .pv-dashboard_page_pv.yaml
@@ -35,6 +35,8 @@ packages:
   page_wallbox:  !include .pv-dashboard_page_wallbox.yaml
   page_heatpump: !include .pv-dashboard_page_heatpump.yaml
   page_house:    !include .pv-dashboard_page_house.yaml
+  page_grid:     !include .pv-dashboard_page_grid.yaml
+  page_stats:    !include .pv-dashboard_page_stats.yaml
   page_alerts:   !include .pv-dashboard_page_alerts.yaml
 
 # Tagesreihen als Text-Entitaeten: 16 Werte, mit Komma getrennt, Platz 0 ist
@@ -89,12 +91,149 @@ globals:
     type: int
     restore_value: true
     initial_value: '0'
+  # Zeitpunkt (millis) der letzten Werte je Quelle, 0 = noch nie:
+  #   0 PV (pv_update)          1 Speicher (storage_update)
+  #   2 Wallboxen (wallbox_update)  3 Waermepumpe (heatpump_update)
+  #   4 Haus (house_flow)       5 Netz (grid_update)
+  # sys_refresh liest daraus das Datenalter fuer Statusleiste und
+  # Systemfenster und meldet ausbleibende Daten.
+  - id: data_seen
+    type: std::array<uint32_t, 6>
+    restore_value: false
+    initial_value: '{0, 0, 0, 0, 0, 0}'
+  # Quellen, deren Ausbleiben schon gemeldet ist (Bit je Quelle)
+  - id: data_stale_reported
+    type: int
+    restore_value: false
+    initial_value: '0'
+  # Zahlenformate aller Seiten, einmal hier statt in jedem Skript:
+  #   fmt_num(v, "%.1f", "--,-")  Dezimalkomma; NAN ergibt den dritten Wert
+  #   fmt_watt(v, "--.---")       ganze Watt mit Tausenderpunkt ("3.412")
+  #   fmt_power(v)                wie evcc: unter 1000 W "450 W", sonst
+  #                               "3,2 kW"; NAN ergibt "--"
+  # Aufruf in einem Lambda: id(fmt_num)(soc, "%.0f", "--").
+  - id: fmt_num
+    type: std::function<std::string(float, const char *, const char *)>
+    restore_value: false
+    initial_value: |-
+      [](float v, const char *f, const char *none) -> std::string {
+        if (std::isnan(v))
+          return std::string(none);
+        char b[32];
+        snprintf(b, sizeof(b), f, v);
+        for (char *p = b; *p; p++)
+          if (*p == '.')
+            *p = ',';
+        return std::string(b);
+      }
+  - id: fmt_watt
+    type: std::function<std::string(float, const char *)>
+    restore_value: false
+    initial_value: |-
+      [](float v, const char *none) -> std::string {
+        if (std::isnan(v))
+          return std::string(none);
+        long w = lroundf(v);
+        unsigned long a = w < 0 ? (unsigned long) -w : (unsigned long) w;
+        char b[24];
+        if (a >= 1000)
+          snprintf(b, sizeof(b), "%s%lu.%03lu", w < 0 ? "-" : "", a / 1000, a % 1000);
+        else
+          snprintf(b, sizeof(b), "%ld", w);
+        return std::string(b);
+      }
+  - id: fmt_power
+    type: std::function<std::string(float)>
+    restore_value: false
+    initial_value: |-
+      [](float v) -> std::string {
+        if (std::isnan(v))
+          return std::string("--");
+        char b[24];
+        if (fabsf(v) < 999.5f)
+          snprintf(b, sizeof(b), "%.0f W", v);
+        else
+          snprintf(b, sizeof(b), "%.1f kW", v / 1000.0f);
+        for (char *p = b; *p; p++)
+          if (*p == '.')
+            *p = ',';
+        return std::string(b);
+      }
 
 # Uhr oben links. Die Zeitquelle heisst auf beiden Seiten "dash_time" (Geraet:
 # Home Assistant, Simulator: Systemuhr) und ruft dieses Skript beim
 # Zeitabgleich und danach zu jeder vollen Minute auf. Die Formatierung steht
 # deshalb genau einmal -- hier.
 script:
+  # Systemzustand: WLAN, Home Assistant und Datenalter je Quelle, fuer die
+  # drei Symbole in der Statusleiste und das Systemfenster (Tipp auf die
+  # Symbole). Laeuft alle 10 s (interval unten). Bleibt eine Quelle, die
+  # schon einmal geliefert hat, laenger als data_stale_s aus, kommt einmal
+  # eine Warnung in die Meldungen; liefert sie wieder, darf sie erneut.
+  # Im Simulator gibt es weder WLAN noch API -- dort steht "Simulator".
+  - id: sys_refresh
+    then:
+      - lambda: |-
+          static const char *const SRC[6] = {"PV", "Speicher", "Wallboxen", "Wärmepumpe", "Haus", "Netz"};
+          lv_obj_t *const age[6] = {id(sys_age_0), id(sys_age_1), id(sys_age_2), id(sys_age_3), id(sys_age_4), id(sys_age_5)};
+          const uint32_t now = millis();
+          const uint32_t limit = (uint32_t) ${data_stale_s} * 1000u;
+          int seen = 0, stale = 0;
+          for (int k = 0; k < 6; k++) {
+            const uint32_t t = id(data_seen)[k];
+            if (t == 0) {
+              lv_label_set_text(age[k], "noch keine Werte");
+              lv_obj_set_style_text_color(age[k], lv_color_hex($col_ink3), 0);
+              continue;
+            }
+            seen++;
+            const uint32_t a = (now - t) / 1000u;
+            if (a < 120)
+              lv_label_set_text_fmt(age[k], "vor %u s", (unsigned) a);
+            else if (a < 7200)
+              lv_label_set_text_fmt(age[k], "vor %u min", (unsigned) (a / 60));
+            else
+              lv_label_set_text_fmt(age[k], "vor %u h", (unsigned) (a / 3600));
+            const bool old = now - t > limit;
+            lv_obj_set_style_text_color(age[k], old ? lv_color_hex($col_warn) : lv_color_hex($col_ink), 0);
+            if (old) {
+              stale++;
+              if (!(id(data_stale_reported) & (1 << k))) {
+                id(data_stale_reported) |= (1 << k);
+                id(alert_push).execute(1, std::string("System"),
+                                       std::string("Keine Daten von ") + SRC[k] + " seit " + std::to_string(a / 60) + " min");
+              }
+            } else {
+              id(data_stale_reported) &= ~(1 << k);
+            }
+          }
+          // Symbol Datenalter: grau = noch nichts, weiss = alles frisch,
+          // gelb = mindestens eine Quelle ueberfaellig
+          lv_label_set_text(id(lbl_sys_data), stale > 0 ? "\U000F05CE" : "\U000F05E1");
+          lv_obj_set_style_text_color(id(lbl_sys_data), seen == 0 ? lv_color_hex($col_ink3) : (stale > 0 ? lv_color_hex($col_warn) : lv_color_hex($col_ink)), 0);
+
+          // WLAN und Home Assistant
+          std::string wifi_txt = "Simulator", api_txt = "Simulator";
+          bool wifi_ok = true, api_ok = true;
+          #ifdef USE_WIFI
+          wifi_ok = wifi::global_wifi_component->is_connected();
+          wifi_txt = wifi_ok ? ("verbunden · " + std::to_string(wifi::global_wifi_component->wifi_rssi()) + " dBm") : std::string("getrennt");
+          #endif
+          #ifdef USE_API
+          api_ok = api::global_api_server->is_connected();
+          api_txt = api_ok ? "verbunden" : "getrennt";
+          #endif
+          lv_label_set_text(id(sys_wifi), wifi_txt.c_str());
+          lv_label_set_text(id(sys_api), api_txt.c_str());
+          lv_obj_set_style_text_color(id(sys_wifi), wifi_ok ? lv_color_hex($col_ink) : lv_color_hex($col_crit), 0);
+          lv_obj_set_style_text_color(id(sys_api), api_ok ? lv_color_hex($col_ink) : lv_color_hex($col_crit), 0);
+          lv_label_set_text(id(lbl_sys_wifi), wifi_ok ? "\U000F05A9" : "\U000F05AA");
+          lv_obj_set_style_text_color(id(lbl_sys_wifi), wifi_ok ? lv_color_hex($col_ink) : lv_color_hex($col_crit), 0);
+          lv_obj_set_style_text_color(id(lbl_sys_api), api_ok ? lv_color_hex($col_ink) : lv_color_hex($col_crit), 0);
+          const uint32_t up = now / 1000u;
+          lv_label_set_text_fmt(id(sys_uptime), "%u d %02u:%02u", (unsigned) (up / 86400), (unsigned) (up / 3600 % 24), (unsigned) (up / 60 % 60));
+          lv_label_set_text(id(sys_version), ESPHOME_VERSION);
+
   # Zur vollen Stunde um HH:00:05 aufgerufen (on_time in
   # .pv-dashboard_core.yaml bzw. pv-dashboard-sim.yaml): schreibt die
   # ABGELAUFENE Stunde HH-1 in Platz (HH-1) - 6 -- 06..07 Uhr um 07:00:05 in
@@ -254,6 +393,8 @@ lvgl:
               - btn_nav_wallbox
               - btn_nav_heatpump
               - btn_nav_house
+              - btn_nav_grid
+              - btn_nav_stats
               - btn_nav_alerts
             control:
               checked: false
@@ -660,6 +801,28 @@ lvgl:
                 text: "Autarkie -- % · Restprognose --,- kWh"
                 text_color: $col_ink
                 text_font: f_bar
+            # Systemzustand: WLAN, Home Assistant, Datenalter. Ein Tipp oeffnet
+            # das Systemfenster. Liegt zwischen den Kennzahlen (bis x 628)
+            # und dem Datum (Text ab etwa x 870), drei Symbole je 32 breit.
+            - obj:
+                id: sys_icons
+                x: 700
+                y: 7
+                width: 110
+                height: 30
+                bg_opa: TRANSP
+                border_width: 0
+                pad_all: 0
+                scrollbar_mode: 'off'
+                scrollable: false
+                scroll_dir: NONE
+                on_click:
+                  - script.execute: sys_refresh
+                  - lvgl.widget.show: sys_panel
+                widgets:
+                  - label: { id: lbl_sys_wifi, x: 0, y: 3, width: 32, text_align: CENTER, text: "\U000F05A9", text_font: f_icon, text_color: $col_ink3 }
+                  - label: { id: lbl_sys_api, x: 38, y: 3, width: 32, text_align: CENTER, text: "\U000F07D0", text_font: f_icon, text_color: $col_ink3 }
+                  - label: { id: lbl_sys_data, x: 76, y: 3, width: 32, text_align: CENTER, text: "\U000F05E1", text_font: f_icon, text_color: $col_ink3 }
             # Rechts Datum, dann Uhr. Die Uhr steht aussen und hat eine feste
             # Breite, damit das Datum daneben nicht wandert, wenn aus 09:05
             # ein 10:05 wird.
@@ -704,7 +867,7 @@ lvgl:
             - lvgl.page.show: page_alerts
             - lvgl.matrix.button.update:
                 id: [btn_nav_overview, btn_nav_pv, btn_nav_battery, btn_nav_wallbox,
-                     btn_nav_heatpump, btn_nav_house]
+                     btn_nav_heatpump, btn_nav_house, btn_nav_grid, btn_nav_stats]
                 control:
                   checked: false
             - lvgl.matrix.button.update:
@@ -812,11 +975,69 @@ lvgl:
                         control: { checkable: true }
                         on_press:
                           - lvgl.page.show: page_house
+                      - text: "Netz"
+                        id: btn_nav_grid
+                        control: { checkable: true }
+                        on_press:
+                          - lvgl.page.show: page_grid
+                      - text: "Statistik"
+                        id: btn_nav_stats
+                        control: { checkable: true }
+                        on_press:
+                          - lvgl.page.show: page_stats
                       - text: "Meldungen"
                         id: btn_nav_alerts
                         control: { checkable: true }
                         on_press:
                           - lvgl.page.show: page_alerts
+
+      # Systemfenster: oeffnet ueber die Symbole in der Statusleiste,
+      # schliesst auf Tipp. 600 x 520 mittig ueber der Seitenflaeche
+      # (x 340, y 150), innen 578 x 498: Titel 0..17, fuenf Zeilen im
+      # Raster 36 ab 28, Titel Datenalter 222..239, sechs Zeilen ab 250,
+      # Hinweis 476..493.
+      - obj:
+          id: sys_panel
+          styles: st_tile
+          x: 340
+          y: 150
+          width: 600
+          height: 520
+          border_color: $col_batt
+          border_width: 2
+          hidden: true
+          scrollbar_mode: 'off'
+          scrollable: false
+          scroll_dir: NONE
+          on_click:
+            - lvgl.widget.hide: sys_panel
+          widgets:
+            - label: { x: 0, y: 0, width: 576, height: 17, long_mode: DOT, styles: st_label, text: "SYSTEM" }
+            - label: { x: 0, y: 36, width: 260, height: 20, long_mode: DOT, text: "WLAN", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_wifi, x: 270, y: 35, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
+            - label: { x: 0, y: 72, width: 260, height: 20, long_mode: DOT, text: "Home Assistant", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_api, x: 270, y: 71, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
+            - label: { x: 0, y: 108, width: 260, height: 20, long_mode: DOT, text: "Laufzeit", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_uptime, x: 270, y: 107, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
+            - label: { x: 0, y: 144, width: 260, height: 20, long_mode: DOT, text: "ESPHome", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_version, x: 270, y: 143, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
+            - label: { x: 0, y: 180, width: 260, height: 20, long_mode: DOT, text: "Datenwarnung nach", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_limit, x: 270, y: 179, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "${data_stale_s} s", text_font: f_text, text_color: $col_ink }
+            - obj: { x: 0, y: 210, width: 576, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+            - label: { x: 0, y: 222, width: 576, height: 17, long_mode: DOT, styles: st_label, text: "LETZTE WERTE" }
+            - label: { x: 0, y: 258, width: 260, height: 20, long_mode: DOT, text: "PV", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_0, x: 270, y: 257, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 294, width: 260, height: 20, long_mode: DOT, text: "Speicher", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_1, x: 270, y: 293, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 330, width: 260, height: 20, long_mode: DOT, text: "Wallboxen", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_2, x: 270, y: 329, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 366, width: 260, height: 20, long_mode: DOT, text: "Wärmepumpe", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_3, x: 270, y: 365, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 402, width: 260, height: 20, long_mode: DOT, text: "Haus", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_4, x: 270, y: 401, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 438, width: 260, height: 20, long_mode: DOT, text: "Netz", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_5, x: 270, y: 437, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 476, width: 576, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "Tippen schließt das Fenster" }
 
       # Sprachassistent: liegt als Overlay ueber der Seite und erscheint nur,
       # solange die Pipeline laeuft. So braucht er keinen festen Platz im
@@ -953,3 +1174,9 @@ lvgl:
                 text: "Stromversorgung bitte nicht trennen"
                 text_font: f_text_s
                 text_color: $col_ink3
+
+# Systemzustand alle 10 s auffrischen (sys_refresh oben)
+interval:
+  - interval: 10s
+    then:
+      - script.execute: sys_refresh

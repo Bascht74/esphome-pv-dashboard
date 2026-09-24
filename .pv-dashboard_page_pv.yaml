@@ -28,7 +28,71 @@
 # .pv-dashboard_anlage.yaml.example bleiben damit die engere Grenze.
 ##############################################################################
 
+globals:
+  # Wechselrichter mit Stoerung (Bit je Wechselrichter), gesetzt von
+  # pv_status; pv_update laesst deren Zweitzeile dann stehen
+  - id: pv_fault
+    type: int
+    restore_value: false
+    initial_value: '0'
+  # Tageswert und Temperatur je Wechselrichter, damit pv_update und
+  # pv_status dieselbe Zweitzeile schreiben
+  - id: pv_inv_energy
+    type: std::array<float, 4>
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN, NAN}'
+  - id: pv_inv_temp
+    type: std::array<float, 4>
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN, NAN}'
+
 script:
+  # ---------------------------------------------------------------------
+  # Zustand eines Wechselrichters (Review 25.09.2026):
+  #   inv   0..3 = Wechselrichter 1..4 (name_inv_1..4)
+  #   ok    false = Stoerung: Rahmen und Punkt rot, die Zweitzeile zeigt
+  #         text; beim Uebergang in die Stoerung kommt eine Meldung
+  #   text  Fehlertext bzw. Fehlercode des Wechselrichters
+  #   temp  Temperatur in °C, NAN = keine; steht sonst in der Zweitzeile
+  #         hinter dem Tageswert
+  # ---------------------------------------------------------------------
+  - id: pv_status
+    parameters:
+      inv: int
+      ok: bool
+      text: string
+      temp: float
+    then:
+      - lambda: |-
+          if (inv < 0 || inv > 3)
+            return;
+          static const char *const NAME[4] = {"${name_inv_1}", "${name_inv_2}", "${name_inv_3}", "${name_inv_4}"};
+          lv_obj_t *const box[4] = {id(pv_inv_box_1), id(pv_inv_box_2), id(pv_inv_box_3), id(pv_inv_box_4)};
+          lv_obj_t *const dot[4] = {id(pv_inv_dot_1), id(pv_inv_dot_2), id(pv_inv_dot_3), id(pv_inv_dot_4)};
+          lv_obj_t *const sb[4] = {id(pv_inv_sub_1), id(pv_inv_sub_2), id(pv_inv_sub_3), id(pv_inv_sub_4)};
+          const uint32_t norm[4] = {$col_full, $col_solar, $col_solar, $col_solar};
+          const bool was = id(pv_fault) & (1 << inv);
+          id(pv_inv_temp)[inv] = temp;
+          lv_obj_clear_flag(dot[inv], LV_OBJ_FLAG_HIDDEN);
+          if (!ok) {
+            id(pv_fault) |= (1 << inv);
+            lv_obj_set_style_border_color(box[inv], lv_color_hex($col_crit), 0);
+            lv_obj_set_style_bg_color(dot[inv], lv_color_hex($col_crit), 0);
+            lv_label_set_text(sb[inv], text.empty() ? "Störung" : text.c_str());
+            lv_obj_set_style_text_color(sb[inv], lv_color_hex($col_crit), 0);
+            if (!was)
+              id(alert_push).execute(2, std::string(NAME[inv]), text.empty() ? std::string("Störung") : text);
+          } else {
+            id(pv_fault) &= ~(1 << inv);
+            lv_obj_set_style_border_color(box[inv], lv_color_hex(norm[inv]), 0);
+            lv_obj_set_style_bg_color(dot[inv], lv_color_hex($col_feed), 0);
+            lv_obj_set_style_text_color(sb[inv], lv_color_hex($col_ink2), 0);
+            std::string t = "W · " + id(fmt_num)(id(pv_inv_energy)[inv], "%.1f", "--,-") + " kWh";
+            if (!std::isnan(temp))
+              t += " · " + id(fmt_num)(temp, "%.0f", "--") + " °C";
+            lv_label_set_text(sb[inv], t.c_str());
+          }
+
   # ---------------------------------------------------------------------
   # Werte der oberen Reihe. Kuenftige Sensoren rufen nur dieses Skript auf.
   #   inv 0..3 = Wechselrichter 1..4 (name_inv_1..4), -1 = keiner
@@ -45,35 +109,23 @@ script:
       energy: float
     then:
       - lambda: |-
+          id(data_seen)[0] = millis();  // Datenalter, sys_refresh
           // Leistung ganzzahlig mit Tausenderpunkt ("3.412"), Energie mit
           // einer Nachkommastelle und Dezimalkomma -- wie im Schema.
-          auto watt = [](float v, const char *none) -> std::string {
-            if (std::isnan(v))
-              return std::string(none);
-            long w = lroundf(v);
-            unsigned long a = w < 0 ? (unsigned long) -w : (unsigned long) w;
-            char b[24];
-            if (a >= 1000)
-              snprintf(b, sizeof(b), "%s%lu.%03lu", w < 0 ? "-" : "", a / 1000, a % 1000);
-            else
-              snprintf(b, sizeof(b), "%ld", w);
-            return std::string(b);
-          };
-          auto sub = [](float e) -> std::string {
-            if (std::isnan(e))
-              return std::string("W · --,- kWh");
-            char b[24];
-            snprintf(b, sizeof(b), "%.1f", e);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string("W · ") + b + " kWh";
-          };
+          auto &watt = id(fmt_watt);  // Formate: .pv-dashboard_ui.yaml
+          auto sub = [](float e) { return "W · " + id(fmt_num)(e, "%.1f", "--,-") + " kWh"; };
           if (inv >= 0 && inv <= 3) {
             lv_obj_t *const val[4] = {id(pv_inv_val_1), id(pv_inv_val_2), id(pv_inv_val_3), id(pv_inv_val_4)};
             lv_obj_t *const sb[4] = {id(pv_inv_sub_1), id(pv_inv_sub_2), id(pv_inv_sub_3), id(pv_inv_sub_4)};
             lv_label_set_text(val[inv], watt(power, "--.---").c_str());
-            lv_label_set_text(sb[inv], sub(energy).c_str());
+            // Bei Stoerung traegt die Zweitzeile den Fehlertext (pv_status)
+            id(pv_inv_energy)[inv] = energy;
+            if (!(id(pv_fault) & (1 << inv))) {
+              std::string t = sub(energy);
+              if (!std::isnan(id(pv_inv_temp)[inv]))
+                t += " · " + id(fmt_num)(id(pv_inv_temp)[inv], "%.0f", "--") + " °C";
+              lv_label_set_text(sb[inv], t.c_str());
+            }
           }
           if (pv >= 0 && pv <= 7) {
             lv_obj_t *const val[8] = {id(pv_str_val_1), id(pv_str_val_2), id(pv_str_val_3), id(pv_str_val_4),
@@ -114,15 +166,8 @@ script:
               pos = comma + 1;
             }
           };
-          // Dezimalkomma wie ueberall auf der Oberflaeche
-          auto fmt = [](float v, const char *f) -> std::string {
-            char b[24];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          // Dezimalkomma wie ueberall (fmt_num, .pv-dashboard_ui.yaml)
+          auto fmt = [](float v, const char *f) { return id(fmt_num)(v, f, "--"); };
           float ist[16] = {0}, pro[16] = {0};
           parse_curve(id(day_curve).state, ist);
           parse_curve(id(forecast_curve).state, pro);
@@ -218,9 +263,10 @@ lvgl:
                   height: 17
                   long_mode: DOT
                   text: "KREIS VOLLEINSPEISUNG"
-              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 26, width: 300, height: 90,
+              - obj: { id: pv_inv_box_1, styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 26, width: 300, height: 90,
                        border_color: $col_full, bg_color: $col_box_full, pad_all: 0, widgets: [
                   { label: { align: TOP_MID, y: 6, width: 284, height: 20, long_mode: DOT, text_align: CENTER, text: "${name_inv_1}", text_color: $col_ink, text_font: f_text_s } },
+                  { obj: { id: pv_inv_dot_1, x: 282, y: 8, width: 10, height: 10, radius: 5, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
                   { label: { id: pv_inv_val_1, align: TOP_MID, y: 29, width: 284, height: 30, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_l, text_color: $col_full } },
                   { label: { id: pv_inv_sub_1, align: TOP_MID, y: 62, width: 284, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
               - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 126, width: 145, height: 108,
@@ -252,9 +298,10 @@ lvgl:
                   height: 17
                   long_mode: DOT
                   text: "KREIS HAUSNETZ"
-              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 26, width: 300, height: 90,
+              - obj: { id: pv_inv_box_2, styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 26, width: 300, height: 90,
                        border_color: $col_solar, bg_color: $col_box_solar, pad_all: 0, widgets: [
                   { label: { align: TOP_MID, y: 6, width: 284, height: 20, long_mode: DOT, text_align: CENTER, text: "${name_inv_2}", text_color: $col_ink, text_font: f_text_s } },
+                  { obj: { id: pv_inv_dot_2, x: 282, y: 8, width: 10, height: 10, radius: 5, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
                   { label: { id: pv_inv_val_2, align: TOP_MID, y: 29, width: 284, height: 30, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_l, text_color: $col_solar } },
                   { label: { id: pv_inv_sub_2, align: TOP_MID, y: 62, width: 284, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
               - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 126, width: 145, height: 108,
@@ -269,9 +316,10 @@ lvgl:
                   { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_4}", text_color: $col_ink, text_font: f_unit } },
                   { label: { id: pv_str_val_4, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_solar } },
                   { label: { id: pv_str_sub_4, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
-              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 310, y: 26, width: 300, height: 90,
+              - obj: { id: pv_inv_box_3, styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 310, y: 26, width: 300, height: 90,
                        border_color: $col_solar, bg_color: $col_box_solar, pad_all: 0, widgets: [
                   { label: { align: TOP_MID, y: 6, width: 284, height: 20, long_mode: DOT, text_align: CENTER, text: "${name_inv_3}", text_color: $col_ink, text_font: f_text_s } },
+                  { obj: { id: pv_inv_dot_3, x: 282, y: 8, width: 10, height: 10, radius: 5, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
                   { label: { id: pv_inv_val_3, align: TOP_MID, y: 29, width: 284, height: 30, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_l, text_color: $col_solar } },
                   { label: { id: pv_inv_sub_3, align: TOP_MID, y: 62, width: 284, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
               - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 310, y: 126, width: 145, height: 108,
@@ -286,9 +334,10 @@ lvgl:
                   { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_6}", text_color: $col_ink, text_font: f_unit } },
                   { label: { id: pv_str_val_6, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_solar } },
                   { label: { id: pv_str_sub_6, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
-              - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 620, y: 26, width: 300, height: 90,
+              - obj: { id: pv_inv_box_4, styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 620, y: 26, width: 300, height: 90,
                        border_color: $col_solar, bg_color: $col_box_solar, pad_all: 0, widgets: [
                   { label: { align: TOP_MID, y: 6, width: 284, height: 20, long_mode: DOT, text_align: CENTER, text: "${name_inv_4}", text_color: $col_ink, text_font: f_text_s } },
+                  { obj: { id: pv_inv_dot_4, x: 282, y: 8, width: 10, height: 10, radius: 5, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
                   { label: { id: pv_inv_val_4, align: TOP_MID, y: 29, width: 284, height: 30, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_l, text_color: $col_solar } },
                   { label: { id: pv_inv_sub_4, align: TOP_MID, y: 62, width: 284, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
               - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 620, y: 126, width: 145, height: 108,

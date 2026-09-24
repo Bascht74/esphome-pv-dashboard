@@ -50,7 +50,6 @@ gelten auch am Gerät. Abgelesen am 20.09.2026:
 | `f_bar` | 22 | 29 | direkt am Widget -- Statusleiste (`lbl_status_left`, `lbl_date`, `lbl_clock`) |
 | `f_val_l` | 23 | 30 | direkt am Widget |
 | `f_icon` | 24 | 24 | direkt am Widget |
-| `f_icon_l` | 30 | 30 | angelegt, im Repo **nirgends** verwendet |
 | `f_val_xl` | 30 | 39 | direkt am Widget |
 
 Die Modulbilder sind 24 px hoch. Bei einer neuen Schrift den Wert ebenso
@@ -63,7 +62,7 @@ mehr:** neu ablesen, nicht hochrechnen.
 **Und die Änderung bleibt nie lokal.** Die Schriften stehen genau einmal in
 `.pv-dashboard_utility.yaml`, einem gemeinsamen Package von Gerät und Simulator.
 Über Theme und `style_definitions` (Spalte „Weg zum Widget") hängen sie an
-**allen sieben Seiten**, nicht nur an der, wegen der geändert wurde. Ein
+**allen neun Seiten**, nicht nur an der, wegen der geändert wurde. Ein
 geändertes `size:` verschiebt jede Zeile, die diese Schrift benutzt. Danach
 Pflicht, in dieser Reihenfolge: neu kompilieren, `line_height` neu ablesen,
 **jede** betroffene Kastenhöhe mit der Formel oben neu rechnen und alles neu
@@ -74,7 +73,7 @@ Theme `f_text`, über die Stile `st_label` (`f_label`) und `st_unit`/`st_sub`
 (`f_unit`), direkt am Widget `f_val_xl`, `f_val_l`, `f_val_m`, `f_val_s`,
 `f_icon` und einmal `f_text_s`. `f_bar` und `f_alert` gehören zu den Leisten im
 `top_layer` und liegen damit über **jeder** Seite. Vor dem Ändern klären, welche
-davon gemeint ist -- `f_text` und `f_unit` treffen alle sieben Seiten.
+davon gemeint ist -- `f_text` und `f_unit` treffen alle neun Seiten.
 
 Die Rechnung hat schon zweimal einen Fehler abgefangen, den sonst erst der
 Screenshot gezeigt hätte. Beispiel (Hausnetz-Kasten im Schema): `24 + 20 + 39 + 17 = 100`, plus `3 x pad_row 4 =

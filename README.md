@@ -24,27 +24,31 @@ Zugangsdaten stehen ohnehin in `secrets.yaml` außerhalb des Repos.
 
 ## Was das Panel zeigt
 
-Sieben Seiten über eine Menüleiste am unteren Rand, dazu eine Statusleiste mit
-Uhr und eine Meldungszeile:
+Neun Seiten über eine Menüleiste am unteren Rand, dazu eine Statusleiste mit
+Uhr und Systemsymbolen (WLAN, Home Assistant, Daten aktuell) und eine Meldungszeile:
 
 | Seite | Stand |
 | --- | --- |
-| Übersicht | Anlagenschema mit Flussanimation, rechte Kennzahlenspalte, Ringe und Tagesertrag |
-| PV & Prognose | Leistung und Tageswert je Wechselrichter und Fläche, getrennt nach Volleinspeisung und Hausnetz; Tagesverlauf Ist gegen Prognose mit vier Kennzahlen |
+| Übersicht | Anlagenschema mit Flussanimation, rechte Kennzahlenspalte, Ringe und Tagesertrag in Euro (auch als Sensoren für Home Assistant) |
+| PV & Prognose | Leistung und Tageswert je Wechselrichter und Fläche, getrennt nach Volleinspeisung und Hausnetz, Status mit Fehlertext und Temperatur; Tagesverlauf Ist gegen Prognose mit vier Kennzahlen |
 | Speicher | Tabelle mit Zellwerten, drei SoC-Ringe |
 | Wallboxen | im Stil von evcc: je Wallbox Modus, Leistung mit Phasen, Geladen, Sonnenanteil, Ladedauer, Fahrzeug mit Ladestand, Ladeplan und Limit; Monatswerte |
-| Wärmepumpe | im Aufbau des Nilan-Bedienteils (Compact P): außen, Raum, Feuchte, CO2, Warmwasser, Lüftungsstufe mit Ventilatoren; Betriebsart, Bypass, Kompressor, Zu-/Fortluft, Filter, Strom |
+| Wärmepumpe | grafisch im Aufbau des Nilan-Touch-Bedienteils (Compact P, Werte aus dem klassischen CTS700): außen, Raum, Feuchte, CO2, Warmwasser, Lüftungsstufe mit Ventilatoren; Betriebsart, Bypass, Kompressor, Zu-/Fortluft, Filter, Strom |
 | Haus | im Stil von evcc: Energiefluss-Balken, Tabelle In / Out / Verbraucher, Verbrauch jetzt mit Herkunft, Verbrauch der letzten 24 Stunden |
+| Netz | Hausanschluss mit Einspeisegrenze, Phasen L1 bis L3 (Shelly Pro 3EM), Zählerstände, Netzvorgaben (Börsenpreis, negative Preise, § 14a) |
+| Statistik | Woche, Monat, Jahr: Erzeugung gegen Verbrauch, Autarkie, Eigenverbrauch, Ertrag |
 | Meldungen | Liste aller Meldungen, neueste oben, Quittieren per Antippen |
 
-Dazu zwei Overlays über der Oberfläche: Sprachassistent (`voice_panel`) und
-Firmware-Update mit Fortschrittsbalken (`ota_panel`).
+Dazu drei Fenster über der Oberfläche: Sprachassistent (`voice_panel`),
+Firmware-Update mit Fortschrittsbalken (`ota_panel`) und System (`sys_panel`,
+Tipp auf die Symbole oben rechts) mit dem Alter der Werte je Quelle.
 
 **Es sind noch keine echten Daten angebunden.** Die Oberfläche wird über feste
 Skript-Schnittstellen gefüttert (`alert_push`, `storage_update`, `pv_update`,
-`wallbox_update`, `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`,
+`pv_status`, `money_update`, `grid_update`, `grid_phase`, `grid_meter`, `grid_rules`,
+`stats_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`,
 `house_battery`, `house_loadpoint`, `house_update`, `house_history`, `record_hour`).
-Beispielwerte für Meldungen, Speicher, PV, Wallboxen, Wärmepumpe und Haus gibt es
+Beispielwerte für Meldungen, Speicher, PV, Wallboxen, Wärmepumpe, Haus, Netz und Statistik gibt es
 nur im Screenshot-Lauf
 (`shots_run` in `pv-dashboard-shots.yaml`). Die Demo-Leistungen der
 Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen
@@ -158,14 +162,16 @@ API-Schlüssel im Klartext.
 | `secrets.yaml.example` | Dokumentiert, welche Schlüssel `secrets.yaml` enthalten muss — die echte Datei legt der Device Builder an |
 | `.pv-dashboard_core.yaml` | Nur Gerät: SoC, PSRAM, LDO, Funkstrecke zum C6, WLAN, API, Logger, OTA, Bluetooth, Zeit und Diagnose, serielle Schnittstellen |
 | `.pv-dashboard_utility.yaml` | Gemeinsam mit dem Simulator: Schriften (IBM Plex Sans/Mono) und die Bilder aus `images/`, dazu die Design-Tokens für Farben, Maße und Abstände — einzige Quelle dafür |
-| `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die sieben Seiten ein |
-| `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, erzeugter Flussanimations-Block |
-| `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose: Wechselrichter und Flächen je Kreis, Tagesverlauf mit Kennzahlen, `pv_update` / `pv_redraw_curve` |
+| `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die neun Seiten ein |
+| `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, `money_update`, erzeugter Flussanimations-Block |
+| `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose: Wechselrichter und Flächen je Kreis, Tagesverlauf mit Kennzahlen, `pv_status` / `pv_update` / `pv_redraw_curve` |
 | `.pv-dashboard_page_battery.yaml` | Seite 3 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
 | `.pv-dashboard_page_wallbox.yaml` | Seite 4 Wallboxen: Ladepunkt-Karten nach evcc, Monatskachel, `wallbox_update` / `wallbox_month` |
-| `.pv-dashboard_page_heatpump.yaml` | Seite 5 Wärmepumpe: Startseite nach Nilan CTS700 Touch, Information, Strom, `heatpump_update` / `heatpump_extra` |
+| `.pv-dashboard_page_heatpump.yaml` | Seite 5 Wärmepumpe: Startseite nach dem Nilan-Touch-Bedienteil, Haus aus Flächen, Information, Strom, `heatpump_update` / `heatpump_extra` |
 | `.pv-dashboard_page_house.yaml` | Seite 6 Haus: Energiefluss nach evcc, Tabelle, Verbrauch jetzt und 24 Stunden, `house_*` |
-| `.pv-dashboard_page_alerts.yaml` | Seite 7 Meldungen: Liste, Zähler, `alert_push` / `alert_ack` / `alert_refresh` |
+| `.pv-dashboard_page_grid.yaml` | Seite 7 Netz: Hausanschluss, Phasen, Zähler, Netzvorgaben, `grid_*` |
+| `.pv-dashboard_page_stats.yaml` | Seite 8 Statistik: Woche / Monat / Jahr, `stats_update` / `stats_show` |
+| `.pv-dashboard_page_alerts.yaml` | Seite 9 Meldungen: Liste, Zähler, `alert_push` / `alert_ack` / `alert_refresh` |
 | `.pv-dashboard_display.yaml` | Nur Gerät: I2C, Backlight, MIPI-DSI-Panel, GT911, Drehung |
 | `.pv-dashboard_audio.yaml` | Nur Gerät: ES8311/ES7210, Voice Assistant, I2S-Halbduplex |
 | `pv-dashboard-sim.yaml` | Simulator: `host:`-Plattform mit SDL-Fenster und SDL-Touchscreen |
@@ -174,7 +180,7 @@ API-Schlüssel im Klartext.
 | `pv-dashboard-demo-a.yaml` | Prototyp: Kettenreaktion auf dem echten Schema |
 | `pv-dashboard-demo-b.yaml` | Prototyp: zwei Kennlinien für die Kugelgeschwindigkeit im Vergleich |
 | `tools/flow_animation.py` | Generator der Flussanimation; erzeugt den markierten Block in der Übersichtsseite |
-| `images/` | `solar_panel.png` (Modulfeld), `solar_module.png` (Einzelmodul) und `house.png` (Hausumriss der Seite Wärmepumpe) |
+| `images/` | `solar_panel.png` (Modulfeld) und `solar_module.png` (Einzelmodul); das Haus der Seite Wärmepumpe ist aus LVGL-Flächen gebaut |
 | `patches/` | `pace_bms-check_uart_settings.patch` für die externe PACE-BMS-Komponente, Anleitung in `docs/06` |
 | `docs/` | Projektwissen, siehe unten |
 | `CLAUDE.md` | Regeln für Assistenz-Sitzungen in diesem Repo |
@@ -184,13 +190,14 @@ Gerät und Simulator binden `utility` und `ui` gemeinsam ein: Eine Änderung an
 der Oberfläche, an den Schriften oder an den Farben wirkt auf beiden Seiten.
 Nur am Gerät hängen `display`, `audio` und `core`.
 
-Die Oberfläche liegt in **acht** Dateien: dem Kern `.pv-dashboard_ui.yaml`
-(951 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
+Die Oberfläche liegt in **zehn** Dateien: dem Kern `.pv-dashboard_ui.yaml`
+(1182 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
 eigenen `packages:`-Block ein — **diese Reihenfolge ist die Reihenfolge der
 Seiten**. Jedes Skript liegt bei der Seite, die es benutzt; im Kern bleiben nur
-`record_hour` und `update_clock`, die kein Seiten-Widget anfassen. Die größte
-Einzeldatei ist damit `.pv-dashboard_page_overview.yaml` mit **1185 Zeilen, rund
-83 kB** (Arbeitsstand 20.09.2026; die Zahl altert mit jeder Änderung), darin der
+`sys_refresh`, `record_hour` und `update_clock`, die kein Seiten-Widget anfassen,
+dazu die gemeinsamen Formatierer `fmt_num`, `fmt_watt` und `fmt_power`. Die größte
+Einzeldatei ist damit `.pv-dashboard_page_overview.yaml` mit **1281 Zeilen**
+(Arbeitsstand 25.09.2026; die Zahl altert mit jeder Änderung), darin der
 erzeugte Flussanimations-Block. Nicht am Stück lesen: `docs/03` hat unter
 „Einstieg" die Dateitabelle mit Zeilennummern und den passenden grep-Mustern.
 Diese Tabelle hier listet die Dateien des Repos; wie die Packages

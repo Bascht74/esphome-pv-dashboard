@@ -1,14 +1,17 @@
 ##############################################################################
 # Package: Seite 5 -- Waermepumpe (Nilan Compact P)
 #
-# Aufbau nach der Startseite des Bedienteils CTS700 Touch der Nilan
-# Compact P (Wunsch des Nutzers, 24.09.2026), wie sie die Nilan-
+# Der Nutzer hat das klassische Bedienteil CTS700 mit zwei Textzeilen
+# (25.09.2026); die Werte kommen deshalb aus dessen Registersatz (docs/06).
+# Dargestellt wird trotzdem grafisch, auf seinen Wunsch: Aufbau nach der
+# Startseite des Touch-Bedienteils der Nilan Compact P, wie sie die Nilan-
 # Bedienungsanleitung "CTS700 Touch, Compact P / Compact P Polar"
 # (Version 1.10) zeigt: blaugrauer Grund, gruenes Haus, links oben die
 # Aussentemperatur mit Sonne, im Dach die Raumtemperatur (gemessen in der
 # Abluft), in der Hauswand Luftfeuchte, CO2 und die Warmwasserkachel mit
 # rotem Punkt fuer die Zusatzheizung, rechts die runde Lueftertaste mit der
-# Lueftungsstufe. Den blaugrauen Grund hat der Nutzer am 24.09.2026 gegen
+# Lueftungsstufe. CO2, Jahreszeit und Alarm hat der klassische Satz nicht;
+# sie bleiben leer bzw. ausgeblendet, bis eine andere Quelle sie liefert. Den blaugrauen Grund hat der Nutzer am 24.09.2026 gegen
 # den Dashboard-Grund getauscht; Haus und Kachel sind dafuer abgedunkelt
 # (col_nilan_*, .pv-dashboard_utility.yaml). Das Nilan-Logo ist bewusst
 # nicht nachgebaut.
@@ -28,7 +31,7 @@
 #   Nilan-Kachel x 4, 760 x 652, innen 738 x 630
 #     Titel, Warnsymbol   0..24
 #     Aussen             60..117  (Wert f_val_xl 39 + 1 + Einheit 17)
-#     Haus              170..530  (Bild 440 x 360 bei x 149: Spitze 369/170,
+#     Haus              170..530  (Flaechen 440 x 360 bei x 149: Spitze 369/170,
 #                                  Traufe 320, Wand 149..589)
 #     Raum              232..288  im Dach, mittig auf 369
 #     Wand              350..493  drei Gruppen, Mitten 229 / 369 / 509
@@ -89,17 +92,8 @@ script:
       alarm: int
     then:
       - lambda: |-
-          // Dezimalkomma wie ueberall auf der Oberflaeche
-          auto fmt = [](float v, const char *f, const char *none) -> std::string {
-            if (std::isnan(v))
-              return std::string(none);
-            char b[24];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          id(data_seen)[3] = millis();  // Datenalter, sys_refresh
+          auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
           auto show = [](lv_obj_t *o, bool on) {
             if (on)
               lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
@@ -113,6 +107,9 @@ script:
           show(id(hp_co2_group), !std::isnan(co2));
           lv_label_set_text(id(hp_co2), fmt(co2, "%.0f", "---").c_str());
           lv_label_set_text(id(hp_dhw), fmt(dhw, "%.1f", "--,-").c_str());
+          // Zweitzeile im Schema der Uebersicht: die Compact P hat keinen
+          // COP, dort steht die Warmwassertemperatur (86 von 94 px)
+          lv_label_set_text(id(d_heatpump), ("kW · WW " + fmt(dhw, "%.0f", "--") + "°C").c_str());
           show(id(hp_dhw_dot), eheat);
           if (fan < 0)
             lv_label_set_text(id(hp_fan), "Stufe -");
@@ -136,9 +133,8 @@ script:
             lv_label_set_text_fmt(id(hp_stand), "Stand %02d:%02d", now.hour, now.minute);
 
   # ---------------------------------------------------------------------
-  # Weitere Werte der Compact P, wie sie die Modbus-Beschreibung des
-  # CTS700 fuehrt (Nilan "CTS700 Modbus User Guide", 2018; Adressen in
-  # docs/06, dort auch, was davon unsicher ist):
+  # Weitere Werte der Compact P aus dem Registersatz des klassischen
+  # CTS700 (Adressen in docs/06, dort auch, was davon unsicher ist):
   #   room_set     Raum-Sollwert in °C
   #   dhw_set      Warmwasser-Sollwert in °C
   #   fan_supply   Zuluftventilator in %
@@ -159,16 +155,7 @@ script:
       legionella: bool
     then:
       - lambda: |-
-          auto fmt = [](float v, const char *f, const char *none) -> std::string {
-            if (std::isnan(v))
-              return std::string(none);
-            char b[24];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
           lv_label_set_text(id(hp_room_unit), ("°C Raum · Soll " + fmt(room_set, "%.1f", "--")).c_str());
           lv_label_set_text(id(hp_dhw_label), ("Warmwasser · Soll " + fmt(dhw_set, "%.0f", "--")).c_str());
           lv_label_set_text(id(hp_fan_in), ("Zuluft " + fmt(fan_supply, "%.0f", "--") + " %").c_str());
@@ -216,7 +203,34 @@ lvgl:
               - label: { x: 40, y: 100, width: 160, height: 17, long_mode: DOT, text: "°C außen", text_font: f_unit, text_color: $col_ink }
               - label: { x: 420, y: 110, text: "\U000F05A8", text_font: f_icon, text_color: $col_nilan_sun }
 
-              - image: { src: img_house, x: 149, y: 170, image_recolor: $col_nilan_house, image_recolor_opa: COVER }
+              # Haus aus Flaechen statt aus einem Bild. Dach: ein Quadrat 311 x 311, um 45 Grad um seine Mitte
+              # gedreht, ist eine Raute 440 breit mit der Spitze oben; ihr
+              # Rahmen 440 x 220 laesst nur die obere Haelfte stehen (ein
+              # Dreieck 440 x 220) und wird um 150 / 220 = 0,682 auf 150
+              # gestaucht. So liegen alle geglaetteten Kanten aussen; zwei
+              # gedrehte Rechtecke nebeneinander zeigten innen eine dunkle
+              # Naht. Die gestauchte Unterkante des Daches ist ebenfalls
+              # geglaettet; deshalb kommt die Wand danach und beginnt 2 px
+              # hoeher (y 318), sie deckt die Kante zu.
+              - obj:
+                  x: 149
+                  y: 170
+                  width: 440
+                  height: 220
+                  bg_opa: TRANSP
+                  border_width: 0
+                  pad_all: 0
+                  radius: 0
+                  clickable: false
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  transform_pivot_x: 0
+                  transform_pivot_y: 0
+                  transform_scale_y: 0.682
+                  widgets:
+                    - obj: { x: 65, y: 65, width: 311, height: 311, radius: 0, bg_color: $col_nilan_house, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, transform_pivot_x: 155, transform_pivot_y: 155, transform_rotation: 45 }
+              - obj: { x: 149, y: 318, width: 440, height: 212, radius: 0, bg_color: $col_nilan_house, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
 
               # Raum im Dach: Wert 232..271, Thermometer daneben, Einheit
               # 273..290

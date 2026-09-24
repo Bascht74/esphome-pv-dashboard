@@ -98,31 +98,11 @@ script:
       price_feed: float
     then:
       - lambda: |-
-          // Leistung wie evcc: unter 1000 W ganzzahlig in W, sonst kW mit
-          // einer Stelle, Dezimalkomma
-          auto pw = [](float v) -> std::string {
-            if (std::isnan(v))
-              return std::string("--");
-            char b[24];
-            if (fabsf(v) < 999.5f)
-              snprintf(b, sizeof(b), "%.0f W", v);
-            else
-              snprintf(b, sizeof(b), "%.1f kW", v / 1000.0f);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
-          auto num = [](float v, const char *f, const char *none) -> std::string {
-            if (std::isnan(v))
-              return std::string(none);
-            char b[32];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          id(data_seen)[4] = millis();  // Datenalter, sys_refresh
+          // Formate: fmt_power (W / kW wie evcc) und fmt_num
+          // (Dezimalkomma), beide in .pv-dashboard_ui.yaml
+          auto &pw = id(fmt_power);
+          auto &num = id(fmt_num);
           // Zeile unter 10 W grau wie in evcc
           auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
             const bool on = !std::isnan(v) && v > 10.0f;
@@ -305,31 +285,10 @@ script:
       - lambda: |-
           if (bat < 0 || bat > 2)
             return;
-          // Leistung wie evcc: unter 1000 W ganzzahlig in W, sonst kW mit
-          // einer Stelle, Dezimalkomma
-          auto pw = [](float v) -> std::string {
-            if (std::isnan(v))
-              return std::string("--");
-            char b[24];
-            if (fabsf(v) < 999.5f)
-              snprintf(b, sizeof(b), "%.0f W", v);
-            else
-              snprintf(b, sizeof(b), "%.1f kW", v / 1000.0f);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
-          auto num = [](float v, const char *f, const char *none) -> std::string {
-            if (std::isnan(v))
-              return std::string(none);
-            char b[32];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          // Formate: fmt_power (W / kW wie evcc) und fmt_num
+          // (Dezimalkomma), beide in .pv-dashboard_ui.yaml
+          auto &pw = id(fmt_power);
+          auto &num = id(fmt_num);
           // Zeile unter 10 W grau wie in evcc
           auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
             const bool on = !std::isnan(v) && v > 10.0f;
@@ -361,31 +320,10 @@ script:
       - lambda: |-
           if (wb < 0 || wb > 1)
             return;
-          // Leistung wie evcc: unter 1000 W ganzzahlig in W, sonst kW mit
-          // einer Stelle, Dezimalkomma
-          auto pw = [](float v) -> std::string {
-            if (std::isnan(v))
-              return std::string("--");
-            char b[24];
-            if (fabsf(v) < 999.5f)
-              snprintf(b, sizeof(b), "%.0f W", v);
-            else
-              snprintf(b, sizeof(b), "%.1f kW", v / 1000.0f);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
-          auto num = [](float v, const char *f, const char *none) -> std::string {
-            if (std::isnan(v))
-              return std::string(none);
-            char b[32];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          // Formate: fmt_power (W / kW wie evcc) und fmt_num
+          // (Dezimalkomma), beide in .pv-dashboard_ui.yaml
+          auto &pw = id(fmt_power);
+          auto &num = id(fmt_num);
           // Zeile unter 10 W grau wie in evcc
           auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
             const bool on = !std::isnan(v) && v > 10.0f;
@@ -426,31 +364,10 @@ script:
       - lambda: |-
           if (dev < 0 || dev > 5)
             return;
-          // Leistung wie evcc: unter 1000 W ganzzahlig in W, sonst kW mit
-          // einer Stelle, Dezimalkomma
-          auto pw = [](float v) -> std::string {
-            if (std::isnan(v))
-              return std::string("--");
-            char b[24];
-            if (fabsf(v) < 999.5f)
-              snprintf(b, sizeof(b), "%.0f W", v);
-            else
-              snprintf(b, sizeof(b), "%.1f kW", v / 1000.0f);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
-          auto num = [](float v, const char *f, const char *none) -> std::string {
-            if (std::isnan(v))
-              return std::string(none);
-            char b[32];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          // Formate: fmt_power (W / kW wie evcc) und fmt_num
+          // (Dezimalkomma), beide in .pv-dashboard_ui.yaml
+          auto &pw = id(fmt_power);
+          auto &num = id(fmt_num);
           // Zeile unter 10 W grau wie in evcc
           auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
             const bool on = !std::isnan(v) && v > 10.0f;

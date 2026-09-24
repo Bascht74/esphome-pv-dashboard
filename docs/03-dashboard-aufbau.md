@@ -10,7 +10,7 @@ SDL-Fenster 1280 x 800) binden dieselben zwei gemeinsamen Packages ein:
   `idle_timeout`. Die drei Tarife standen bis zum 20.09.2026 hier und gehören
   jetzt zu den Anlagen-Einstellungen (Dokument 01)
 - `.pv-dashboard_ui.yaml` — der Kern der Oberfläche: Tagesreihen, gemeinsame
-  Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`. Die sieben Seiten hängen
+  Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`. Die neun Seiten hängen
   als eigene Packages daran (`.pv-dashboard_page_*.yaml`)
 
 Nur am Gerät: `.pv-dashboard_display.yaml` (I2C, Backlight, DSI-Panel, GT911;
@@ -69,8 +69,8 @@ packages:
       - .pv-dashboard_core.yaml
 ```
 
-Er ist noch aus. Getauscht werden die beiden `packages:`-Blöcke, sobald die
-Paketdateien im Repo liegen: Der Fernblock kommt ohne Zugangsdaten aus, weil
+Er ist seit dem 20.09.2026 aktiv, die lokale Variante steht auskommentiert
+darunter. Der Fernblock kommt ohne Zugangsdaten aus, weil
 das Repo öffentlich ist — ein nicht öffentliches bräuchte `username`/`password`
 und damit einen Token in genau der Datei, die keine Geheimnisse enthalten soll.
 
@@ -86,7 +86,7 @@ damit dieselbe wie bei den `!include`-Zeilen.
 Drei Dinge, die der Probelauf gezeigt hat (2026.9.0, 20.09.2026, gegen eine
 Kopie dieses Repos und gegen ein öffentliches Repo):
 
-- **Die sieben Seitendateien gehören nicht in die Liste.**
+- **Die Seitendateien gehören nicht in die Liste.**
   `.pv-dashboard_ui.yaml` holt sie selbst über `!include`, und zwar aus
   demselben Checkout. Listet man sie zusätzlich auf, hängt ESPHome jede Seite
   zweimal an und der Lauf bricht mit „ID redraw_curve redefined“ ab. Genauso
@@ -117,38 +117,49 @@ Die Oberfläche steht genau einmal da; Gerät und Simulator erwarten dieselben I
 
 ## Einstieg in die Oberfläche
 
-Die Oberfläche liegt in **acht** Dateien: dem Kern `.pv-dashboard_ui.yaml` und
+Die Oberfläche liegt in **zehn** Dateien: dem Kern `.pv-dashboard_ui.yaml` und
 je einer Datei pro Seite. Der Kern bindet die Seiten über einen eigenen
 `packages:`-Block ein — **diese Reihenfolge ist die Reihenfolge der Seiten**.
 ESPHome hängt Listen aus Packages in der Reihenfolge aneinander, in der die
 Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnung:
-Übersicht, PV, Speicher, Wallbox, Wärmepumpe, Haus, Meldungen.
+Übersicht, PV, Speicher, Wallbox, Wärmepumpe, Haus, Netz, Statistik, Meldungen.
 
 | Datei | Zeilen | Blöcke, Zeilennummern |
 | --- | --- | --- |
-| `.pv-dashboard_ui.yaml` | 955 | `packages:` 31, `text:` 49, `globals:` 79, `script:` 97, `lvgl:` 220 |
-| `.pv-dashboard_page_overview.yaml` | 1187 | `substitutions:` 35, `script:` 94, `lvgl:` 169, `interval:` 988 |
-| `.pv-dashboard_page_pv.yaml` | 411 | `script:` 31, `lvgl:` 184 |
-| `.pv-dashboard_page_battery.yaml` | 331 | `substitutions:` 35, `script:` 42, `lvgl:` 112 |
-| `.pv-dashboard_page_wallbox.yaml` | 454 | `substitutions:` 48, `script:` 52, `lvgl:` 202 |
-| `.pv-dashboard_page_heatpump.yaml` | 356 | `script:` 49, `lvgl:` 193 |
-| `.pv-dashboard_page_house.yaml` | 854 | `substitutions:` 61, `script:` 68, `lvgl:` 546 |
+| `.pv-dashboard_ui.yaml` | 1182 | `packages:` 31, `text:` 51, `globals:` 81, `script:` 167, `lvgl:` 359, `interval:` 1179 |
+| `.pv-dashboard_page_overview.yaml` | 1281 | `substitutions:` 35, `globals:` 97, `sensor:` 115, `script:` 149, `lvgl:` 263, `interval:` 1082 |
+| `.pv-dashboard_page_pv.yaml` | 460 | `globals:` 31, `script:` 49, `lvgl:` 229 |
+| `.pv-dashboard_page_battery.yaml` | 323 | `substitutions:` 35, `script:` 42, `lvgl:` 104 |
+| `.pv-dashboard_page_wallbox.yaml` | 436 | `substitutions:` 48, `script:` 52, `lvgl:` 184 |
+| `.pv-dashboard_page_heatpump.yaml` | 368 | `script:` 49, `lvgl:` 178 |
+| `.pv-dashboard_page_house.yaml` | 771 | `substitutions:` 61, `script:` 68, `lvgl:` 463 |
+| `.pv-dashboard_page_grid.yaml` | 346 | `substitutions:` 50, `script:` 54, `lvgl:` 204 |
+| `.pv-dashboard_page_stats.yaml` | 400 | `globals:` 31, `script:` 46, `lvgl:` 217 |
 | `.pv-dashboard_page_alerts.yaml` | 431 | `script:` 20, `lvgl:` 268 |
 
 Im Kern steht nur, was alle Seiten teilen: die Tagesreihen `day_curve` und
-`forecast_curve`, die Globals `ota_running` 80 und `curve_day` 88, die Skripte
-`record_hour` 110 und `update_clock` 165 und unter `lvgl:` die Basis,
-`style_definitions` 265, `gradients` 342 und `top_layer` 632. Einen
+`forecast_curve`, die Globals `ota_running` 82, `curve_day` 90, `data_seen` 100
+und `data_stale_reported` 105, die Formatierer `fmt_num` 115, `fmt_watt` 129 und
+`fmt_power` 145 (Dezimalkomma, Tausenderpunkt, Striche bei `NAN`; alle Seiten
+benutzen sie), die Skripte `sys_refresh` 174, `record_hour` 249 und
+`update_clock` 304, unter `lvgl:` die Basis, `style_definitions` 406,
+`gradients` 483 und `top_layer` 773, und am Ende das `interval:` für
+`sys_refresh`. Einen
 `pages:`-Schlüssel hat der Kern **nicht** — die Seiten bringen ihn mit.
 
-**Jedes Skript liegt bei der Seite, die es benutzt:** `redraw_curve` 98 in der
-Übersicht, `pv_update` 40 und `pv_redraw_curve` 99 auf der Seite PV & Prognose,
-`storage_update` 49 im Speicher, `wallbox_update` 73 und `wallbox_month` 179 bei den Wallboxen,
-`heatpump_update` 72 und `heatpump_extra` 151 bei der Wärmepumpe, `house_flow` 85, `house_battery` 299, `house_loadpoint` 355, `house_update` 420 und `house_history` 488 im Haus, `alert_push` 56, `alert_ack` 170 und
-`alert_refresh` 202 in den Meldungen. Im Kern bleiben nur `record_hour` und
-`update_clock`: Sie fassen kein Seiten-Widget an, sondern die Tagesreihen
-beziehungsweise die Leisten im `top_layer`, und sie werden aus Packages
-gerufen, die keine Seite sind (`_core`, `-sim`, `-shots`).
+**Jedes Skript liegt bei der Seite, die es benutzt:** `money_update` 163 und
+`redraw_curve` 192 in der Übersicht, `pv_status` 59, `pv_update` 104 und
+`pv_redraw_curve` 151 auf der Seite PV & Prognose, `storage_update` 49 im Speicher,
+`wallbox_update` 73 und `wallbox_month` 170 bei den Wallboxen, `heatpump_update` 72
+und `heatpump_extra` 145 bei der Wärmepumpe, `house_flow` 85, `house_battery` 279,
+`house_loadpoint` 314, `house_update` 358 und `house_history` 405 im Haus,
+`grid_update` 65, `grid_phase` 113, `grid_meter` 147 und `grid_rules` 176 im Netz,
+`stats_update` 58, `stats_show` 89 und `stats_redraw` 115 in der Statistik,
+`alert_push` 56, `alert_ack` 170 und `alert_refresh` 202 in den Meldungen. Im Kern
+bleiben nur `sys_refresh`, `record_hour` und `update_clock`: Sie fassen kein
+Seiten-Widget an, sondern die Tagesreihen beziehungsweise die Leisten und
+Fenster im `top_layer`, und sie werden aus Packages gerufen, die keine Seite
+sind (`_core`, `-sim`, `-shots`) oder aus dem Kern selbst.
 
 Vier Seiten tragen vor ihrem `script:` einen eigenen `substitutions:`-Block
 mit den Standardbeschriftungen (Dokument 01): Übersicht und Speicher seit dem
@@ -163,22 +174,22 @@ stillschweigend das Speicher-Paket, weil es im `packages:`-Block des Kerns
 später steht; unter Packages sticht der spätere Eintrag (geprüft mit 2026.9.0).
 Gemeldet wird das nicht, die drei Zeilen in der Übersicht sind dann tote Zeilen.
 Wer eine der beiden Seiten anfasst, zieht die andere mit nach. Ein Wert aus
-`pv-dashboard.yaml` sticht ohnehin beide.
+`.pv-dashboard_anlage.yaml` sticht ohnehin beide.
 
-Zeilennummern im **Arbeitsstand vom 23.09.2026**, für die Seiten Wallboxen, Wärmepumpe und Haus vom 24.09.2026. Sie altern mit jeder
+Zeilennummern im **Arbeitsstand vom 25.09.2026**. Sie altern mit jeder
 Änderung, sie sind nur der Einstieg; gefunden wird mit `grep`:
 
 ```
 grep -n '^[a-z_]*:'         .pv-dashboard_ui.yaml        # die Bloecke des Kerns
 grep -n '^  [a-z_]*:'       .pv-dashboard_ui.yaml        # Unterbloecke von lvgl:
 grep -n '^  - id: '         .pv-dashboard_*.yaml         # Globals und Skripte
-grep -n '^    - id: page_'  .pv-dashboard_page_*.yaml    # die sieben Seiten
+grep -n '^    - id: page_'  .pv-dashboard_page_*.yaml    # die neun Seiten
 grep -n '!include'          .pv-dashboard_ui.yaml        # die Seitenreihenfolge
 ```
 
 ## Seiten
 
-Sieben Seiten, Fläche **1280 x 800** (quer). Drei Leisten liegen im `top_layer`, überdecken jede Seite und werden **nie** versteckt: `bar_status` (y 0 bis 44), die Meldungszeile `bar_alert` mit `lbl_alert` (y 44 bis 76) und die Reiterleiste `bar_nav` mit `nav_matrix` (y 744 bis 800).
+Neun Seiten, Fläche **1280 x 800** (quer). Drei Leisten liegen im `top_layer`, überdecken jede Seite und werden **nie** versteckt: `bar_status` (y 0 bis 44), die Meldungszeile `bar_alert` mit `lbl_alert` (y 44 bis 76) und die Reiterleiste `bar_nav` mit `nav_matrix` (y 744 bis 800).
 
 Die Meldungszeile steht auch ohne Meldung da — `lbl_alert` zeigt dann „Keine Meldungen" bzw. „Keine offenen Meldungen", ein Tipp öffnet die Meldungsseite. Für Seiteninhalt bleiben deshalb **1280 x 668**, y 76 bis y 744: die Höhe, gegen die Regel 1 aus Dokument 04 rechnet.
 
@@ -186,10 +197,14 @@ Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — j
 
 - `page_overview` – links das Anlagenschema (`schema_area`, 904 × 668, 28 Leitungen), rechts die Kennzahlenspalte: Tagesverlauf (16 `bar`-Widgets `bar_h00`…`bar_h15` plus Prognoselinie `line_forecast`; ESPHomes LVGL hat kein chart-Widget), vier Kacheln der Energiebilanz, Tagesertrag, Ringe Autarkie und Eigenverbrauch.
 - `page_battery` – drei SoC-Ringe und Tabelle `tbl_storage`: Ladezustand, Strom, Zelle min/max, Zelldifferenz, Temperatur min/max, Zyklen. Erste fertig gebaute Detailseite — **Vorlage für jede neue**.
-- `page_pv` – seit 23.09.2026. Oben zwei Kacheln wie die zwei Energiekreise: links Volleinspeisung (x 4, 322 breit), rechts Hausnetz (x 334, 942 breit); je Wechselrichter eine Gruppe aus Wechselrichterkasten und seinen zwei Flächen, Leistung in W und Tageswert in kWh. Unten dieselbe Teilung: links vier Kennzahlen (Ist heute, Prognose heute, Restprognose, Ist zu Prognose der abgeschlossenen Stunden), rechts der Tagesverlauf mit 16 Balken und Prognoselinie im großen Maßstab. Geometrie und Höhenrechnung im Kopf der Datei.
+In der Statusleiste stehen seit dem 25.09.2026 rechts neben der Mitte drei Symbole (`sys_icons`, x 700, 110 × 30): WLAN, Home Assistant, Daten aktuell. Ein Tipp öffnet das Fenster `sys_panel` im `top_layer` (600 × 520 bei x 340, y 150), ein Tipp darauf schließt es. Inhalt und Regeln in Dokument 06, „Systemstatus“.
+
+- `page_pv` – seit 23.09.2026. Oben zwei Kacheln wie die zwei Energiekreise: links Volleinspeisung (x 4, 322 breit), rechts Hausnetz (x 334, 942 breit); je Wechselrichter eine Gruppe aus Wechselrichterkasten und seinen zwei Flächen, Leistung in W und Tageswert in kWh. Unten dieselbe Teilung: links vier Kennzahlen (Ist heute, Prognose heute, Restprognose, Ist zu Prognose der abgeschlossenen Stunden), rechts der Tagesverlauf mit 16 Balken und Prognoselinie im großen Maßstab. Seit 25.09.2026 zeigt jeder Wechselrichterkasten einen Statuspunkt (grün / rot) und die Temperatur in der Unterzeile; bei Störung wird der Rahmen rot und die Unterzeile zeigt den Fehlertext (`pv_status`). Geometrie und Höhenrechnung im Kopf der Datei.
 - `page_alerts` – Liste `alert_list`, Kopfkachel mit Zähler, Knöpfe „Alle quittieren“ und „Liste leeren“.
 - `page_wallbox` – seit 24.09.2026, am selben Tag nach dem Vorbild von evcc (0.316.0) umgebaut. Zwei Ladepunkt-Karten je 632 × 512: Kopf mit Name und Modus-Schalter Aus / Smart / Schnell, Sitzungswerte Leistung (mit Blitz und drei Phasenstrichen), Geladen, Sonne, Ladedauer; nach der Trennlinie Fahrzeug und Statuszeile, Ladestandsbalken mit dunklerem Rest bis zum Limit und Limit-Marke, darunter Ladestand (mit Reichweite), Ladeplan, Ladelimit. Unten die Monatskachel „Ladevorgänge im Monat“ (Geladen, Sonnenanteil, Kosten, Ø Preis). Akzent `col_evcc`, Flächen und Einheitenregel bleiben die des Dashboards. Höhenrechnung im Kopf der Datei.
-- `page_heatpump` – seit 24.09.2026, am selben Tag auf die **Nilan Compact P** umgebaut, im Aufbau der Startseite ihres Bedienteils CTS700 Touch, auf Wunsch des Nutzers aber auf dem Dashboard-Grund (Kachel `st_tile`). Links die Nilan-Kachel (760 × 652): Außentemperatur mit Sonne, grünes Haus (Bild `img_house`, eingefärbt mit `col_nilan_house`), im Dach die Raumtemperatur mit Sollwert, in der Wand Feuchte, CO2 (nur mit Wert sichtbar) und die Warmwasserkachel (`col_nilan_tank`, Rand `col_nilan_tank_edge`) mit rotem Punkt für die Zusatzheizung und Sollwert darunter, rechts die runde Lüftertaste mit Stufe und Zu-/Abluftventilator in %. Unter dem Haus ein gelber Hinweis, solange Enteisung oder Legionellenschutz laufen. Rechts „Information“ wie hinter der Info-Taste (Betriebsart Lüftung, Jahreszeit, Bypass, Kompressor, Zu- und Fortluft, Ventilatoren, Tage bis zum Filterwechsel, ab 7 Tagen gelb) und „Strom“ (Leistungsaufnahme, Verbrauch heute). Das Nilan-Logo ist bewusst nicht nachgebaut.
+- `page_heatpump` – seit 24.09.2026, am selben Tag auf die **Nilan Compact P** umgebaut, im Aufbau der Startseite des Touch-Bedienteils CTS700 (der Nutzer hat das klassische CTS700 mit Textzeilen, will die Seite aber grafisch), auf Wunsch des Nutzers auf dem Dashboard-Grund (Kachel `st_tile`). Links die Nilan-Kachel (760 × 652): Außentemperatur mit Sonne, grünes Haus aus Flächen (`col_nilan_house`; Dach = Quadrat 311 × 311, um 45° gedreht, in einem Behälter mit `transform_scale_y` 0,682 gestaucht, darüber die Wand, damit die Kante am Dachfuß verdeckt ist; Rechnung im Kommentar der Datei), im Dach die Raumtemperatur mit Sollwert, in der Wand Feuchte, CO2 (nur mit Wert sichtbar) und die Warmwasserkachel (`col_nilan_tank`, Rand `col_nilan_tank_edge`) mit rotem Punkt für die Zusatzheizung und Sollwert darunter, rechts die runde Lüftertaste mit Stufe und Zu-/Abluftventilator in %. Unter dem Haus ein gelber Hinweis, solange Enteisung oder Legionellenschutz laufen. Rechts „Information“ wie hinter der Info-Taste (Betriebsart Lüftung, Jahreszeit, Bypass, Kompressor, Zu- und Fortluft, Ventilatoren, Tage bis zum Filterwechsel, ab 7 Tagen gelb) und „Strom“ (Leistungsaufnahme, Verbrauch heute). Das Nilan-Logo ist bewusst nicht nachgebaut.
+- `page_grid` – seit 25.09.2026, Netz und Zähler. Vier Kacheln je 632 breit: Hausanschluss (Leistung, grün bei Einspeisung und rot bei Bezug, Frequenz, Balken der Einspeisung gegen die Einspeisegrenze `feed_limit_pct` von `pv_kwp` mit gelber Marke, Grenze in kW, Auslastung, abgeregelte Energie heute), Phasen L1 bis L3 (Spannung, außerhalb 207 bis 253 V gelb, Strom, Wirk- und Scheinleistung, Leistungsfaktor, Neutralleiterstrom), Zählerstände (fünf Zählwerke mit Stand und heute) und Netzvorgaben (Einspeisegrenze, Börsenpreis, rot wenn negativ, negative Viertelstunden, Vergütung bei negativem Preis, Steuersignal § 14a, Smart Meter). Werte nach dem Shelly Pro 3EM, Rechtliches in Dokument 06.
+- `page_stats` – seit 25.09.2026, Statistik. Kopf mit Zeitraum, Umschalter Woche / Monat / Jahr und fünf Kennzahlen (Erzeugung, Verbrauch, Autarkie, Eigenverbrauch, Ertrag in €), darunter Balkenpaare Erzeugung (gelb) und Verbrauch (hell) auf gemeinsamem Maßstab, bis 31 Plätze. Autarkie = (Verbrauch − Bezug) / Verbrauch, Eigenverbrauch = (Erzeugung − Einspeisung) / Erzeugung. Die Reihen liegen nur im RAM.
 - `page_house` – seit 24.09.2026, am selben Tag nach dem Energiefluss von evcc umgebaut. Oben der evcc-Balken (Eigenverbrauch PV, Eigenverbrauch Speicher, Netzbezug, Einspeisung; Breite nach Anteil) mit den Klammern „In“ (PV, Speicher, Netz) und „Out“ (Verbrauch, Ladepunkte, Speicher laden, Einspeisung) samt Symbolen und Legende. Darunter die ausgeklappte Tabelle in drei Spalten: In (Erzeugung mit Restprognose, Speicher entladen mit Unterzeilen je Speicher, Netzbezug mit Preis), Out (Verbrauch mit Preis, Ladepunkte mit Unterzeilen je Wallbox, Speicher laden, Einspeisung mit Vergütung) und Verbraucher (Wärmepumpe, vier Geräte, Grundlast mit kWh heute). Unten links „Verbrauch jetzt“ (Haus und Ladepunkte) mit Herkunft aus PV, Speicher und Netz als Balken und in %, rechts der Verbrauch der letzten 24 Stunden als Stundenbalken, der PV-gedeckte Teil grün. Farben `col_evcc*`. Geometrie im Kopf der Datei.
 
 **Neue Detailseite.** Vorlage ist `page_battery`. Dazu gehört:
@@ -198,8 +213,10 @@ Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — j
 - `scrollable: false` **auch auf der Seite selbst** — eine Seite ist ebenfalls
   ein Objekt (Dokument 04, Punkt 4).
 - Nav-Knopf und Screenshot-Eintrag sind **schon da**: `nav_matrix` trägt alle
-  sieben Knöpfe (`btn_nav_overview` … `btn_nav_alerts`), und der Screenshot-Lauf
-  nimmt jede Seite auf (`04_wallbox.bmp` und so fort). Nichts nachzutragen.
+  neun Knöpfe (`btn_nav_overview` … `btn_nav_alerts`), und der Screenshot-Lauf
+  nimmt jede Seite auf (`04_wallbox.bmp` und so fort). Eine **zehnte** Seite
+  braucht einen neuen Knopf in `nav_matrix` (Breiten neu rechnen), einen Eintrag in
+  `shots_nav_clear` und einen eigenen Bildschritt in `pv-dashboard-shots.yaml`.
 - Die Flussanimation **nicht** neu erzeugen, solange keine Leitung im Schema
   angefasst wird.
 - Datenanbindung: eigene Skript-Schnittstelle nach dem Muster
@@ -242,7 +259,7 @@ Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in D
 
 **`heatpump_update(outdoor, room, humidity, co2, dhw, eheat, fan, vent_mode, season, bypass, compressor, supply, exhaust, power, energy, alarm)`** – Seite Wärmepumpe (Nilan Compact P). Temperaturen in °C: außen, Raum (Abluft), Warmwasser, Zu- und Fortluft; `humidity` in %, `co2` in ppm (`NAN` blendet die CO2-Gruppe aus); `eheat` zeigt den roten Punkt der Zusatzheizung; `fan` Lüftungsstufe 0…4 (0 = „Aus“, < 0 = unbekannt); `vent_mode`, `season`, `bypass`, `compressor` als Text (leer ergibt „--“); `power` in kW und `energy` in kWh heute, beide elektrisch; `alarm` 0 = nichts, 1 = gelbes, 2 = rotes Warnsymbol. Setzt „Stand HH:MM“. Füllt nur diese Seite, den Kasten im Schema noch nicht.
 
-**`heatpump_extra(room_set, dhw_set, fan_supply, fan_extract, filter_days, defrost, legionella)`** – weitere Werte der Compact P aus der Modbus-Beschreibung des CTS700: Sollwerte Raum und Warmwasser in °C, Zu- und Abluftventilator in %, Tage bis zum Filterwechsel (< 0 = unbekannt), Enteisung und Legionellenschutz als Schalter. Adressen und ihre Unsicherheit in Dokument 06.
+**`heatpump_extra(room_set, dhw_set, fan_supply, fan_extract, filter_days, defrost, legionella)`** – weitere Werte der Compact P aus dem Registersatz des klassischen CTS700: Sollwerte Raum und Warmwasser in °C, Zu- und Abluftventilator in %, Tage bis zum Filterwechsel (< 0 = unbekannt), Enteisung und Legionellenschutz als Schalter. Adressen und ihre Unsicherheit in Dokument 06.
 
 **`house_flow(pv, bat_out, grid_in, home, loadpoints, bat_in, grid_out, soc, forecast, price_grid, price_home, price_feed)`** – Seite Haus, Energiefluss nach evcc. Leistungen in W (≥ 0) für den Hausnetz-Kreis: PV-Erzeugung, Speicher entladen, Netzbezug, Verbrauch (alles außer Ladepunkten und Speicher, also mit Wärmepumpe), beide Ladepunkte zusammen, Speicher laden, Einspeisung; dazu Speicher-SoC in %, Restprognose in kWh und drei Preise in ct/kWh. Rechnet Eigenverbrauch wie evcc (erst PV, dann Speicher) und füllt Balken, Klammern, die Spalten In und Out und „Verbrauch jetzt“. `NAN` ergibt Striche.
 
@@ -251,6 +268,22 @@ Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in D
 **`house_update(dev, power, energy)`** – Spalte Verbraucher. `dev` 0…5 = Wärmepumpe, Backofen, Waschmaschine, Spülmaschine, Trockner, Grundlast (`name_heatpump`, `name_oven` … `name_baseload`), `power` in W, `energy` in kWh heute. Die Kopfzeile zeigt die Summe, sobald alle sechs da sind.
 
 **`house_history(home, solar, hour)`** – Verbrauch der letzten 24 Stunden: je 24 kommagetrennte kWh-Werte, älteste zuerst, `solar` der aus PV gedeckte Teil, `hour` die Uhrzeit des letzten Werts. Wird nicht gespeichert (Dokument 06).
+
+**`pv_status(inv, ok, text, temp)`** – Zustand eines Wechselrichters (`inv` 0…3): `ok` false färbt Rahmen und Punkt rot, zeigt `text` (leer = „Störung“) in der Unterzeile und legt beim Wechsel in die Störung **eine** Meldung (Schwere 2) an; `temp` in °C erscheint hinter dem Tageswert, `NAN` blendet sie aus.
+
+**`money_update(full_feed, surplus, self_use, grid_in)`** – Übersicht, Kachel Tagesertrag. Energien heute in kWh: Volleinspeisung, Überschusseinspeisung, selbst verbrauchter PV-Strom, Netzbezug. Rechnet mit den drei Tarifen Förderung, Ersparnis, Bezugskosten und Ertrag, schreibt Kachel, globals und vier Sensoren (Dokument 06, „Geldwerte“).
+
+**`grid_update(power, freq, curtailed, n_current)`** – Seite Netz: Leistung am Hausanschluss in W (positiv = Bezug, negativ = Einspeisung, wie `total_act_power` des Shelly Pro 3EM), Frequenz in Hz, heute abgeregelte kWh, Neutralleiterstrom in A.
+
+**`grid_phase(phase, voltage, current, power, apparent, pf)`** – eine Phase (0…2 = L1…L3): V, A, W (positiv = Bezug), VA, Leistungsfaktor.
+
+**`grid_meter(meter, total, today)`** – ein Zählwerk: 0 Hausanschluss Bezug, 1 Hausanschluss Einspeisung, 2 PV-Zähler Einspeisung, 3 Hauszähler Bezug, 4 Hauszähler Einspeisung; Stand und heute in kWh.
+
+**`grid_rules(limit_active, spot_ct, neg_quarters, neg_paid, p14a_active, p14a_kw, smart_meter)`** – Netzvorgaben: Einspeisegrenze aktiv, Börsenpreis in ct/kWh, negative Viertelstunden heute (< 0 = unbekannt), Vergütung bei negativem Preis, Steuersignal § 14a mit Grenze in kW, Smart Meter und Steuerbox eingebaut.
+
+**`stats_update(range, period, labels, prod, cons, imp, exp, money)`** – Seite Statistik: `range` 0 Woche, 1 Monat, 2 Jahr; `period` Zeitraum als Text; `labels` und die vier Reihen (Erzeugung, Verbrauch, Bezug, Einspeisung in kWh) kommagetrennt, gleich viele Werte; `money` Ertrag in €. **`stats_show(range)`** schaltet um und zieht die Knöpfe mit.
+
+**`sys_refresh`** – Kern, alle 10 s und beim Öffnen des Systemfensters: Alter der Werte je Quelle aus `data_seen`, Symbole, WLAN, Home Assistant, Laufzeit, Version (Dokument 06). Von Hand ruft es niemand.
 
 **`pv_redraw_curve`** – Seite PV & Prognose, hängt wie `redraw_curve` an `on_value` beider Reihen und schreibt keine. Zeichnet Balken und Linie auf gemeinsamem Maßstab (Legende nennt die Skala) und rechnet die Kennzahlen: „abgeschlossen" sind die Plätze vor der laufenden Stunde (Stunde − 6), Restprognose ist die Prognose ab der laufenden Stunde bis 22 Uhr, „Ist zu Prognose" braucht mindestens 0,1 kWh Prognose in den abgeschlossenen Stunden. Ohne gültige Uhrzeit bleiben diese beiden auf Strichen.
 
@@ -289,7 +322,7 @@ Projektordner, mit vollem Pfad in die Arbeitsumgebung (ESPHome 2026.9.0):
 
 `pv-dashboard-sim.yaml` öffnet ein SDL-Fenster und **blockiert**, bis das Fenster geschlossen wird; **F12** speichert ein Bild nach `.esphome/snapshots/pv-dashboard-sim/`, `ESPHOME_SNAPSHOT_DIR` lenkt es um.
 
-`pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle sieben Seiten plus beide Overlays als BMP (`01_overview.bmp` … `09_ota_panel.bmp`) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
+`pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle neun Seiten, die Statistik zusätzlich als Monat, plus die drei Fenster als BMP (`01_overview.bmp` … `12_system.bmp`) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
 
 Beispieldaten für Meldungen, Speicher, PV-Werte, Wallboxen, Wärmepumpe, Haus, Tagesreihen und Ringe stehen in `shots_run`, also **nur** im Screenshot-Lauf. Die Demo-Leistungen der Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen host-Plattform, im Simulator ebenso. Im Gerät steht beides nicht.
 
@@ -314,7 +347,7 @@ sips -s format png shots/*.bmp --out shots/
 `sips` bringt macOS mit, Pillow steckt in der ESPHome-Umgebung. Beide legen die
 PNG neben die BMP und lassen die BMP stehen. Je nach Seite und Weg wiegt die PNG
 rund 10 bis 120 kB — Pillow packt dichter als `sips` (nachgemessen über alle
-neun Bilder: 9,9 bis 96,3 kB gegen 21,6 bis 116,2 kB). Angesehen wird danach die
+damals neun Bilder: 9,9 bis 96,3 kB gegen 21,6 bis 116,2 kB). Angesehen wird danach die
 **PNG**.
 
 Ausschnitt vergrößern, wieder mit Pillow — `crop` nimmt

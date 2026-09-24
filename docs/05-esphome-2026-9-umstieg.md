@@ -10,7 +10,8 @@ direkt eingebaut werden.
 Im Repo steht `min_version: 2026.9.0` in `pv-dashboard.yaml` und in
 `pv-dashboard-sim.yaml`. `pv-dashboard-shots.yaml` erbt sie über das
 Simulator-Package. Die Demo-Konfigurationen (`pv-dashboard-demo*.yaml`) stehen
-weiter auf `min_version: 2026.7.0` und wurden nicht mitgezogen.
+seit dem 25.09.2026 ebenfalls auf `min_version: 2026.9.0`; `esphome config`
+läuft für alle drei mit 2026.9.0 durch (gebaut wurden sie dabei nicht).
 
 ## Device Builder und Bauumgebungen
 
@@ -167,7 +168,7 @@ is valid!" und gibt dabei **genau diese drei** aus (nachgemessen am 20.09.2026):
   hat **keine** eigene Angabe und erbt sie über das Simulator-Package. Unter den
   **drei aktiven** Konfigurationen gibt es eigene `min_version`-Zeilen also nur
   in `pv-dashboard.yaml` und `pv-dashboard-sim.yaml`; die Demo-Dateien stehen
-  weiter auf `2026.7.0` (siehe oben). Jede Datei hat höchstens eine, `grep -n
+  ebenfalls auf `2026.9.0` (siehe oben). Jede Datei hat höchstens eine, `grep -n
   min_version *.yaml` findet sie sofort — Zeilennummern altern, deshalb stehen
   hier keine.
 

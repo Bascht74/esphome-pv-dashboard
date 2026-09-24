@@ -49,14 +49,6 @@ image:
     id: img_solar_module
     type: RGB565
     transparency: alpha_channel
-  # Hausumriss der Seite Waermepumpe, nach der Startseite des Nilan-
-  # Bedienteils CTS700 Touch. Graustufen: LVGL nimmt den Grauwert als Deckkraft (A8) und
-  # faerbt mit image_recolor ein -- weiss = Haus, schwarz = durchsichtig,
-  # die Dachkanten bleiben geglaettet. 440 x 360, rund 155 kB im Flash.
-  - platform: file
-    file: images/house.png
-    id: img_house
-    type: GRAYSCALE
 
 font:
   # --- Beschriftungen und Fliesstext ------------------------------------
@@ -149,6 +141,12 @@ font:
   #   \U000F0210  fan                  Lueftungsstufe (Nilan)
   #   \U000F0026  alert                Warnung / Alarm (Nilan)
   #   \U000F0084  battery-charging     Speicher laden (Seite Haus)
+  # Seit 25.09.2026 fuer die Statusleiste (Systemzustand):
+  #   \U000F05A9  wifi                 WLAN verbunden
+  #   \U000F05AA  wifi-off             WLAN getrennt
+  #   \U000F07D0  home-assistant       Home Assistant
+  #   \U000F05E1  check-circle-outline Daten frisch
+  #   \U000F05CE  clock-alert-outline  Daten ueberfaellig
   - file:
       type: web
       url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
@@ -159,16 +157,8 @@ font:
              "\U000F05F1", "\U000F1A43", "\U000F072A", "\U000F0199",
              "\U000F0D3E", "\U000F140B", "\U000F05A8", "\U000F050F",
              "\U000F058C", "\U000F07E4", "\U000F09A1", "\U000F0210",
-             "\U000F0026", "\U000F0084"]
-  - file:
-      type: web
-      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
-    id: f_icon_l
-    size: 30
-    bpp: 4
-    glyphs: ["\U000F0D9B", "\U000F1480", "\U000F12A3", "\U000F1903",
-             "\U000F05F1", "\U000F1A43", "\U000F072A", "\U000F0199",
-             "\U000F0D3E"]
+             "\U000F0026", "\U000F0084", "\U000F05A9", "\U000F05AA",
+             "\U000F07D0", "\U000F05E1", "\U000F05CE"]
 
 
 
@@ -315,6 +305,11 @@ substitutions:
   col_nilan_tank_edge: "0x6C92A5"
   col_nilan_sun: "0xF6E70D"
   col_nilan_button: "0xBFC4CA"
+
+  # --- Systemzustand -----------------------------------------------------
+  # Nach so vielen Sekunden ohne neue Werte gilt eine Quelle als
+  # ueberfaellig (Symbol gelb, eine Meldung). 300 = 5 min.
+  data_stale_s: "300"
 
   # --- Abstaende und Radien --------------------------------------------
   # Aussenrand 4 px. Das Panel hat einen physischen Rahmen, ein zusaetzlicher

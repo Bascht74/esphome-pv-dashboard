@@ -22,16 +22,17 @@ substitutions:
 
   # Zugangsdaten. Nur hier steht !secret -- die Pakete arbeiten ausschliesslich
   # mit ${...} und bleiben damit frei von Geheimnissen. Das ist Voraussetzung
-  # dafuer, sie spaeter aus dem GitHub-Repo nachzuladen, waehrend diese Datei
-  # und die secrets.yaml auf dem Rechner bleiben.
+  # dafuer, dass sie aus dem GitHub-Repo kommen (Block packages: unten),
+  # waehrend diese Datei und die secrets.yaml auf dem Rechner bleiben.
   #
   # Die Werte selbst stehen in secrets.yaml (nicht im Repo). Welche Schluessel
   # dort erwartet werden, zeigt secrets.yaml.example.
   #
-  # Geprueft mit 2026.9.0: ESPHome setzt substitutions erst nach dem
-  # Zusammenfuehren der Pakete ein und merkt sich dabei die Herkunft aus
-  # !secret. "esphome config" zeigt weiterhin nur "!secret '<name>'", nicht den
-  # Wert -- der Umweg ueber substitutions gibt also nichts preis.
+  # ACHTUNG, geprueft mit 2026.9.0: Seit die Pakete aus dem Repo kommen, zeigt
+  # "esphome config" die Werte aus der secrets.yaml AUFGELOEST, nicht mehr als
+  # "!secret '<name>'" (Begruendung unten bei "Was der Bezug aus dem Repo
+  # bedeutet"). Die Ausgabe nie in eine Datei umleiten, nie weitergeben, nie
+  # mit --show-secrets aufrufen.
   wifi_ssid:     !secret wifi_ssid
   wifi_password: !secret wifi_password
   ap_password:   !secret ap_password
@@ -98,7 +99,7 @@ packages:
 #     die Ausgabe den Namen zurueckholt. Die Ausgabe deshalb nicht in eine
 #     Datei schreiben und nicht weitergeben. Im Repo steht davon nichts, die
 #     Werte stehen ausschliesslich in der lokalen secrets.yaml.
-#   * Die sieben Seitendateien stehen mit Absicht NICHT in der Liste:
+#   * Die Seitendateien stehen mit Absicht NICHT in der Liste:
 #     .pv-dashboard_ui.yaml holt sie selbst ueber !include, aus demselben
 #     Checkout. Wer sie zusaetzlich auflistet, bekommt jede Seite zweimal und
 #     der Lauf bricht ab ("ID redraw_curve redefined"). Genauso kommt images/

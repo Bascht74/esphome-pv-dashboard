@@ -13,9 +13,9 @@
 # Zugangsdaten stehen hier ABSICHTLICH nicht. pv-dashboard.yaml legt sie oben
 # als substitutions an und holt sie dort mit !secret aus der secrets.yaml;
 # hier steht nur ${wifi_ssid}, ${wifi_password}, ${ap_password}, ${api_key}
-# und ${ota_password}. Damit bleibt diese Datei frei von Geheimnissen -- sie
-# soll spaeter aus dem GitHub-Repo nachgeladen werden, waehrend
-# pv-dashboard.yaml und secrets.yaml auf dem Rechner bleiben.
+# und ${ota_password}. Damit bleibt diese Datei frei von Geheimnissen -- das
+# Geraet laedt sie aus dem GitHub-Repo nach (packages: in pv-dashboard.yaml),
+# waehrend pv-dashboard.yaml und secrets.yaml auf dem Rechner bleiben.
 #
 # ESPHome loest substitutions erst nach dem Zusammenfuehren aller Pakete auf,
 # deshalb wirken die Werte aus pv-dashboard.yaml auch hier drin.

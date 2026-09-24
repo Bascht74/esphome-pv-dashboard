@@ -83,15 +83,109 @@ substitutions:
   name_selfuse_note: "ohne Voll-WR"   # 79 von 92
 
   # --- Tarife fuer die Geldrechnung, in Cent je kWh ---------------------
-  # Noch ungenutzt: Die Kachel TAGESERTRAG zeigt Platzhalter. Der Standard
-  # steht hier, damit Simulator und Screenshot-Lauf weiterbauen, sobald die
-  # Rechnung dazukommt. Die eigenen Tarife gehoeren in
-  # .pv-dashboard_anlage.yaml.
+  # Genutzt von money_update (Kachel TAGESERTRAG, Sensoren "Ertrag heute"
+  # usw.). Der Standard steht hier, damit Simulator und Screenshot-Lauf
+  # bauen; die eigenen Tarife gehoeren in .pv-dashboard_anlage.yaml.
   tarif_volleinspeisung_ct: "20.0"  # Volleinspeisung
   tarif_ueberschuss_ct: "10.0"      # Ueberschusseinspeisung
   tarif_bezug_ct: "30.0"            # Strombezug
 
+# Geldwerte des Tages (Review 25.09.2026): money_update rechnet sie aus
+# den Tarifen oben, schreibt die Kachel TAGESERTRAG und legt sie in diese
+# globals und in vier Sensoren -- damit stehen sie anderen Lambdas und in
+# Home Assistant zur Verfuegung. Euro, positiv = Ertrag bzw. Kosten.
+globals:
+  - id: money_subsidy
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: money_saved
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: money_import
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: money_total
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+
+sensor:
+  - platform: template
+    id: sensor_money_total
+    name: "Ertrag heute"
+    unit_of_measurement: "€"
+    device_class: monetary
+    accuracy_decimals: 2
+    update_interval: never
+    lambda: 'return id(money_total);'
+  - platform: template
+    id: sensor_money_subsidy
+    name: "Förderung heute"
+    unit_of_measurement: "€"
+    device_class: monetary
+    accuracy_decimals: 2
+    update_interval: never
+    lambda: 'return id(money_subsidy);'
+  - platform: template
+    id: sensor_money_saved
+    name: "Ersparnis heute"
+    unit_of_measurement: "€"
+    device_class: monetary
+    accuracy_decimals: 2
+    update_interval: never
+    lambda: 'return id(money_saved);'
+  - platform: template
+    id: sensor_money_import
+    name: "Bezugskosten heute"
+    unit_of_measurement: "€"
+    device_class: monetary
+    accuracy_decimals: 2
+    update_interval: never
+    lambda: 'return id(money_import);'
+
 script:
+  # ---------------------------------------------------------------------
+  # Geldrechnung des Tages, Energien in kWh seit Mitternacht:
+  #   full_feed  Einspeisung des Volleinspeise-Kreises
+  #   surplus    Ueberschusseinspeisung des Hausnetz-Kreises
+  #   self_use   selbst verbrauchter PV-Strom (Hausnetz-Kreis)
+  #   grid_in    Netzbezug
+  # Foerderung = full_feed x tarif_volleinspeisung_ct
+  #            + surplus x tarif_ueberschuss_ct
+  # Gespart    = self_use x tarif_bezug_ct
+  # Bezug      = grid_in x tarif_bezug_ct
+  # Ertrag     = Foerderung + Gespart - Bezug
+  # NAN in einem Wert ergibt Striche in dessen Zeile und im Ertrag.
+  # ---------------------------------------------------------------------
+  - id: money_update
+    parameters:
+      full_feed: float
+      surplus: float
+      self_use: float
+      grid_in: float
+    then:
+      - lambda: |-
+          const float sub = (full_feed * ${tarif_volleinspeisung_ct} + surplus * ${tarif_ueberschuss_ct}) / 100.0f;
+          const float saved = self_use * ${tarif_bezug_ct} / 100.0f;
+          const float cost = grid_in * ${tarif_bezug_ct} / 100.0f;
+          const float total = sub + saved - cost;
+          id(money_subsidy) = sub;
+          id(money_saved) = saved;
+          id(money_import) = cost;
+          id(money_total) = total;
+          auto &num = id(fmt_num);
+          lv_label_set_text(id(val_money), num(total, "%.2f", "--,--").c_str());
+          const std::string split = num(sub, "+%.2f", "+--,--") + " €\n" + num(saved, "+%.2f", "+--,--") + " €\n" +
+                                    num(-cost, "%.2f", "---,--") + " €";
+          lv_label_set_text(id(money_split), split.c_str());
+          id(sensor_money_total).publish_state(total);
+          id(sensor_money_subsidy).publish_state(sub);
+          id(sensor_money_saved).publish_state(saved);
+          id(sensor_money_import).publish_state(cost);
+
   # Zeichnet Balken (Ist) und Linie (Prognose) aus beiden Reihen. Sie liegen
   # uebereinander in derselben Kachel: Die Linie steht im YAML nach den Balken
   # und wird deshalb darueber gezeichnet.
@@ -913,7 +1007,7 @@ lvgl:
                   { label: { text: "\U000F1A43", text_font: f_icon, text_color: $col_solar } },
                   { label: { width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_heatpump}", text_color: $col_ink2, text_font: f_unit } },
                   { label: { id: v_heatpump, width: 94, height: 21, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_s, text_color: $col_ink } },
-                  { label: { id: d_heatpump, width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "kW · COP --", text_color: $col_ink3, text_font: f_unit } } ] }
+                  { label: { id: d_heatpump, width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "kW · WW --°C", text_color: $col_ink3, text_font: f_unit } } ] }
               - obj: { styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 218, y: 419, width: 100, height: 112, bg_color: $col_bg, pad_all: 1, layout: { type: FLEX, flex_flow: COLUMN, flex_align_main: CENTER, flex_align_cross: CENTER, flex_align_track: CENTER, pad_row: 4 }, widgets: [
                   { label: { text: "\U000F072A", text_font: f_icon, text_color: $col_ink2 } },
                   { label: { width: 94, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_misc}", text_color: $col_ink2, text_font: f_unit } },

@@ -58,19 +58,11 @@ script:
       cycles: int
     then:
       - lambda: |-
+          id(data_seen)[1] = millis();  // Datenalter, sys_refresh
           if (bat < 0 || bat > 2)
             return;
-          // Dezimalkomma wie ueberall auf der Oberflaeche
-          auto fmt = [](float v, const char *f) -> std::string {
-            if (std::isnan(v))
-              return "--";
-            char b[24];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          // Dezimalkomma wie ueberall (fmt_num, .pv-dashboard_ui.yaml)
+          auto fmt = [](float v, const char *f) { return id(fmt_num)(v, f, "--"); };
           // Reihenfolge = Tabellenzeilen 1..7
           std::string cell[7];
           cell[0] = fmt(soc, "%.0f");
