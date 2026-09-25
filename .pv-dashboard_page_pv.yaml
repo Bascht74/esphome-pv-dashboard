@@ -35,6 +35,11 @@ globals:
     type: int
     restore_value: false
     initial_value: '0'
+  # Text der gemeldeten Stoerung je Wechselrichter: alert_clear braucht ihn,
+  # wenn der Wechselrichter wieder in Ordnung ist.
+  - id: pv_fault_text
+    type: std::array<std::string, 4>
+    restore_value: false
   # Tageswert und Temperatur je Wechselrichter, damit pv_update und
   # pv_status dieselbe Zweitzeile schreiben
   - id: pv_inv_energy
@@ -51,7 +56,8 @@ script:
   # Zustand eines Wechselrichters (Review 25.09.2026):
   #   inv   0..3 = Wechselrichter 1..4 (name_inv_1..4)
   #   ok    false = Stoerung: Rahmen und Punkt rot, die Zweitzeile zeigt
-  #         text; beim Uebergang in die Stoerung kommt eine Meldung
+  #         text; beim Uebergang in die Stoerung kommt eine Meldung, bei
+  #         true verschwindet sie wieder (alert_clear)
   #   text  Fehlertext bzw. Fehlercode des Wechselrichters
   #   temp  Temperatur in °C, NAN = keine; steht sonst in der Zweitzeile
   #         hinter dem Tageswert
@@ -65,6 +71,10 @@ script:
     then:
       - lambda: |-
           if (inv < 0 || inv > 3)
+            return;
+          // Fehlender Wechselrichter (dev_present, Bit 8 + inv): keine
+          // Stoerung, keine Meldung -- sein Kasten ist ausgeblendet.
+          if (!(id(dev_present) & (1u << (8 + inv))))
             return;
           static const char *const NAME[4] = {"${name_inv_1}", "${name_inv_2}", "${name_inv_3}", "${name_inv_4}"};
           lv_obj_t *const box[4] = {id(pv_inv_box_1), id(pv_inv_box_2), id(pv_inv_box_3), id(pv_inv_box_4)};
@@ -80,15 +90,24 @@ script:
             lv_obj_set_style_bg_color(dot[inv], lv_color_hex($col_crit), 0);
             lv_label_set_text(sb[inv], text.empty() ? "Störung" : text.c_str());
             lv_obj_set_style_text_color(sb[inv], lv_color_hex($col_crit), 0);
-            if (!was)
-              id(alert_push).execute(2, std::string(NAME[inv]), text.empty() ? std::string("Störung") : text);
+            // Neue Stoerung oder anderer Fehlertext: melden, ein anderer
+            // Text ersetzt den alten in den Meldungen.
+            const std::string msg = text.empty() ? std::string("Störung") : text;
+            if (!was || msg != id(pv_fault_text)[inv]) {
+              if (was)
+                id(alert_clear).execute(std::string(NAME[inv]), id(pv_fault_text)[inv]);
+              id(pv_fault_text)[inv] = msg;
+              id(alert_push).execute(2, std::string(NAME[inv]), msg);
+            }
           } else {
+            if (was)
+              id(alert_clear).execute(std::string(NAME[inv]), id(pv_fault_text)[inv]);
             id(pv_fault) &= ~(1 << inv);
             lv_obj_set_style_border_color(box[inv], lv_color_hex(norm[inv]), 0);
             lv_obj_set_style_bg_color(dot[inv], lv_color_hex($col_feed), 0);
             lv_obj_set_style_text_color(sb[inv], lv_color_hex($col_ink2), 0);
             std::string t = "W · " + id(fmt_num)(id(pv_inv_energy)[inv], "%.1f", "--,-") + " kWh";
-            if (!std::isnan(temp))
+            if (std::isfinite(temp))
               t += " · " + id(fmt_num)(temp, "%.0f", "--") + " °C";
             lv_label_set_text(sb[inv], t.c_str());
           }
@@ -122,7 +141,7 @@ script:
             id(pv_inv_energy)[inv] = energy;
             if (!(id(pv_fault) & (1 << inv))) {
               std::string t = sub(energy);
-              if (!std::isnan(id(pv_inv_temp)[inv]))
+              if (std::isfinite(id(pv_inv_temp)[inv]))
                 t += " · " + id(fmt_num)(id(pv_inv_temp)[inv], "%.0f", "--") + " °C";
               lv_label_set_text(sb[inv], t.c_str());
             }

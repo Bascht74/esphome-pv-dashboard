@@ -20,8 +20,14 @@
 # mit headless-Display: Es oeffnet sich kein Fenster. Das Programm zeigt
 # nacheinander alle elf Seiten (die Statistik zweimal, Woche und Monat) --
 # der passende Reiter unten ist dabei markiert -- und die drei Fenster
-# Sprachassistent, Firmware-Update und System,
-# legt jedes Bild als BMP ab und beendet sich dann selbst.
+# Sprachassistent, Firmware-Update und System. Zum Schluss dieselbe Anlage
+# ohne einige Geraete (dev_present, dev_apply): Uebersicht, PV, Speicher und
+# Haus noch einmal als *_reduced, dazu drei Werte leer (val_leer: Entitaet
+# nicht belegt oder nicht verfuegbar). Jedes Bild landet als BMP, dann beendet
+# sich das Programm selbst. Die Werte kommen ueber dieselben Skripte wie
+# spaeter aus Home Assistant (ov_*, pv_update ...); den Datenweg selbst
+# (.pv-dashboard_ha.yaml) bindet der Lauf nicht ein -- ohne API gaebe es
+# nichts zu empfangen.
 #
 # Die Bilder landen in shots/ unterhalb des Verzeichnisses, aus dem der
 # Befehl gestartet wird -- also im Projektordner starten. snapshot.take nimmt
@@ -101,6 +107,10 @@ script:
     then:
       # Uhr sofort fuellen, sonst steht bis zur naechsten vollen Minute --:--
       - script.execute: update_clock
+      # Volle Anlage: dev_present startet ohnehin mit allem (nicht im NVS);
+      # hier noch einmal ausdruecklich, damit die Bilder davon nicht abhaengen.
+      - lambda: 'id(dev_present) = 0xFFFFFu;'
+      - script.execute: dev_apply
 
       # Beispieldaten, damit Meldungen, Speicher, PV und die Meldungszeile
       # nicht leer auf den Bildern stehen -- nur hier, nie im Geraet. Aelteste
@@ -131,6 +141,20 @@ script:
       - script.wait: alert_push
       # Die Speicher-Warnung (Zeile 3 von 0..4) gilt als quittiert
       - script.execute: { id: alert_ack, row: 3 }
+      # Zusammenfassen: dieselbe Stoerung noch zweimal -> eine Zeile "x3".
+      # Das erste Auftreten um 150 min zurueckdatieren, damit "seit" eine
+      # andere Zeit zeigt als die Zeile.
+      - lambda: |-
+          lv_obj_t *row = lv_obj_get_child(id(alert_list), 0);
+          uint32_t ts = (uint32_t) (uintptr_t) lv_obj_get_user_data(row);
+          if (ts >= 1000000000u)
+            lv_obj_set_user_data(row, (void *) (uintptr_t) (ts - 150 * 60));
+      - script.execute: { id: alert_push, severity: 2, device: "${name_wb_1}", text: "Fehlerstrom erkannt (RCD 6 mA DC) – Ladevorgang abgebrochen" }
+      - script.execute: { id: alert_push, severity: 2, device: "${name_wb_1}", text: "Fehlerstrom erkannt (RCD 6 mA DC) – Ladevorgang abgebrochen" }
+      # Behoben: kommt und geht wieder, steht also nicht in der Liste
+      - script.execute: { id: alert_push, severity: 1, device: "System", text: "Keine Daten von Netz" }
+      - script.wait: alert_push
+      - script.execute: { id: alert_clear, device: "System", text: "Keine Daten von Netz" }
       - script.execute: { id: storage_update, bat: 0, soc: 72, current: 12.4, cell_min: 3.281, cell_max: 3.302, temp_min: 18, temp_max: 21, cycles: 412 }
       - script.execute: { id: storage_update, bat: 1, soc: 38, current: -8.9, cell_min: 3.195, cell_max: 3.377, temp_min: 19, temp_max: 24, cycles: 398 }
       - script.execute: { id: storage_update, bat: 2, soc: 100, current: 0.0, cell_min: 3.402, cell_max: 3.411, temp_min: 17, temp_max: 19, cycles: 1287 }
@@ -396,20 +420,41 @@ script:
       - lambda: |-
           id(day_curve).publish_state("0.3,1.2,3.5,7.1,11.8,16.2,19.4,21,20.3,17.6,13.2,8.4,4.6,1.9,0.5,0");
           id(forecast_curve).publish_state("0.4,1.5,4,7.8,12.5,17,20.1,21.6,21,18.4,14,9,5,2.1,0.6,0");
-      # Zweitzeile des Speicherkastens mit zweistelligen Tageswerten, damit
-      # die Breite (176, jeder Wert mit Einheit) mit auf dem Bild ist.
-      - lvgl.label.update:
-          id: sub_battery_total
-          text: "W · \U000F004512,3 kWh · \U000F005D18,5 kWh"
-      # Ringe Autarkie und Eigenverbrauch: Den Verlauf sieht man nur, wo der
-      # Deckbogen ihn freigibt -- dessen Wert ist 100 - Anteil (100 = leer).
-      - lvgl.arc.update: { id: ring_cover_autarky, value: 13 }
-      - lvgl.arc.update: { id: ring_cover_selfuse, value: 36 }
-      - lvgl.label.update: { id: val_autarky, text: "87" }
-      - lvgl.label.update: { id: val_selfuse, text: "64" }
+      # Anlagenschema ueber die Skripte ov_* (wie spaeter aus Home
+      # Assistant): Hausnetz-Kreis 588 + 7835 + 5231 = 13654 W, davon
+      # Verbraucher 620 + 312 + 7400 = 8332 W, Speicher laedt 196 W, der
+      # Rest 5126 W geht ueber den Hauszaehler, mit den 6214 W des
+      # Voll-WR 11340 W ins Netz. Flaeche 8 bleibt ohne Aufruf (Striche).
+      - script.execute: { id: ov_inverter, n: 0, power: 6214, energy: 38.5 }
+      - script.execute: { id: ov_inverter, n: 1, power: 588, energy: 3.9 }
+      - script.execute: { id: ov_inverter, n: 2, power: 7835, energy: 58.2 }
+      - script.execute: { id: ov_inverter, n: 3, power: 5231, energy: 46.4 }
+      - script.execute: { id: ov_roof, n: 0, power: 3412, energy: 20.1 }
+      - script.execute: { id: ov_roof, n: 1, power: 2980, energy: 19.2 }
+      - script.execute: { id: ov_roof, n: 2, power: 312, energy: 2.0 }
+      - script.execute: { id: ov_roof, n: 3, power: 298, energy: 2.0 }
+      - script.execute: { id: ov_roof, n: 4, power: 4120, energy: 30.4 }
+      - script.execute: { id: ov_roof, n: 5, power: 3890, energy: 29.1 }
+      - script.execute: { id: ov_roof, n: 6, power: 3650, energy: 31.2 }
+      - script.execute: { id: ov_battery, n: 0, soc: 72, current: 12.4, voltage: 53.2 }
+      - script.execute: { id: ov_battery, n: 1, soc: 38, current: -8.9, voltage: 52.1 }
+      - script.execute: { id: ov_battery, n: 2, soc: 100, current: 0.0, voltage: 54.4 }
+      # Zweistellige Tageswerte, damit die Breite (176, jeder Wert mit
+      # Einheit) mit auf dem Bild ist.
+      - script.execute: { id: ov_battery_total, power: 196, charged: 12.3, discharged: 18.5 }
+      - script.execute: { id: ov_consumer, n: 0, power: 620, sub: "" }
+      - script.execute: { id: ov_consumer, n: 1, power: 312, sub: "Basis 0,3" }
+      - script.execute: { id: ov_consumer, n: 2, power: 7400, sub: "12,8 kWh" }
+      - script.execute: { id: ov_consumer, n: 3, power: 0, sub: "frei" }
+      - script.execute: { id: ov_meter, n: 0, power: 6214, energy: 88.7 }
+      - script.execute: { id: ov_meter, n: 1, power: 5126, energy: 30.6 }
+      - script.execute: { id: ov_grid, power: -11340 }
+      - script.execute: { id: ov_house, power: 8332, energy: 21.3 }
+      - script.execute: { id: ov_totals, gen: 147.0, use: 21.3, feed: 119.3, draw: 3.4, full_feed: 88.7, surplus: 30.6, remaining: 12.6 }
 
       - script.execute: { id: shots_take, name: 01_overview.bmp }
       - script.wait: shots_take
+
 
       - lvgl.page.show: page_pv
       - script.execute: shots_nav_clear
@@ -474,6 +519,13 @@ script:
       - lvgl.matrix.button.update: { id: btn_nav_alerts, control: { checked: true } }
       - script.execute: { id: shots_take, name: 09_alerts.bmp }
       - script.wait: shots_take
+      # Filter: nur Stoerungen, danach wieder alle
+      - lambda: 'id(alert_filter) = 2;'
+      - script.execute: alert_refresh
+      - script.execute: { id: shots_take, name: 09_alerts_filter.bmp }
+      - script.wait: shots_take
+      - lambda: 'id(alert_filter) = -1;'
+      - script.execute: alert_refresh
 
       # Overlays im top_layer, wie im Betrieb ueber der Uebersicht. Die Texte
       # sind Beispiele, damit Umbruch und Ueberlauf mit auf dem Bild sind.
@@ -512,5 +564,42 @@ script:
       - script.wait: shots_take
       - lvgl.widget.hide: sys_panel
 
+      # Kleinere Anlage ueber dieselbe Maske, die am Geraet die
+      # Referenz-Entitaeten setzen (dev_present, Bits in
+      # .pv-dashboard_ui.yaml): nur der
+      # Voll-WR mit seinen zwei Flaechen, Speicher 1 und 2, Wallbox 1 und
+      # die beiden Zaehler. Alles andere bleibt an seinem Platz, aber
+      # unsichtbar -- Kaesten, Werte, Leitungen, Kugeln. Zuletzt im Lauf,
+      # damit die Stoerung von Wechselrichter 4 (dev_apply nimmt sie beim
+      # Ausblenden aus den Meldungen) die Bilder davor nicht aendert.
+      - lvgl.page.show: page_overview
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_overview, control: { checked: true } }
+      - lambda: |-
+          id(dev_present) = (1u << 0) | (1u << 1) | (1u << 8) | (1u << 12) | (1u << 13) |
+                            (1u << 15) | (1u << 18) | (1u << 19);
+      - script.execute: dev_apply
+      # Wert weg, Geraet bleibt: Ertrag WR 1, Spannung Speicher 2 und
+      # Leistung Hauszaehler leer (Entitaet nicht belegt/nicht verfuegbar)
+      - script.execute: { id: ov_inverter, n: 0, power: 6214, energy: !lambda 'return id(val_leer);' }
+      - script.execute: { id: ov_battery, n: 1, soc: 38, current: -8.9, voltage: !lambda 'return id(val_leer);' }
+      - script.execute: { id: ov_meter, n: 1, power: !lambda 'return id(val_leer);', energy: 30.6 }
+      - script.execute: { id: shots_take, name: 01_overview_reduced.bmp }
+      - script.wait: shots_take
+      - lvgl.page.show: page_pv
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_pv, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 02_pv_reduced.bmp }
+      - script.wait: shots_take
+      - lvgl.page.show: page_battery
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_battery, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 03_battery_reduced.bmp }
+      - script.wait: shots_take
+      - lvgl.page.show: page_house
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_house, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 06_house_reduced.bmp }
+      - script.wait: shots_take
       - delay: 200ms
       - lambda: 'exit(0);'

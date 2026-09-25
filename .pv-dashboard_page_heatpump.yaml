@@ -104,7 +104,7 @@ script:
           lv_label_set_text(id(hp_outdoor), fmt(outdoor, "%.1f", "--,-").c_str());
           lv_label_set_text(id(hp_room), fmt(room, "%.1f", "--,-").c_str());
           lv_label_set_text(id(hp_humidity), fmt(humidity, "%.0f", "--").c_str());
-          show(id(hp_co2_group), !std::isnan(co2));
+          show(id(hp_co2_group), std::isfinite(co2));
           lv_label_set_text(id(hp_co2), fmt(co2, "%.0f", "---").c_str());
           lv_label_set_text(id(hp_dhw), fmt(dhw, "%.1f", "--,-").c_str());
           // Zweitzeile im Schema der Uebersicht: die Compact P hat keinen
@@ -186,6 +186,7 @@ lvgl:
       widgets:
         # ---------------- Startseite wie das CTS700 Touch ----------------
         - obj:
+            id: hp_tile_main
             styles: st_tile
             scrollbar_mode: 'off'
             scrollable: false
@@ -316,6 +317,7 @@ lvgl:
         # bei + 14, Wert f_val_m (25) rechtsbuendig bei + 12, Linie bei
         # + 47; die letzte endet bei 396 von 410.
         - obj:
+            id: hp_tile_info
             styles: st_tile
             scrollbar_mode: 'off'
             scrollable: false
@@ -352,6 +354,7 @@ lvgl:
 
         # ---------------- Strom ------------------------------------------
         - obj:
+            id: hp_tile_power
             styles: st_tile
             scrollbar_mode: 'off'
             scrollable: false

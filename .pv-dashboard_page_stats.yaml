@@ -125,7 +125,7 @@ script:
               const float v = strtof(q, &end);
               if (end == q)
                 break;
-              out[n++] = std::isnan(v) ? 0.0f : std::max(v, 0.0f);
+              out[n++] = !std::isfinite(v) ? 0.0f : std::max(v, 0.0f);
               q = end;
               while (*q == ',' || *q == ' ')
                 q++;

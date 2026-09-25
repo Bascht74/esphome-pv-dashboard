@@ -1,0 +1,155 @@
+##############################################################################
+# Testaufbau fuer den Datenweg: Simulator + .pv-dashboard_ha.yaml + API
+#
+# Nur fuer tests/ha_probe.py -- nicht fuer das Geraet, nicht zum Ansehen.
+# Die Probe baut diese Datei, startet das Programm ohne Fenster, meldet sich
+# als nachgebautes Home Assistant an und prueft, was das Panel zeigt. Aufruf
+# aus dem Projektordner (docs/03, "Tests"):
+#
+#   ~/.venvs/esphome-beta/bin/python tests/ha_probe.py
+#
+# Keine Geheimnisse: api ohne Verschluesselung, nur auf dem Rechner
+# (localhost), kein WLAN, kein OTA. Gebaut wird nach .esphome/build/
+# (ESPHOME_DATA_DIR setzt die Probe), damit der Schrift-Cache greift.
+#
+# Beobachten: Ein Intervall schreibt jede Sekunde eine Zeile "PROBE {json}"
+# auf stdout -- dev_present, ausgeblendete Kaesten, Texte einzelner Labels,
+# offene Systemmeldungen, Prognose- und Statistikreihen. Die Probe liest
+# nur diese Zeilen. probe_shot(name) legt auf Wunsch ein Bild ab.
+##############################################################################
+
+substitutions:
+  # Nicht belegt: Referenz (Flaeche 8 faellt weg) und Nicht-Referenz
+  # (nur der Wert Raumtemperatur bleibt leer), zwei Schreibweisen
+  ha_pv8_power: none
+  ha_hp_room: FALSE
+
+packages:
+  sim: !include ../pv-dashboard-sim.yaml
+  ha: !include ../.pv-dashboard_ha.yaml
+
+esphome:
+  name: pv-dashboard-test
+  friendly_name: PV-Dashboard Test
+
+api:
+  port: 16063
+  actions:
+    - action: probe_shot
+      variables:
+        name: string
+      then:
+        - snapshot.take:
+            id: main_display
+            filename: !lambda 'return name;'
+
+logger:
+  level: INFO
+
+display:
+  - id: !extend main_display
+    headless: true
+    snapshot_key: !remove
+
+touchscreen: !remove
+
+lvgl:
+  touchscreens: !remove
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          auto esc = [](const std::string &s) {
+            std::string o;
+            for (char c : s) {
+              if (c == '"' || c == '\\')
+                o += '\\';
+              if ((unsigned char) c >= 0x20)
+                o += c;
+            }
+            return o;
+          };
+          auto box = [](lv_obj_t *l) { return lv_obj_get_parent(l); };
+          auto hid = [](lv_obj_t *o) { return (o != nullptr && lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) ? "1" : "0"; };
+          auto txt = [&](lv_obj_t *l) { return "\"" + esc(lv_label_get_text(l)) + "\""; };
+          // offene Systemmeldungen (USER_1 = freie Zeile, USER_4 = behoben)
+          int sys_open = 0, link = 0;
+          lv_obj_t *list = id(alert_list);
+          for (uint32_t i = 0; i < lv_obj_get_child_count(list); i++) {
+            lv_obj_t *e = lv_obj_get_child(list, i);
+            if (lv_obj_has_flag(e, LV_OBJ_FLAG_USER_1) || lv_obj_has_flag(e, LV_OBJ_FLAG_USER_4))
+              continue;
+            const char *k = lv_label_get_text(lv_obj_get_child(e, 5));
+            if (strncmp(k, "System: ", 8) != 0)
+              continue;
+            sys_open++;
+            if (strcmp(k, "System: Keine Verbindung zu Home Assistant") == 0)
+              link++;
+          }
+          std::string j = "{\"ms\":" + std::to_string(millis());
+          j += ",\"ready\":" + std::to_string(id(ha_ready) ? 1 : 0);
+          j += ",\"dev\":" + std::to_string(id(dev_present));
+          j += ",\"hid\":{";
+          j += std::string("\"roof1\":") + hid(box(id(v_roof_1))) + ",\"roof8\":" + hid(box(id(v_roof_8)));
+          j += std::string(",\"inv1\":") + hid(box(id(v_wr_full))) + ",\"pv_inv1\":" + hid(id(pv_inv_box_1));
+          j += std::string(",\"bat1\":") + hid(box(id(v_bat1))) + ",\"bat2\":" + hid(box(id(v_bat2)));
+          j += std::string(",\"bat3\":") + hid(box(id(v_bat3))) + ",\"wb1\":" + hid(box(id(v_wb1)));
+          j += std::string(",\"wb2\":") + hid(box(id(v_wb2))) + ",\"heatpump\":" + hid(box(id(v_heatpump)));
+          j += std::string(",\"meter_house\":") + hid(box(id(v_meter_house))) + "}";
+          j += ",\"txt\":{";
+          j += "\"v_bat1\":" + txt(id(v_bat1)) + ",\"d_bat1\":" + txt(id(d_bat1));
+          j += ",\"v_bat2\":" + txt(id(v_bat2)) + ",\"v_bat3\":" + txt(id(v_bat3));
+          j += ",\"hp_room\":" + txt(id(hp_room)) + ",\"hp_humidity\":" + txt(id(hp_humidity));
+          j += ",\"v_wb1\":" + txt(id(v_wb1)) + ",\"lbl_alert\":" + txt(id(lbl_alert));
+          j += ",\"v_house\":" + txt(id(v_house)) + ",\"v_misc\":" + txt(id(v_misc)) + ",\"v_heatpump\":" + txt(id(v_heatpump));
+          j += ",\"ht_c_total\":" + txt(id(ht_c_total)) + ",\"ht_out_total\":" + txt(id(ht_out_total)) + "}";
+          // Kein Label irgendwo darf "inf" oder "nan" zeigen: alle Seiten und
+          // die oberste Ebene rekursiv, Wort mit Nicht-Buchstaben daneben
+          // ("Infos", "Finanz" zaehlen nicht)
+          int bad = 0, labels = 0;
+          std::string bad_txt;
+          std::function<void(lv_obj_t *)> walk = [&](lv_obj_t *o) {
+            if (o == nullptr)
+              return;
+            if (lv_obj_check_type(o, &lv_label_class)) {
+              labels++;
+              std::string t = lv_label_get_text(o);
+              for (auto &ch : t)
+                ch = tolower((unsigned char) ch);
+              for (const char *w : {"inf", "nan"}) {
+                for (size_t p = t.find(w); p != std::string::npos; p = t.find(w, p + 1)) {
+                  const bool l = p == 0 || !isalpha((unsigned char) t[p - 1]);
+                  const bool r = p + 3 >= t.size() || !isalpha((unsigned char) t[p + 3]);
+                  if (l && r) {
+                    bad++;
+                    if (bad_txt.empty())
+                      bad_txt = lv_label_get_text(o);
+                  }
+                }
+              }
+            }
+            for (uint32_t i = 0; i < lv_obj_get_child_count(o); i++)
+              walk(lv_obj_get_child(o, i));
+          };
+          for (lv_obj_t *pg : {id(page_overview)->obj, id(page_pv)->obj, id(page_forecast)->obj, id(page_weather)->obj,
+                               id(page_battery)->obj, id(page_wallbox)->obj, id(page_heatpump)->obj, id(page_house)->obj,
+                               id(page_grid)->obj, id(page_stats)->obj, id(page_alerts)->obj, lv_layer_top()})
+            walk(pg);
+          j += ",\"labels\":" + std::to_string(labels) + ",\"bad\":" + std::to_string(bad) + ",\"bad_txt\":\"" + esc(bad_txt) + "\"";
+          j += ",\"sys_open\":" + std::to_string(sys_open) + ",\"link\":" + std::to_string(link);
+          j += ",\"stats_week\":\"" + esc(id(stats_text)[0]) + "\"";
+          j += ",\"forecast_curve\":\"" + esc(id(forecast_curve).state) + "\"";
+          j += ",\"day_curve\":\"" + esc(id(day_curve).state) + "\"";
+          // Temperatur je Wechselrichter, wie pv_status sie merkt: Zahl, "leer"
+          // (val_leer, -inf) oder "nan" (noch kein Wert). Die Unterzeile der Seite PV
+          // ist ausserhalb der Seite gekuerzt ("...") und taugt nicht.
+          auto wert = [](float v) -> std::string {
+            if (std::isinf(v))
+              return v < 0 ? "leer" : "+inf";
+            return std::isnan(v) ? "nan" : std::to_string(v);
+          };
+          j += ",\"inv_temp\":[\"" + wert(id(pv_inv_temp)[0]) + "\",\"" + wert(id(pv_inv_temp)[1]) + "\"]";
+          j += ",\"wx_stamp\":\"" + esc(id(ha_wx_stamp)) + "\"}";
+          printf("PROBE %s\n", j.c_str());
+          fflush(stdout);

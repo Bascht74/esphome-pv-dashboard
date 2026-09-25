@@ -39,6 +39,13 @@ substitutions:
   # Zweitzeile unter dem Mittelwert (326 px)
   name_bat_summary: "Mittel der drei Speicher"   # 139 von 326
 
+# Letzter Ladezustand je Speicher in %, fuer den Mittelwert (storage_mean)
+globals:
+  - id: storage_soc
+    type: std::array<float, 3>
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN}'
+
 script:
   # ---------------------------------------------------------------------
   # Speicher (Seite page_battery): Spalte bat + 1 der Tabelle und Ring bat.
@@ -58,20 +65,28 @@ script:
       cycles: int
     then:
       - lambda: |-
-          id(data_seen)[1] = millis();  // Datenalter, sys_refresh
           if (bat < 0 || bat > 2)
             return;
+          // Fehlender Speicher (dev_present, Bit 12 + bat): Spalte bleibt
+          // leer, kein Datenalter -- dev_apply hat sie geleert.
+          if (!(id(dev_present) & (1u << (12 + bat))))
+            return;
+          id(data_seen)[1] = millis();  // Datenalter, sys_refresh
           // Dezimalkomma wie ueberall (fmt_num, .pv-dashboard_ui.yaml)
           auto fmt = [](float v, const char *f) { return id(fmt_num)(v, f, "--"); };
           // Reihenfolge = Tabellenzeilen 1..7
           std::string cell[7];
           cell[0] = fmt(soc, "%.0f");
-          cell[1] = (!std::isnan(current) && fabsf(current) < 0.05f) ? std::string("0,0")
+          cell[1] = (std::isfinite(current) && fabsf(current) < 0.05f) ? std::string("0,0")
                                                                       : fmt(current, "%+.1f");
           cell[2] = fmt(cell_min, "%.3f");
           cell[3] = fmt(cell_max, "%.3f");
-          cell[4] = fmt((cell_max - cell_min) * 1000.0f, "%.0f");   // NAN bleibt NAN
-          cell[5] = (std::isnan(temp_min) || std::isnan(temp_max))
+          // NAN bleibt NAN (Striche), ein leerer Wert (val_leer, -inf) macht
+          // die Differenz leer -- nie inf - inf
+          cell[4] = (std::isinf(cell_max) || std::isinf(cell_min)) ? std::string()
+                                                                   : fmt((cell_max - cell_min) * 1000.0f, "%.0f");
+          cell[5] = (std::isinf(temp_min) && std::isinf(temp_max)) ? std::string()
+                    : (std::isnan(temp_min) || std::isnan(temp_max))
                         ? std::string("--")
                         : fmt(temp_min, "%.0f") + " / " + fmt(temp_max, "%.0f");
           cell[6] = cycles < 0 ? std::string("--") : std::to_string(cycles);
@@ -82,24 +97,34 @@ script:
           // Ring: der Bogen deckt den leeren Teil (100 - SoC) in Spurfarbe ab
           lv_obj_t *const covers[3] = {id(ring_cover_1), id(ring_cover_2), id(ring_cover_3)};
           lv_obj_t *const values[3] = {id(ring_val_1), id(ring_val_2), id(ring_val_3)};
-          const float v = std::isnan(soc) ? 0.0f : std::clamp(soc, 0.0f, 100.0f);
+          const float v = !std::isfinite(soc) ? 0.0f : std::clamp(soc, 0.0f, 100.0f);
           lv_arc_set_value(covers[bat], (int32_t) lroundf(100.0f - v));
           lv_label_set_text(values[bat], cell[0].c_str());
 
-          // Mittel nur, wenn alle drei Werte da sind -- sonst waere es falsch
-          static float socs[3] = {NAN, NAN, NAN};
-          socs[bat] = soc;
-          float sum = 0.0f;
-          int known = 0;
-          for (float s : socs)
-            if (!std::isnan(s)) {
-              sum += s;
-              known++;
-            }
-          lv_label_set_text(id(val_storage_mean), known == 3 ? fmt(sum / 3.0f, "%.0f").c_str() : "--");
+          id(storage_soc)[bat] = soc;
           auto now = id(dash_time).now();
           if (now.is_valid())
             lv_label_set_text_fmt(id(lbl_storage_stand), "Stand %02d:%02d", now.hour, now.minute);
+      - script.execute: storage_mean
+
+  # Mittelwert ueber die vorhandenen Speicher (dev_present), nur wenn jeder
+  # von ihnen einen Wert hat -- sonst waere er falsch. Gerufen von
+  # storage_update und von dev_apply, wenn ein Speicher kommt oder geht.
+  - id: storage_mean
+    then:
+      - lambda: |-
+          float sum = 0.0f;
+          int known = 0, need = 0;
+          for (int k = 0; k < 3; k++) {
+            if (!(id(dev_present) & (1u << (12 + k))))
+              continue;
+            need++;
+            if (std::isfinite(id(storage_soc)[k])) {
+              sum += id(storage_soc)[k];
+              known++;
+            }
+          }
+          lv_label_set_text(id(val_storage_mean), (need > 0 && known == need) ? id(fmt_num)(sum / known, "%.0f", "--").c_str() : "--");
 
 lvgl:
   pages:
@@ -186,7 +211,7 @@ lvgl:
                              indicator: { arc_color: $col_line, arc_width: 14, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
                     - label: { id: ring_val_1, align: CENTER, y: -9, text: "--", text_font: f_val_xl, text_color: $col_ink }
                     - label: { align: CENTER, y: 19, text: "%", styles: st_unit }
-              - label: { x: 350, y: 172, width: 300, height: 17, long_mode: DOT, text_align: CENTER, styles: st_label, text: "${ name_bat_1 | upper }" }
+              - label: { id: bat_ring_name_1, x: 350, y: 172, width: 300, height: 17, long_mode: DOT, text_align: CENTER, styles: st_label, text: "${ name_bat_1 | upper }" }
               - obj:
                   x: 725
                   y: 16
@@ -206,7 +231,7 @@ lvgl:
                              indicator: { arc_color: $col_line, arc_width: 14, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
                     - label: { id: ring_val_2, align: CENTER, y: -9, text: "--", text_font: f_val_xl, text_color: $col_ink }
                     - label: { align: CENTER, y: 19, text: "%", styles: st_unit }
-              - label: { x: 650, y: 172, width: 300, height: 17, long_mode: DOT, text_align: CENTER, styles: st_label, text: "${ name_bat_2 | upper }" }
+              - label: { id: bat_ring_name_2, x: 650, y: 172, width: 300, height: 17, long_mode: DOT, text_align: CENTER, styles: st_label, text: "${ name_bat_2 | upper }" }
               - obj:
                   x: 1025
                   y: 16
@@ -226,7 +251,7 @@ lvgl:
                              indicator: { arc_color: $col_line, arc_width: 14, arc_rounded: false, pad_all: 0 }, knob: { bg_opa: TRANSP, pad_all: 0 } }
                     - label: { id: ring_val_3, align: CENTER, y: -9, text: "--", text_font: f_val_xl, text_color: $col_ink }
                     - label: { align: CENTER, y: 19, text: "%", styles: st_unit }
-              - label: { x: 950, y: 172, width: 300, height: 17, long_mode: DOT, text_align: CENTER, styles: st_label, text: "${ name_bat_3 | upper }" }
+              - label: { id: bat_ring_name_3, x: 950, y: 172, width: 300, height: 17, long_mode: DOT, text_align: CENTER, styles: st_label, text: "${ name_bat_3 | upper }" }
 
         # Tabellenkachel, innen 1250 x 395: Titel 0..17, Tabelle ab y 26 mit
         # 8 Zeilen x (21 + 2 x 12) = 360 -> 26..386, Reserve 9.

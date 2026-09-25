@@ -148,7 +148,9 @@ is valid!" und gibt dabei **genau diese drei** aus (nachgemessen am 20.09.2026):
 - **Geschwärzte Werte in der Config-Ausgabe** — eine Heuristik schwärzt jedes
   Feld mit „_key“ im Namen: hier `transparency_key`, im Simulator zusätzlich
   `snapshot_key: SDLK_F12`. Reine Kosmetik; laut Warnung fällt die Heuristik mit
-  2026.12.0 weg.
+  2026.12.0 weg. **Noch zu prüfen beim nächsten `config`-Lauf:** Im YAML steht
+  `transparency_key` nicht mehr, die Bilder nutzen `transparency: alpha_channel`
+  (`.pv-dashboard_utility.yaml`); ob die Warnung dazu noch erscheint, ist offen.
 
 **Erst bei der Code-Erzeugung, nicht bei `esphome config`:**
 
@@ -174,6 +176,7 @@ is valid!" und gibt dabei **genau diese drei** aus (nachgemessen am 20.09.2026):
 
 ---
 
-Stand: 20.09.2026 (#19177 in 2026.9.0 enthalten, in der Bauumgebung
+Stand: 25.09.2026 (Demo-Konfigurationen auf 2026.9.0, `transparency_key` als
+offen markiert); davor 20.09.2026 (#19177 in 2026.9.0 enthalten, in der Bauumgebung
 `esphome-2026.9.0` nachgeprüft; `~/.venvs/esphome-beta` an dem Tag auf 2026.9.0
-gehoben). Geprüfter Commit: `c6a432f` (12.09.2026).
+gehoben). Geprüfter Stand: Commit `0e2bd3d` (25.09.2026).

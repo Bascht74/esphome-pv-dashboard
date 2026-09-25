@@ -141,12 +141,12 @@ script:
           // Fahrzeug
           lv_label_set_text(c.vehicle, vehicle.empty() ? "Kein Fahrzeug" : vehicle.c_str());
           lv_label_set_text(c.status, status.empty() ? "--" : status.c_str());
-          const float s = std::isnan(soc) ? 0.0f : std::clamp(soc, 0.0f, 100.0f);
-          const float l = std::isnan(limit) ? 0.0f : std::clamp(limit, 0.0f, 100.0f);
+          const float s = !std::isfinite(soc) ? 0.0f : std::clamp(soc, 0.0f, 100.0f);
+          const float l = !std::isfinite(limit) ? 0.0f : std::clamp(limit, 0.0f, 100.0f);
           lv_bar_set_value(c.bar_soc, (int32_t) lroundf(s), LV_ANIM_OFF);
           // Hinter dem Ladestand der Rest bis zum Limit, gedaempft wie in evcc
           lv_bar_set_value(c.bar_limit, (int32_t) lroundf(std::max(s, l)), LV_ANIM_OFF);
-          if (std::isnan(limit)) {
+          if (!std::isfinite(limit)) {
             lv_obj_add_flag(c.marker, LV_OBJ_FLAG_HIDDEN);
           } else {
             lv_obj_clear_flag(c.marker, LV_OBJ_FLAG_HIDDEN);
@@ -190,6 +190,7 @@ lvgl:
       widgets:
         # ---------------- Wallbox 1 --------------------------------------
         - obj:
+            id: wb_card_1
             styles: st_tile
             scrollbar_mode: 'off'
             scrollable: false
@@ -300,6 +301,7 @@ lvgl:
               - label: { x: 420, y: 431, width: 190, height: 17, long_mode: DOT, text_align: RIGHT, styles: st_unit, text: "%" }
         # ---------------- Wallbox 2 --------------------------------------
         - obj:
+            id: wb_card_2
             styles: st_tile
             scrollbar_mode: 'off'
             scrollable: false

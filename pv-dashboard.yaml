@@ -79,6 +79,10 @@ packages:
       - .pv-dashboard_display.yaml
       - .pv-dashboard_audio.yaml
       - .pv-dashboard_core.yaml
+      # Datenweg von Home Assistant (tools/ha_bindings.py); braucht in Home
+      # Assistant die Option "Allow the device to perform Home Assistant
+      # actions" (docs/03, Abschnitt "Datenweg")
+      - .pv-dashboard_ha.yaml
 
 ##############################################################################
 # Was der Bezug aus dem Repo bedeutet
@@ -114,4 +118,5 @@ packages:
 #   display: !include .pv-dashboard_display.yaml
 #   audio:   !include .pv-dashboard_audio.yaml
 #   core:    !include .pv-dashboard_core.yaml
+#   ha:      !include .pv-dashboard_ha.yaml
 ##############################################################################

@@ -43,15 +43,20 @@
 globals:
   # Halbstunden heute (48 Plaetze ab 00:00, kW) fuer den Verlauf; die Marke
   # "jetzt" braucht sie nicht, das Band aber beim Neuzeichnen.
+  # Start mit NAN (kein Wert), nicht 0: Sonst zeichnete das Intervall vor
+  # den ersten Daten eine Null-Linie statt leer zu bleiben.
   - id: fc_p50
     type: std::array<float, 48>
     restore_value: false
+    initial_value: '[] { std::array<float, 48> a; a.fill(NAN); return a; }()'
   - id: fc_p10
     type: std::array<float, 48>
     restore_value: false
+    initial_value: '[] { std::array<float, 48> a; a.fill(NAN); return a; }()'
   - id: fc_p90
     type: std::array<float, 48>
     restore_value: false
+    initial_value: '[] { std::array<float, 48> a; a.fill(NAN); return a; }()'
   # Folgetage: je P50, P10, P90 in kWh, NAN = kein Wert
   - id: fc_days
     type: std::array<float, 21>
@@ -177,7 +182,7 @@ script:
           for (int i = 0; i < 34; i++) {
             const int k = i + 10;
             for (float v : {p50[k], p10[k], p90[k]})
-              if (!std::isnan(v))
+              if (std::isfinite(v))
                 peak = std::max(peak, v);
           }
           const bool known = peak > 0.0f;
@@ -188,9 +193,9 @@ script:
           int np = 0;
           for (int i = 0; i < 34; i++) {
             const int k = i + 10;
-            const float lo = std::isnan(p10[k]) ? p50[k] : p10[k];
-            const float hi = std::isnan(p90[k]) ? p50[k] : p90[k];
-            if (std::isnan(lo) || std::isnan(hi)) {
+            const float lo = !std::isfinite(p10[k]) ? p50[k] : p10[k];
+            const float hi = !std::isfinite(p90[k]) ? p50[k] : p90[k];
+            if (!std::isfinite(lo) || !std::isfinite(hi)) {
               lv_obj_add_flag(band[i], LV_OBJ_FLAG_HIDDEN);
             } else {
               const int y0 = (int) lroundf(BASE - hi / peak * H);
@@ -199,7 +204,7 @@ script:
               lv_obj_set_height(band[i], std::max(y1 - y0, 2));
               lv_obj_clear_flag(band[i], LV_OBJ_FLAG_HIDDEN);
             }
-            if (!std::isnan(p50[k])) {
+            if (std::isfinite(p50[k])) {
               pts[np].x = (lv_value_precise_t) (SW * i + SW / 2);
               pts[np].y = (lv_value_precise_t) (BASE - 30.0f - p50[k] / peak * H);  // Linie liegt bei y 30
               np++;
@@ -230,7 +235,7 @@ script:
           const auto &d = id(fc_days);
           float dpeak = 0.0f;
           for (int i = 0; i < 21; i++)
-            if (!std::isnan(d[i]))
+            if (std::isfinite(d[i]))
               dpeak = std::max(dpeak, d[i]);
           if (dpeak <= 0.0f)
             dpeak = 1.0f;
@@ -238,7 +243,7 @@ script:
           for (int i = 0; i < 7; i++) {
             const float v = d[i * 3], lo = d[i * 3 + 1], hi = d[i * 3 + 2];
             lv_label_set_text(val[i], id(fmt_num)(v, "%.1f", "--,-").c_str());
-            if (std::isnan(v)) {
+            if (!std::isfinite(v)) {
               lv_obj_add_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
             } else {
               const int h = std::max((int) lroundf(v / dpeak * DH), 2);
@@ -246,9 +251,9 @@ script:
               lv_obj_set_height(bar[i], h);
               lv_obj_clear_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
             }
-            if (std::isnan(lo) || std::isnan(hi)) {
+            if (!std::isfinite(lo) || !std::isfinite(hi)) {
               lv_obj_add_flag(rng[i], LV_OBJ_FLAG_HIDDEN);
-              lv_label_set_text(sub[i], "P10 bis P90 --");
+              lv_label_set_text(sub[i], (std::isinf(lo) || std::isinf(hi)) ? "" : "P10 bis P90 --");
             } else {
               const int y0 = (int) lroundf(DBASE - hi / dpeak * DH);
               const int y1 = (int) lroundf(DBASE - lo / dpeak * DH);

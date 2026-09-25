@@ -30,7 +30,7 @@ Verfügbare Seitenhöhe: **668 px** (y 76 bis y 744) -- zwischen Statusleiste,
 der dauerhaft eingeblendeten Meldungszeile und der Reiterleiste. Seiteninhalt
 beginnt bei y 84 (Dokument 03).
 
-**Die vierzehn Schriften des Projekts.** `size:` steht in
+**Die dreizehn Schriften des Projekts.** `size:` steht in
 `.pv-dashboard_utility.yaml` -- das ist die Stellschraube. `line_height` ist der
 **vierte** Parameter von `font::Font(...)` im erzeugten Schriftcode
 `.esphome/build/pv-dashboard-sim/src/main.cpp` -- damit wird gerechnet. Beide
@@ -53,6 +53,13 @@ gelten auch am Gerät. Abgelesen am 20.09.2026:
 | `f_val_xl` | 30 | 39 | direkt am Widget |
 | `f_wx_l` | 44 | 44 | direkt am Widget -- Wetterbilder der Tagesspalten (Prognose, Wetter); abgelesen am 25.09.2026 im shots-Bau |
 | `f_wx_xl` | 88 | 88 | direkt am Widget -- Wetterbild „jetzt“; abgelesen am 25.09.2026 im shots-Bau |
+
+Die Symbole (`f_icon`, `f_wx_l`, `f_wx_xl` und die zwei Pfeile in `f_unit`)
+kommen aus dem Web-Font von Material Design Icons. Seit 25.09.2026 ist er fest
+auf das Release **v7.4.47** genagelt, über die Substitution `mdi_font_url` in
+`.pv-dashboard_utility.yaml`
+(`…/MaterialDesign-Webfont/raw/v7.4.47/fonts/materialdesignicons-webfont.ttf`)
+statt `master`; die Codepunkte in den Kommentaren stammen aus diesem Stand.
 
 Die Modulbilder sind 24 px hoch. Bei einer neuen Schrift den Wert ebenso
 nachsehen, nicht schätzen. Zum Auffrischen
@@ -243,7 +250,8 @@ Ecken eine Tasche.
 
 ---
 
-Stand: 20.09.2026 (Zeilenhöhen aus `main.cpp` und `size:` aus
-`.pv-dashboard_utility.yaml`, alle zwölf an diesem Tag neu abgelesen; Punkt 3 am
-20.09.2026 um die einstellbaren Beschriftungen ergänzt). Geprüfter Commit:
-`c6a432f` (12.09.2026).
+Stand: 25.09.2026 (dreizehn Schriften, `f_wx_l`/`f_wx_xl` ergänzt;
+MDI-Web-Font auf v7.4.47 festgelegt); davor 20.09.2026 (Zeilenhöhen aus
+`main.cpp` und `size:` aus `.pv-dashboard_utility.yaml`, alle damals zwölf
+neu abgelesen; Punkt 3 um die einstellbaren Beschriftungen ergänzt).
+Geprüfter Stand: Commit `0e2bd3d` (25.09.2026).

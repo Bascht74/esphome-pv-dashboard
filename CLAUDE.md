@@ -57,7 +57,15 @@ ESPHome 2026.9.0 (`docs/05`):
 sips -s format png shots/*.bmp --out shots/
 ~/.venvs/esphome-beta/bin/esphome compile pv-dashboard-sim.yaml
 ~/.venvs/esphome-beta/bin/esphome config pv-dashboard.yaml
+~/.venvs/esphome-beta/bin/python -m unittest discover tests
+~/.venvs/esphome-beta/bin/python tests/ha_probe.py
 ```
+
+Die letzten beiden sind die Tests: Unit-Tests für die Werkzeuge und den leeren
+Wert, dazu eine End-zu-End-Probe gegen ein nachgebildetes Home Assistant
+(Datenweg, Ausblenden nicht belegter Geräte, Sammelmeldung). `ha_probe.py`
+kennt `--no-build` (vorhandenen Bau nehmen) und `--shots` (mit Bildlauf).
+Nach jeder Änderung an Datenweg, Zuordnung oder Übersicht laufen lassen.
 
 **Die Kette bis zum Bild ist Pflicht.** Die Config-Prüfung findet nur Syntax
 und Semantik, Überläufe und Kollisionen erst das Bild. Der shots-Lauf schreibt

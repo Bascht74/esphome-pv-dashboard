@@ -14,10 +14,15 @@
 # Update-Abdeckung). Jede Seite liegt in einer eigenen Datei und haengt
 # unten als Paket dran.
 #
-# Stand: Statusleiste, Meldungszeile, rechte Kennzahlenspalte, Menueleiste,
-# Anlagenschema mit Flussanimation, Seiten PV & Prognose, Speicher und
-# Meldungen. Wallboxen, Waermepumpe und Haus sind noch Platzhalter.
+# Stand 25.09.2026: alle elf Seiten gebaut; ihre Werte kommen ueber die
+# Skripte der Seiten.
 ##############################################################################
+
+# Anfangswert von dev_present (globals unten): alle Plaetze vorhanden. Der
+# Datenweg (.pv-dashboard_ha.yaml, nur Geraet) setzt "0u" -- er steht in
+# der Paketliste spaeter und sticht damit diesen Wert.
+substitutions:
+  dev_present_start: "0xFFFFFu"
 
 # Die Seiten, jede in einer eigenen Datei. Wer diesen Kern einbindet, bekommt
 # sie alle mit -- Geraet, Simulator und Screenshots sehen dieselbe Oberflaeche.
@@ -27,7 +32,7 @@
 # deklariert sind (config_helpers.merge_config: alt + neu, dazu die
 # Umkehrung in packages._walk_package_dict). Die Reiter unten in der
 # Menueleiste zaehlen auf dieselbe Ordnung: Uebersicht, PV, Prognose,
-# Wetter, Speicher, Wallbox, Waermepumpe, Haus, Netz, Statistik, Meldungen.
+# Wetter, Speicher, Wallboxen, Waermepumpe, Haus, Netz, Statistik, Meldungen.
 packages:
   page_overview: !include .pv-dashboard_page_overview.yaml
   page_pv:       !include .pv-dashboard_page_pv.yaml
@@ -104,7 +109,29 @@ globals:
     type: std::array<uint32_t, 8>
     restore_value: false
     initial_value: '{0, 0, 0, 0, 0, 0, 0, 0}'
-  # Quellen, deren Ausbleiben schon gemeldet ist (Bit je Quelle)
+  # Welche Geraete die Anlage hat (25.09.2026), ein Bit je Platz:
+  #    0..7  pv_1..pv_8      Flaechen und Module (name_pv_1..8)
+  #    8..11 inv_1..inv_4    Wechselrichter (name_inv_1..4)
+  #   12..14 bat_1..bat_3    Speicher
+  #   15, 16 wb_1, wb_2      Wallboxen
+  #   17     heatpump        Waermepumpe
+  #   18, 19 meter_pv, meter_house   PV-Zaehler, Hauszaehler
+  # Hausnetz, Sonstige und Hausanschluss gibt es immer. Am Geraet setzt der
+  # Datenweg die Maske (.pv-dashboard_ha.yaml): Ein Platz ist da, solange
+  # seine Referenz-Entitaet einen gueltigen Wert hat; eine auf none gesetzte
+  # Referenz heisst "gibt es nicht". dev_apply blendet danach aus, die
+  # Leitungen und Kugeln des Schemas zieht der erzeugte Block der Uebersicht
+  # selbst nach. Bewusst NICHT im NVS (Wunsch des Nutzers): Nach einem
+  # Neustart ist nichts da, bis die Referenzen melden.
+  # Start: dev_present_start -- hier alle 20 Plaetze (Simulator, Screenshots),
+  # der Datenweg setzt 0. Dieselbe Reihenfolge steht in
+  # tools/flow_animation.py und tools/ha_bindings.py (PLAETZE).
+  - id: dev_present
+    type: uint32_t
+    restore_value: false
+    initial_value: '${dev_present_start}'
+  # Quellen, deren Ausbleiben schon gemeldet ist (Bit 0..7 je Quelle,
+  # Bit 8 = Verbindung zu Home Assistant, siehe sys_refresh)
   - id: data_stale_reported
     type: int
     restore_value: false
@@ -115,11 +142,25 @@ globals:
   #   fmt_power(v)                wie evcc: unter 1000 W "450 W", sonst
   #                               "3,2 kW"; NAN ergibt "--"
   # Aufruf in einem Lambda: id(fmt_num)(soc, "%.0f", "--").
+  # Zwei Arten "kein Wert" (25.09.2026): das gewoehnliche NAN ergibt die
+  # Striche (noch keine Daten), der Sonderwert val_leer ergibt einen LEEREN
+  # Text -- der Wert ist nicht belegt oder in Home Assistant nicht verfuegbar
+  # (.pv-dashboard_ha.yaml). val_leer ist -unendlich: Das ueberlebt auf
+  # jeder IEEE-754-Plattform (auch RISC-V) Kopieren und die Rechnungen hier
+  # (-inf + x, -inf * k > 0, -inf / k > 0 bleiben -inf); erkannt wird es mit
+  # std::isinf (beide Vorzeichen). Wo Werte Geometrie, Kugeln oder Farben
+  # steuern, gilt nur std::isfinite als "Wert da".
+  - id: val_leer
+    type: float
+    restore_value: false
+    initial_value: '-std::numeric_limits<float>::infinity()'
   - id: fmt_num
     type: std::function<std::string(float, const char *, const char *)>
     restore_value: false
     initial_value: |-
       [](float v, const char *f, const char *none) -> std::string {
+        if (std::isinf(v))
+          return std::string();
         if (std::isnan(v))
           return std::string(none);
         char b[32];
@@ -134,6 +175,8 @@ globals:
     restore_value: false
     initial_value: |-
       [](float v, const char *none) -> std::string {
+        if (std::isinf(v))
+          return std::string();
         if (std::isnan(v))
           return std::string(none);
         long w = lroundf(v);
@@ -150,6 +193,8 @@ globals:
     restore_value: false
     initial_value: |-
       [](float v) -> std::string {
+        if (std::isinf(v))
+          return std::string();
         if (std::isnan(v))
           return std::string("--");
         char b[24];
@@ -172,18 +217,52 @@ script:
   # drei Symbole in der Statusleiste und das Systemfenster (Tipp auf die
   # Symbole). Laeuft alle 10 s (interval unten). Bleibt eine Quelle, die
   # schon einmal geliefert hat, laenger als data_stale_s aus, kommt einmal
-  # eine Warnung in die Meldungen; liefert sie wieder, darf sie erneut.
+  # eine Warnung in die Meldungen; liefert sie wieder, verschwindet die
+  # Warnung (alert_clear) und darf erneut kommen. Fehlt die Verbindung zu
+  # Home Assistant (WLAN oder API), kommt statt der Einzelwarnungen eine
+  # Stoerung "Keine Verbindung zu Home Assistant".
   # Im Simulator gibt es weder WLAN noch API -- dort steht "Simulator".
   - id: sys_refresh
     then:
       - lambda: |-
           static const char *const SRC[8] = {"PV", "Speicher", "Wallboxen", "Wärmepumpe", "Haus", "Netz", "Prognose", "Wetter"};
           lv_obj_t *const age[8] = {id(sys_age_0), id(sys_age_1), id(sys_age_2), id(sys_age_3), id(sys_age_4), id(sys_age_5), id(sys_age_6), id(sys_age_7)};
+          // WLAN und Home Assistant. Als verbunden gilt HA nur mit
+          // abonnierten Zustaenden -- ein Log-Client allein zaehlt nicht.
+          std::string wifi_txt = "Simulator", api_txt = "Simulator";
+          bool wifi_ok = true, api_ok = true;
+          #ifdef USE_WIFI
+          wifi_ok = wifi::global_wifi_component->is_connected();
+          wifi_txt = wifi_ok ? ("verbunden · " + std::to_string(wifi::global_wifi_component->wifi_rssi()) + " dBm") : std::string("getrennt");
+          #endif
+          #ifdef USE_API
+          api_ok = api::global_api_server->is_connected_with_state_subscription();
+          api_txt = api_ok ? "verbunden" : "getrennt";
+          #endif
+          // Ohne Verbindung zu HA eine Sammelmeldung statt einer je Quelle
+          // (Bit 8 in data_stale_reported); sie verschwindet, sobald HA wieder
+          // da ist. Gezaehlt wird erst, wenn schon eine Quelle geliefert hat,
+          // sonst meldete jeder Start ohne HA sofort.
+          const bool link_ok = wifi_ok && api_ok;
+          static const std::string LINK_TXT = "Keine Verbindung zu Home Assistant";
+          // Quellen ohne vorhandenes Geraet (dev_present) melden nichts: PV
+          // braucht eine Flaeche oder einen Wechselrichter, Speicher einen
+          // Speicher usw. Die uebrigen Quellen haengen an keinem Geraeteplatz.
+          static const uint32_t NEED[8] = {0xFFFu, 7u << 12, 3u << 15, 1u << 17, 0, 0, 0, 0};
           const uint32_t now = millis();
           const uint32_t limit = (uint32_t) ${data_stale_s} * 1000u;
           int seen = 0, stale = 0;
           for (int k = 0; k < 8; k++) {
             const uint32_t t = id(data_seen)[k];
+            if (NEED[k] && !(id(dev_present) & NEED[k])) {
+              lv_label_set_text(age[k], "kein Gerät");
+              lv_obj_set_style_text_color(age[k], lv_color_hex($col_ink3), 0);
+              if (id(data_stale_reported) & (1 << k)) {
+                id(data_stale_reported) &= ~(1 << k);
+                id(alert_clear).execute(std::string("System"), std::string("Keine Daten von ") + SRC[k]);
+              }
+              continue;
+            }
             if (t == 0) {
               lv_label_set_text(age[k], "noch keine Werte");
               lv_obj_set_style_text_color(age[k], lv_color_hex($col_ink3), 0);
@@ -201,31 +280,30 @@ script:
             lv_obj_set_style_text_color(age[k], old ? lv_color_hex($col_warn) : lv_color_hex($col_ink), 0);
             if (old) {
               stale++;
-              if (!(id(data_stale_reported) & (1 << k))) {
+              if (link_ok && !(id(data_stale_reported) & (1 << k))) {
                 id(data_stale_reported) |= (1 << k);
-                id(alert_push).execute(1, std::string("System"),
-                                       std::string("Keine Daten von ") + SRC[k] + " seit " + std::to_string(a / 60) + " min");
+                // Fester Text ohne Minuten: So erkennt alert_push ein
+                // Wiederauftreten, und alert_clear findet die Meldung.
+                id(alert_push).execute(1, std::string("System"), std::string("Keine Daten von ") + SRC[k]);
               }
-            } else {
+            } else if (id(data_stale_reported) & (1 << k)) {
               id(data_stale_reported) &= ~(1 << k);
+              id(alert_clear).execute(std::string("System"), std::string("Keine Daten von ") + SRC[k]);
             }
+          }
+          if (!link_ok && seen > 0 && !(id(data_stale_reported) & (1 << 8))) {
+            id(data_stale_reported) |= (1 << 8);
+            id(alert_push).execute(2, std::string("System"), LINK_TXT);
+          } else if (link_ok && (id(data_stale_reported) & (1 << 8))) {
+            id(data_stale_reported) &= ~(1 << 8);
+            id(alert_clear).execute(std::string("System"), LINK_TXT);
           }
           // Symbol Datenalter: grau = noch nichts, weiss = alles frisch,
           // gelb = mindestens eine Quelle ueberfaellig
           lv_label_set_text(id(lbl_sys_data), stale > 0 ? "\U000F05CE" : "\U000F05E1");
           lv_obj_set_style_text_color(id(lbl_sys_data), seen == 0 ? lv_color_hex($col_ink3) : (stale > 0 ? lv_color_hex($col_warn) : lv_color_hex($col_ink)), 0);
 
-          // WLAN und Home Assistant
-          std::string wifi_txt = "Simulator", api_txt = "Simulator";
-          bool wifi_ok = true, api_ok = true;
-          #ifdef USE_WIFI
-          wifi_ok = wifi::global_wifi_component->is_connected();
-          wifi_txt = wifi_ok ? ("verbunden · " + std::to_string(wifi::global_wifi_component->wifi_rssi()) + " dBm") : std::string("getrennt");
-          #endif
-          #ifdef USE_API
-          api_ok = api::global_api_server->is_connected();
-          api_txt = api_ok ? "verbunden" : "getrennt";
-          #endif
+          // WLAN und Home Assistant (Zustand oben ermittelt)
           lv_label_set_text(id(sys_wifi), wifi_txt.c_str());
           lv_label_set_text(id(sys_api), api_txt.c_str());
           lv_obj_set_style_text_color(id(sys_wifi), wifi_ok ? lv_color_hex($col_ink) : lv_color_hex($col_crit), 0);
@@ -303,6 +381,125 @@ script:
           }
           // Speichert im NVS und loest ueber on_value redraw_curve aus
           id(day_curve).make_call().set_value(buf).perform();
+
+  # Fehlende Geraete ausblenden (25.09.2026): liest dev_present und blendet
+  # je Platz Kasten, Werte und Grafik aus bzw. wieder ein. Die Lage aendert
+  # sich nicht -- alles bleibt, wo es steht, nur unsichtbar. Leitungen und
+  # Kugeln des Schemas zieht der erzeugte Block der Uebersicht selbst nach
+  # (tools/flow_animation.py, Regel 10). Gerufen beim Start (on_boot von
+  # bar_status) und wenn eine Referenz-Entitaet kommt oder geht
+  # (.pv-dashboard_ha.yaml). Kaesten ohne eigene ID findet es ueber ihr
+  # Wert-Label (lv_obj_get_parent).
+  # Nebenbei: Kanaele fehlender Geraete auf 0 und die Stoerung eines
+  # fehlenden Wechselrichters aus den Meldungen nehmen.
+  - id: dev_apply
+    then:
+      - lambda: |-
+          const uint32_t d = id(dev_present);
+          auto da = [d](int b) -> bool { return (d >> b) & 1u; };
+          auto zeig = [](lv_obj_t *o, bool v) {
+            if (o == nullptr)
+              return;
+            if (v)
+              lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+            else
+              lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+          };
+          auto box = [](lv_obj_t *label) { return lv_obj_get_parent(label); };
+          const bool bat_any = d & (7u << 12);
+          auto &ch = id(flow_ch);
+
+          // --- Uebersicht: Daecher, Dachgruppen, Wechselrichter ----------
+          lv_obj_t *const roof[8] = {id(v_roof_1), id(v_roof_2), id(v_roof_3), id(v_roof_4), id(v_roof_5), id(v_roof_6), id(v_roof_7), id(v_roof_8)};
+          lv_obj_t *const grp[4] = {id(roof_grp_1), id(roof_grp_2), id(roof_grp_3), id(roof_grp_4)};
+          lv_obj_t *const inv[4] = {id(v_wr_full), id(v_wr_mini), id(v_wr_hybrid1), id(v_wr_hybrid2)};
+          for (int i = 0; i < 8; i++) {
+            zeig(box(roof[i]), da(i));
+            if (!da(i)) ch[i] = 0.0f;
+          }
+          for (int k = 0; k < 4; k++) {
+            zeig(grp[k], da(2 * k) || da(2 * k + 1));
+            zeig(box(inv[k]), da(8 + k));
+            if (!da(8 + k)) ch[8 + k] = 0.0f;
+          }
+          // Rahmen der Volleinspeisung gehoert zum ersten Wechselrichter
+          zeig(id(frame_full), da(8));
+          zeig(id(lbl_feedin), da(8));
+          // --- Speicher, Summenkasten, Verbraucher, Zaehler --------------
+          lv_obj_t *const bat[3] = {id(v_bat1), id(v_bat2), id(v_bat3)};
+          for (int n = 0; n < 3; n++) {
+            zeig(box(bat[n]), da(12 + n));
+            if (!da(12 + n)) ch[13 + n] = 0.0f;
+          }
+          zeig(box(id(e_batt)), bat_any);
+          if (!bat_any) ch[12] = 0.0f;
+          zeig(box(id(v_heatpump)), da(17));
+          zeig(box(id(v_wb1)), da(15));
+          zeig(box(id(v_wb2)), da(16));
+          if (!da(17)) ch[17] = 0.0f;
+          if (!da(15)) ch[19] = 0.0f;
+          if (!da(16)) ch[20] = 0.0f;
+          zeig(box(id(v_meter_pv)), da(18));
+          zeig(box(id(v_meter_house)), da(19));
+          if (!da(18)) ch[21] = 0.0f;
+          if (!da(19)) ch[22] = 0.0f;
+
+          // --- Seite PV: Wechselrichterkasten und Flaechen ---------------
+          lv_obj_t *const pinv[4] = {id(pv_inv_box_1), id(pv_inv_box_2), id(pv_inv_box_3), id(pv_inv_box_4)};
+          lv_obj_t *const pstr[8] = {id(pv_str_val_1), id(pv_str_val_2), id(pv_str_val_3), id(pv_str_val_4),
+                                     id(pv_str_val_5), id(pv_str_val_6), id(pv_str_val_7), id(pv_str_val_8)};
+          for (int k = 0; k < 4; k++)
+            zeig(pinv[k], da(8 + k));
+          for (int i = 0; i < 8; i++)
+            zeig(box(pstr[i]), da(i));
+          // Stoerung eines fehlenden Wechselrichters: Meldung weg, Merker weg
+          static const char *const INV_NAME[4] = {"${name_inv_1}", "${name_inv_2}", "${name_inv_3}", "${name_inv_4}"};
+          for (int k = 0; k < 4; k++)
+            if (!da(8 + k) && (id(pv_fault) & (1 << k))) {
+              id(pv_fault) &= ~(1 << k);
+              id(alert_clear).execute(std::string(INV_NAME[k]), id(pv_fault_text)[k]);
+            }
+
+          // --- Seite Speicher: Ring, Name, Tabellenspalte ----------------
+          lv_obj_t *const ring[3] = {id(ring_cover_1), id(ring_cover_2), id(ring_cover_3)};
+          lv_obj_t *const rname[3] = {id(bat_ring_name_1), id(bat_ring_name_2), id(bat_ring_name_3)};
+          static const char *const BAT_HEAD[3] = {"${ name_bat_1 | upper }", "${ name_bat_2 | upper }", "${ name_bat_3 | upper }"};
+          static uint32_t vorher = 0xFFFFFFFFu;   // Spalten nur beim Wechsel anfassen
+          lv_obj_t *tbl = id(tbl_storage)->obj;
+          for (int n = 0; n < 3; n++) {
+            zeig(box(ring[n]), da(12 + n));
+            zeig(rname[n], da(12 + n));
+            const bool war = (vorher >> (12 + n)) & 1u;
+            if (war == da(12 + n) && vorher != 0xFFFFFFFFu)
+              continue;
+            // Fehlt der Speicher, bleibt die Spalte leer; kommt er wieder,
+            // stehen Striche bis zum naechsten storage_update.
+            lv_table_set_cell_value(tbl, 0, n + 1, da(12 + n) ? BAT_HEAD[n] : "");
+            for (int r = 1; r < 8; r++)
+              if (!da(12 + n) || !war)
+                lv_table_set_cell_value(tbl, r, n + 1, da(12 + n) ? "--" : "");
+          }
+          vorher = d;
+          id(storage_mean).execute();
+
+          // --- Seiten Wallboxen und Waermepumpe ---------------------------
+          zeig(id(wb_card_1), da(15));
+          zeig(id(wb_card_2), da(16));
+          zeig(id(hp_tile_main), da(17));
+          zeig(id(hp_tile_info), da(17));
+          zeig(id(hp_tile_power), da(17));
+
+          // --- Seite Haus: Unterzeilen je Speicher und Ladepunkt,
+          //     Waermepumpe in der Spalte Verbraucher ----------------------
+          lv_obj_t *const hb[9] = {id(ht_b1), id(ht_b1_n), id(ht_b1_d), id(ht_b2), id(ht_b2_n), id(ht_b2_d), id(ht_b3), id(ht_b3_n), id(ht_b3_d)};
+          for (int k = 0; k < 9; k++)
+            zeig(hb[k], da(12 + k / 3));
+          lv_obj_t *const hw[6] = {id(ht_w1), id(ht_w1_n), id(ht_w1_d), id(ht_w2), id(ht_w2_n), id(ht_w2_d)};
+          for (int k = 0; k < 6; k++)
+            zeig(hw[k], da(15 + k / 3));
+          zeig(id(ht_c1), da(17));
+          zeig(id(ht_c1_n), da(17));
+          zeig(id(ht_c1_d), da(17));
 
   - id: update_clock
     mode: restart
@@ -780,6 +977,10 @@ lvgl:
       # Statusleiste
       - obj:
           id: bar_status
+          # Einmal beim Start, nach dem Laden von dev_present aus dem NVS
+          # (Prioritaet 390, nach LVGL und globals): fehlende Geraete aus.
+          on_boot:
+            - script.execute: dev_apply
           x: 0
           y: 0
           width: 1280
@@ -852,8 +1053,9 @@ lvgl:
                 text_font: f_bar
                 text_color: $col_ink
 
-      # Meldungszeile: Zahl der offenen Meldungen und die juengste davon,
-      # oeffnet auf Tipp die Liste. Den Text setzt alert_refresh.
+      # Meldungszeile: offene Meldungen je Schweregrad und die schwerste
+      # davon, oeffnet auf Tipp die Liste. Text und Farbe des Grundes setzt
+      # alert_refresh (rot bei Stoerung, gelb bei Warnung, sonst ruhig).
       - obj:
           id: bar_alert
           x: 0

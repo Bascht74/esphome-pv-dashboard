@@ -63,7 +63,7 @@ font:
     extras:
       - file:
           type: web
-          url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+          url: "${mdi_font_url}"
         glyphs: ["\U000F005D", "\U000F0045"]
   - file: "gfonts://IBM+Plex+Sans@600"
     id: f_label
@@ -153,7 +153,7 @@ font:
   #   \U000F059B  weather-sunset-down  Sonnenuntergang
   - file:
       type: web
-      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+      url: "${mdi_font_url}"
     id: f_icon
     size: 24
     bpp: 4
@@ -177,14 +177,14 @@ font:
   # f_wx_xl fuer "jetzt", f_wx_l fuer die Tagesspalten.
   - file:
       type: web
-      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+      url: "${mdi_font_url}"
     id: f_wx_xl
     size: 88
     bpp: 4
     glyphs: ["\U000F0599", "\U000F0594", "\U000F0595", "\U000F0590", "\U000F0591", "\U000F0597", "\U000F0596", "\U000F0598", "\U000F067F", "\U000F0592", "\U000F0593", "\U000F067E", "\U000F059D", "\U000F059E", "\U000F0F2F"]
   - file:
       type: web
-      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+      url: "${mdi_font_url}"
     id: f_wx_l
     size: 44
     bpp: 4
@@ -349,6 +349,13 @@ substitutions:
   gap_tile: "8"
   radius_tile: "11"
   radius_box: "10"
+
+  # --- Symbolschrift ----------------------------------------------------
+  # Material Design Icons, fest auf das Release 7.4.47 (Tag v7.4.47 im Repo
+  # Templarian/MaterialDesign-Webfont). Vorher kam die Datei von "master":
+  # Ein neuer Stand dort haette Symbole verschieben koennen. Die Codepunkte
+  # in allen Dateien sind aus 7.4.47 nachgesehen.
+  mdi_font_url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/v7.4.47/fonts/materialdesignicons-webfont.ttf"
 
   # --- Meldungen --------------------------------------------------------
   # Hoechstzahl der Zeilen der Meldungsliste: alert_push (max_runs und

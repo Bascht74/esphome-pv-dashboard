@@ -74,10 +74,10 @@ script:
       - lambda: |-
           auto &num = id(fmt_num);  // Formate: .pv-dashboard_ui.yaml
           id(data_seen)[5] = millis();
-          const bool feed = !std::isnan(power) && power < 0.0f;
+          const bool feed = std::isfinite(power) && power < 0.0f;   // val_leer (-inf) ist keine Einspeisung
           lv_label_set_text(id(gr_power), num(fabsf(power) / 1000.0f, "%.2f", "-,--").c_str());
-          lv_label_set_text(id(gr_dir), std::isnan(power) ? "kW" : (feed ? "kW · Einspeisung" : "kW · Bezug"));
-          lv_obj_set_style_text_color(id(gr_power), std::isnan(power) ? lv_color_hex($col_ink) : (feed ? lv_color_hex($col_feed) : lv_color_hex($col_draw)), 0);
+          lv_label_set_text(id(gr_dir), !std::isfinite(power) ? "kW" : (feed ? "kW · Einspeisung" : "kW · Bezug"));
+          lv_obj_set_style_text_color(id(gr_power), !std::isfinite(power) ? lv_color_hex($col_ink) : (feed ? lv_color_hex($col_feed) : lv_color_hex($col_draw)), 0);
           lv_label_set_text(id(gr_freq), num(freq, "%.2f", "--,--").c_str());
           lv_label_set_text(id(gr_n), ("N-Leiter " + num(n_current, "%.1f", "--,-") + " A").c_str());
           // Einspeisung gegen die Grenze; Balken = 0..100 % der kWp,
@@ -85,10 +85,12 @@ script:
           const float kwp = ${pv_kwp};
           const float limit_w = kwp * 1000.0f * ${feed_limit_pct} / 100.0f;
           const float fw = feed ? -power : 0.0f;
-          lv_label_set_text(id(gr_feed), std::isnan(power) ? "--" : id(fmt_power)(fw).c_str());
+          // leer (val_leer, -inf) statt Striche, wenn die Entitaet fehlt
+          const char *ohne = std::isinf(power) ? "" : "--";
+          lv_label_set_text(id(gr_feed), !std::isfinite(power) ? ohne : id(fmt_power)(fw).c_str());
           lv_label_set_text(id(gr_limit), id(fmt_power)(limit_w).c_str());
-          if (std::isnan(power) || limit_w <= 0.0f) {
-            lv_label_set_text(id(gr_util), "-- %");
+          if (!std::isfinite(power) || limit_w <= 0.0f) {
+            lv_label_set_text(id(gr_util), std::isinf(power) ? "" : "-- %");
           } else {
             lv_label_set_text_fmt(id(gr_util), "%d %%", (int) lroundf(fw / limit_w * 100.0f));
           }
@@ -136,7 +138,7 @@ script:
           lv_label_set_text(s[phase], id(fmt_watt)(apparent, "--.---").c_str());
           lv_label_set_text(f[phase], num(pf, "%.2f", "-,--").c_str());
           // Spannung ausserhalb 230 V +- 10 % (EN 50160) gelb
-          const bool bad = !std::isnan(voltage) && (voltage < 207.0f || voltage > 253.0f);
+          const bool bad = std::isfinite(voltage) && (voltage < 207.0f || voltage > 253.0f);
           lv_obj_set_style_text_color(u[phase], bad ? lv_color_hex($col_warn) : lv_color_hex($col_ink), 0);
 
   # ---------------------------------------------------------------------
@@ -190,7 +192,7 @@ script:
           lv_label_set_text(id(gr_limit_state), limit_active ? "${feed_limit_pct} % aktiv" : "aufgehoben");
           lv_label_set_text(id(gr_rule_0), limit_active ? "${feed_limit_pct} % aktiv" : "aufgehoben");
           lv_label_set_text(id(gr_rule_1), (num(spot_ct, "%.2f", "--,--") + " ct/kWh").c_str());
-          lv_obj_set_style_text_color(id(gr_rule_1), (!std::isnan(spot_ct) && spot_ct < 0.0f) ? lv_color_hex($col_crit) : lv_color_hex($col_ink), 0);
+          lv_obj_set_style_text_color(id(gr_rule_1), (std::isfinite(spot_ct) && spot_ct < 0.0f) ? lv_color_hex($col_crit) : lv_color_hex($col_ink), 0);
           if (neg_quarters < 0)
             lv_label_set_text(id(gr_rule_2), "--");
           else
