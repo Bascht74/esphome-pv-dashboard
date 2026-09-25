@@ -209,7 +209,7 @@ API-Schlüssel im Klartext.
 | `.pv-dashboard_page_forecast.yaml` | Seite 3 Prognose: Solcast heute, Halbstunden, sieben Tage, `fc_*` |
 | `.pv-dashboard_page_weather.yaml` | Seite 4 Wetter: DWD jetzt, 24 Stunden, sieben Tage, Warnung, `wx_*` |
 | `.pv-dashboard_page_battery.yaml` | Seite 5 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
-| `.pv-dashboard_page_wallbox.yaml` | Seite 6 Wallboxen: Ladepunkt-Karten nach evcc, Monatskachel, `wallbox_update` / `wallbox_month` |
+| `.pv-dashboard_page_wallbox.yaml` | Seite 6 Wallboxen: Ladepunkt-Karten nach evcc mit bedienbarem Modus-Schalter, Monatskachel, `wallbox_update` / `wallbox_mode_set` / `wallbox_month` |
 | `.pv-dashboard_page_heatpump.yaml` | Seite 7 Wärmepumpe: Startseite nach dem Nilan-Touch-Bedienteil, Haus aus Flächen, Information, Strom, `heatpump_update` / `heatpump_extra` |
 | `.pv-dashboard_page_house.yaml` | Seite 8 Haus: Energiefluss nach evcc, Tabelle, Verbrauch jetzt und 24 Stunden, `house_*` |
 | `.pv-dashboard_page_grid.yaml` | Seite 9 Netz: Hausanschluss, Phasen, Zähler, Netzvorgaben, `grid_*` |

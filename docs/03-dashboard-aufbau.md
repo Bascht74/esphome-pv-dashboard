@@ -135,13 +135,13 @@ Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnun
 | `.pv-dashboard_page_forecast.yaml` | 439 | `globals:` 43, `script:` 66, `interval:` 268, `lvgl:` 273 |
 | `.pv-dashboard_page_weather.yaml` | 522 | `globals:` 49, `script:` 96, `lvgl:` 320 |
 | `.pv-dashboard_page_battery.yaml` | 348 | `substitutions:` 35, `globals:` 43, `script:` 49, `lvgl:` 129 |
-| `.pv-dashboard_page_wallbox.yaml` | 438 | `substitutions:` 48, `script:` 52, `lvgl:` 184 |
+| `.pv-dashboard_page_wallbox.yaml` | 517 | `substitutions:` 54, `globals:` 58, `script:` 72, `lvgl:` 243 |
 | `.pv-dashboard_page_heatpump.yaml` | 373 | `script:` 52, `lvgl:` 180 |
 | `.pv-dashboard_page_house.yaml` | 782 | `substitutions:` 61, `script:` 68, `lvgl:` 474 |
 | `.pv-dashboard_page_grid.yaml` | 350 | `substitutions:` 52, `script:` 56, `lvgl:` 208 |
 | `.pv-dashboard_page_stats.yaml` | 400 | `globals:` 31, `script:` 46, `lvgl:` 217 |
 | `.pv-dashboard_page_alerts.yaml` | 721 | `globals:` 26, `script:` 41, `lvgl:` 473 |
-| `.pv-dashboard_ha.yaml` (nur Gerät, erzeugt) | 2925 | `substitutions:` 47, `globals:` 270, `sensor:` 377, `text_sensor:` 1494, `binary_sensor:` 1619, `script:` 1726, `interval:` 2307 |
+| `.pv-dashboard_ha.yaml` (nur Gerät, erzeugt) | 2988 | `substitutions:` 50, `globals:` 273, `sensor:` 380, `text_sensor:` 1497, `binary_sensor:` 1636, `script:` 1743, `interval:` 2370 |
 
 Im Kern steht nur, was alle Seiten teilen: die Tagesreihen `day_curve` und
 `forecast_curve`, die Globals `ota_running` 89, `curve_day` 97, `data_seen` 108,
@@ -164,7 +164,7 @@ der Übersicht (dazu dort die globals `flow_ch` 134 und `ov_now` 140),
 `fc_day` 149 und `fc_redraw` 175 in der Prognose, `wx_now` 110, `wx_hour` 160,
 `wx_day` 198, `wx_warning` 243 und `wx_redraw` 268 im Wetter (dazu dort das global
 `wx_cond` 52, das auch die Prognose benutzt), `storage_update` 56 und `storage_mean` 113 im Speicher (global `storage_soc` 44),
-`wallbox_update` 73 und `wallbox_month` 170 bei den Wallboxen, `heatpump_update` 75
+`wallbox_update` 93, `wallbox_mode_set` 202 und `wallbox_month` 229 bei den Wallboxen (dazu dort die globals `wb_mode_pending` 63 und `wb_mode_pending_ms` 67), `heatpump_update` 75
 und `heatpump_extra` 147 bei der Wärmepumpe, `house_flow` 85, `house_battery` 282,
 `house_loadpoint` 317, `house_update` 362 und `house_history` 416 im Haus,
 `grid_update` 67, `grid_phase` 117, `grid_meter` 151 und `grid_rules` 180 im Netz,
@@ -217,7 +217,7 @@ Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — j
 - `page_forecast` – seit 25.09.2026, Prognose nach Solcast, mit den Werten, die der Blueprint ha-pv-optimizer benutzt. Links „Solcast · heute“ (P50 groß, Spanne P10 bis P90, Rest heute, jetzt, nächste Stunde, Spitze mit Uhrzeit, Stand und API-Abrufe), rechts die Halbstunden 05:00 bis 22:00 als Band P10 bis P90 mit P50-Linie und Marke „jetzt“ (zieht jede Minute nach), unten sieben Tage mit Wetterbild (Lage von der Seite Wetter), P50 als Balken, P10 bis P90 als Strich. Geometrie im Kopf der Datei.
 - `page_weather` – seit 25.09.2026, Wetter vom DWD (HACS-Integration „DWD Weather“). Links „jetzt“ mit großem Wetterbild (`f_wx_xl`), Temperatur, Lage, Höchst- und Tiefstwert, Wind mit Richtung, Böen, Feuchte, Luftdruck, Wolken, Regen heute, Sonne auf und unter, Sonnenscheindauer; rechts zwölf Spalten zu 2 Stunden mit Bild, Temperatur als Kurve, Regen als Balken und Wahrscheinlichkeit; unten sieben Tage mit Bild (`f_wx_l`), Lage, Höchst, Tiefst, Regen, Sonne, Wind und oben rechts der DWD-Warnung.
 - `page_battery` – drei SoC-Ringe und Tabelle `tbl_storage`: Ladezustand, Strom, Zelle min/max, Zelldifferenz, Temperatur min/max, Zyklen. Erste fertig gebaute Detailseite — **Vorlage für jede neue**.
-- `page_wallbox` – seit 24.09.2026, am selben Tag nach dem Vorbild von evcc (0.316.0) umgebaut. Zwei Ladepunkt-Karten je 632 × 512: Kopf mit Name und Modus-Schalter Aus / Smart / Schnell, Sitzungswerte Leistung (mit Blitz und drei Phasenstrichen), Geladen, Sonne, Ladedauer; nach der Trennlinie Fahrzeug und Statuszeile, Ladestandsbalken mit dunklerem Rest bis zum Limit und Limit-Marke, darunter Ladestand (mit Reichweite), Ladeplan, Ladelimit. Unten die Monatskachel „Ladevorgänge im Monat“ (Geladen, Sonnenanteil, Kosten, Ø Preis). Akzent `col_evcc`, Flächen und Einheitenregel bleiben die des Dashboards. Höhenrechnung im Kopf der Datei.
+- `page_wallbox` – seit 24.09.2026, am selben Tag nach dem Vorbild von evcc (0.316.0) umgebaut. Zwei Ladepunkt-Karten je 632 × 512: Kopf mit Name und Modus-Schalter Aus / Smart / Schnell (seit 25.09.2026 bedienbar: Pille 300 × 44, jeder Teil 98 × 38 ganz Tippfläche, gedrückt halb grün; `wallbox_mode_set`), Sitzungswerte Leistung (mit Blitz und drei Phasenstrichen), Geladen, Sonne, Ladedauer; nach der Trennlinie Fahrzeug und Statuszeile, Ladestandsbalken mit dunklerem Rest bis zum Limit und Limit-Marke, darunter Ladestand (mit Reichweite), Ladeplan, Ladelimit. Unten die Monatskachel „Ladevorgänge im Monat“ (Geladen, Sonnenanteil, Kosten, Ø Preis). Akzent `col_evcc`, Flächen und Einheitenregel bleiben die des Dashboards. Höhenrechnung im Kopf der Datei.
 - `page_heatpump` – seit 24.09.2026, am selben Tag auf die **Nilan Compact P** umgebaut, im Aufbau der Startseite des Touch-Bedienteils CTS700 (der Nutzer hat das klassische CTS700 mit Textzeilen, will die Seite aber grafisch), auf Wunsch des Nutzers auf dem Dashboard-Grund (Kachel `st_tile`). Links die Nilan-Kachel (760 × 652): Außentemperatur mit Sonne, grünes Haus aus Flächen (`col_nilan_house`; Dach = Quadrat 311 × 311, um 45° gedreht, in einem Behälter mit `transform_scale_y` 0,682 gestaucht, darüber die Wand, damit die Kante am Dachfuß verdeckt ist; Rechnung im Kommentar der Datei), im Dach die Raumtemperatur mit Sollwert, in der Wand Feuchte, CO2 (nur mit Wert sichtbar) und die Warmwasserkachel (`col_nilan_tank`, Rand `col_nilan_tank_edge`) mit rotem Punkt für die Zusatzheizung und Sollwert darunter, rechts die runde Lüftertaste mit Stufe und Zu-/Abluftventilator in %. Unter dem Haus ein gelber Hinweis, solange Enteisung oder Legionellenschutz laufen. Rechts „Information“ wie hinter der Info-Taste (Betriebsart Lüftung, Jahreszeit, Bypass, Kompressor, Zu- und Fortluft, Ventilatoren, Tage bis zum Filterwechsel, ab 7 Tagen gelb) und „Strom“ (Leistungsaufnahme, Verbrauch heute). Das Nilan-Logo ist bewusst nicht nachgebaut.
 - `page_house` – seit 24.09.2026, am selben Tag nach dem Energiefluss von evcc umgebaut. Oben der evcc-Balken (Eigenverbrauch PV, Eigenverbrauch Speicher, Netzbezug, Einspeisung; Breite nach Anteil) mit den Klammern „In“ (PV, Speicher, Netz) und „Out“ (Verbrauch, Ladepunkte, Speicher laden, Einspeisung) samt Symbolen und Legende. Darunter die ausgeklappte Tabelle in drei Spalten: In (Erzeugung mit Restprognose, Speicher entladen mit Unterzeilen je Speicher, Netzbezug mit Preis), Out (Verbrauch mit Preis, Ladepunkte mit Unterzeilen je Wallbox, Speicher laden, Einspeisung mit Vergütung) und Verbraucher (Wärmepumpe, vier Geräte, Grundlast mit kWh heute). Unten links „Verbrauch jetzt“ (Haus und Ladepunkte) mit Herkunft aus PV, Speicher und Netz als Balken und in %, rechts der Verbrauch der letzten 24 Stunden als Stundenbalken, der PV-gedeckte Teil grün. Farben `col_evcc*`. Geometrie im Kopf der Datei.
 - `page_grid` – seit 25.09.2026, Netz und Zähler. Vier Kacheln je 632 breit: Hausanschluss (Leistung, grün bei Einspeisung und rot bei Bezug, Frequenz, Balken der Einspeisung gegen die Einspeisegrenze `feed_limit_pct` von `pv_kwp` mit gelber Marke, Grenze in kW, Auslastung, abgeregelte Energie heute), Phasen L1 bis L3 (Spannung, außerhalb 207 bis 253 V gelb, Strom, Wirk- und Scheinleistung, Leistungsfaktor, Neutralleiterstrom), Zählerstände (fünf Zählwerke mit Stand und heute) und Netzvorgaben (Einspeisegrenze, Börsenpreis, rot wenn negativ, negative Viertelstunden, Vergütung bei negativem Preis, Steuersignal § 14a, Smart Meter). Werte nach dem Shelly Pro 3EM, Rechtliches in Dokument 06.
@@ -275,7 +275,9 @@ Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in D
 
 **`pv_update(inv, pv, power, energy)`** – Seite PV & Prognose. `inv` 0…3 = Wechselrichter 1…4, `pv` 0…7 = Fläche/Modul 1…8, jeweils `-1` = keiner; ein Aufruf setzt einen Wechselrichter, eine Fläche oder beides. `power` in W, ganzzahlig mit Tausenderpunkt; `energy` in kWh heute, eine Nachkommastelle. `NAN` ergibt das Strichmuster (`--.---` bzw. `-.---`, `W · --,- kWh`). Füllt nur die PV-Seite; die Kästen im Schema füllen `ov_roof` und `ov_inverter`.
 
-**`wallbox_update(wb, mode, charging, power, phases, energy, solar, minutes, vehicle, status, soc, range, limit, plan)`** – Seite Wallboxen, Namen nach der evcc-API. `wb` 0…1 = Wallbox 1…2; `mode` `off`/`smart`/`now` (ältere evcc-Versionen: `pv` und `minpv` leuchten als Smart); `charging` färbt Blitz und Phasen; `power` in kW, `phases` 0…3, `energy` Sitzung in kWh, `solar` Sonnenanteil in %, `minutes` Ladedauer (< 0 = keine); `vehicle` leer = „Kein Fahrzeug“, `status` freie Zeile; `soc` und `limit` in %, `range` in km, `plan` Text wie „Mo 07:00“ (leer = kein Plan). `NAN` ergibt Striche. Füllt nur diese Seite; den Wallbox-Kasten der Übersicht füllt `ov_consumer`.
+**`wallbox_update(wb, mode, charging, power, phases, energy, solar, minutes, vehicle, status, soc, range, limit, plan)`** – Seite Wallboxen, Namen nach der evcc-API. `wb` 0…1 = Wallbox 1…2; `mode` `off`/`smart`/`now` (ältere evcc-Versionen: `pv` und `minpv` leuchten als Smart); `charging` färbt Blitz und Phasen; `power` in kW, `phases` 0…3, `energy` Sitzung in kWh, `solar` Sonnenanteil in %, `minutes` Ladedauer (< 0 = keine); `vehicle` leer = „Kein Fahrzeug“, `status` freie Zeile; `soc` und `limit` in %, `range` in km, `plan` Text wie „Mo 07:00“ (leer = kein Plan). `NAN` ergibt Striche. Füllt nur diese Seite; den Wallbox-Kasten der Übersicht füllt `ov_consumer`. Ein mit `wallbox_mode_set` getippter Modus (`wb_mode_pending`) gilt hier vor dem gemeldeten, bis `mode` ihn bestätigt oder 10 s um sind.
+
+**`wallbox_mode_set(wb, seg)`** – Tipp auf den Modus-Schalter (`on_click` der Teile `wb<N>_seg<S>`), `wb` 0…1, `seg` 0 Aus, 1 Smart, 2 Schnell. Fehlt die Wallbox (`dev_present`), geschieht nichts; sonst leuchtet der Teil sofort und bleibt vorgemerkt. Die Seite fasst Home Assistant nicht an: `.pv-dashboard_ha.yaml` hängt mit `!extend wallbox_mode_set` die Aktion `select.select_option` an (Abschnitt „Datenweg“, „Steuern“). Im Simulator und in den Screenshots bleibt es beim Leuchten.
 
 **`wallbox_month(energy, solar, cost, price)`** – Monatskachel der Wallbox-Seite: geladene kWh, Sonnenanteil in %, Kosten in €, Durchschnittspreis in ct/kWh. `NAN` ergibt Striche.
 
@@ -462,6 +464,19 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   letzten 24 Stunden (`house_history`, dazu `day_curve` aus der Erzeugung
   heute). Den Ertrag der Statistik rechnet das Panel mit den Tarifen wie
   `money_update` [A].
+- **Steuern** (seit 25.09.2026): Der Modus-Schalter der Seite Wallboxen
+  ruft `wallbox_mode_set`; das Paket hängt daran (`!extend`)
+  `select.select_option` auf `${ha_wb<N>_mode}` an – nur wenn die
+  Substitution belegt und die Wallbox da ist. Aus = `off`, Schnell = `now`,
+  Smart = `smart` oder `pv`: marq24/ha-evcc legt unter derselben ID je nach
+  evcc-Version `off`/`smart`/`now` (evcc mit `alwaysCharge`, Tag
+  `MODE_SMART`) oder `off`/`pv`/`minpv`/`now` (älter, `MODE_PV_MINPV`) an
+  (`pyevcc_ha/keys.py`, `select.py`). Welche Liste gilt, liest der
+  Text-Sensor `ha_wb<N>_mode_options` aus dem Attribut `options` (Home
+  Assistant schickt die Liste als Python-Text, etwa `['off', 'smart', 'now']`);
+  ohne ihn entscheidet der gemeldete Modus (`pv`/`minpv` → `pv`), sonst
+  `smart`. Lehnt Home Assistant ab (`on_error`, Log „ha“) oder meldet evcc
+  nach 10 s nichts Neues, zeichnet die Karte aus dem gemeldeten Zustand neu.
 - **Zeitplan.** Ein Intervall von 10 s erkennt das Verbinden: Prognosen
   20 s danach und dann alle 30 min, Statistik 30 s danach und dann zu
   jeder neuen Stunde ab Minute 2 (damit auch beim Tageswechsel).
@@ -539,9 +554,13 @@ Python-Umgebung von ESPHome (nichts nachzuinstallieren):
   `unavailable`, `FALSE` oder fehlend → nur der Wert leer; leerer Wert in
   einer Summe (Leistung Wärmepumpe und Wallbox 1) → „Sonstige“, Hausnetz und
   die Summen der Seite Haus leer, Geräte bleiben; Prognosen und Statistik
-  gefüllt; Trennung → genau eine Sammelmeldung, Verbinden → weg; über den
+  gefüllt; Modus-Schalter: Tipp (`probe_tap` schickt `LV_EVENT_CLICKED`)
+  leuchtet sofort und hält bis zur Meldung, `select.select_option` mit
+  Entität und `now`/`pv`/`smart`/`off` je nach Attribut `options`, Ablehnung
+  bzw. 10 s ohne Meldung → zurück, fehlende Wallbox → kein Befehl;
+  Trennung → genau eine Sammelmeldung, Verbinden → weg; über den
   ganzen Lauf in keinem der rund 770 Labels aller Seiten „inf“ oder „nan“.
-  `--shots` legt dazu drei BMP nach `shots/ha_probe/` (vorher gelöscht, `snapshot.take` überschreibt nicht). Exit-Code 0 = alles
+  `--shots` legt dazu vier BMP nach `shots/ha_probe/` (vorher gelöscht, `snapshot.take` überschreibt nicht). Exit-Code 0 = alles
   bestanden.
 
 ## Simulator und Screenshots
@@ -594,7 +613,7 @@ im YAML:
 
 ---
 
-Stand: 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, `val_leer` = −∞ samt Rechenregeln, Abschnitt „Tests“, Zeilennummern von Kern, Übersicht und Datenweg neu abgezählt); davor 25.09.2026, später Tag (Datenweg von Home Assistant samt Dummy-Paket, Eingabeskripte `ov_*`, `flow_ch`, `dev_present` und `dev_apply`, Flussanimation mit 37 Leitungen, Tabelle und Skriptliste neu abgezählt); davor 25.09.2026 (Meldungen: Lagebild, Zähler mit Filter, Zusammenfassen, `alert_clear`; danach alle Zeilennummern der Tabelle und der Skriptliste neu abgezählt, Seitenliste in Reiterreihenfolge, `sys_panel`-Maße, `voice_panel_hide`, MDI-Font auf v7.4.47); davor 24.09.2026 (Seiten Wallboxen, Wärmepumpe und Haus samt ihren
+Stand: 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar: `wallbox_mode_set`, Abschnitt „Steuern“, Zeilennummern von Wallboxen und Datenweg neu abgezählt); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, `val_leer` = −∞ samt Rechenregeln, Abschnitt „Tests“, Zeilennummern von Kern, Übersicht und Datenweg neu abgezählt); davor 25.09.2026, später Tag (Datenweg von Home Assistant samt Dummy-Paket, Eingabeskripte `ov_*`, `flow_ch`, `dev_present` und `dev_apply`, Flussanimation mit 37 Leitungen, Tabelle und Skriptliste neu abgezählt); davor 25.09.2026 (Meldungen: Lagebild, Zähler mit Filter, Zusammenfassen, `alert_clear`; danach alle Zeilennummern der Tabelle und der Skriptliste neu abgezählt, Seitenliste in Reiterreihenfolge, `sys_panel`-Maße, `voice_panel_hide`, MDI-Font auf v7.4.47); davor 24.09.2026 (Seiten Wallboxen, Wärmepumpe und Haus samt ihren
 Skripten, Tabelle neu abgezählt); davor 23.09.2026 (eigene Anlage in `.pv-dashboard_anlage.yaml`, Seite PV &
 Prognose samt `pv_update` und `pv_redraw_curve`, Tabelle und Zeilennummern neu
 abgezählt; davor 20.09.2026: Streckenzahlen aus einem Vorschaulauf; Zeilennummern gegen

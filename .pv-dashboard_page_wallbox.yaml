@@ -12,15 +12,21 @@
 # bleiben die des Dashboards. Unten eine Kachel mit den Monatswerten, wie
 # sie evcc unter "Ladevorgaenge" fuehrt.
 #
-# Zwei Skripte gehoeren dazu; kuenftige Sensoren (evcc ueber Home
-# Assistant oder MQTT) rufen nur diese auf, bis dahin stehen Striche:
-#   wallbox_update  eine Ladepunkt-Karte
-#   wallbox_month   die Monatskachel
+# Drei Skripte gehoeren dazu. Die ersten zwei ruft der Datenweg
+# (.pv-dashboard_ha.yaml), bis dahin stehen Striche:
+#   wallbox_update    eine Ladepunkt-Karte
+#   wallbox_month     die Monatskachel
+#   wallbox_mode_set  Tipp auf den Modus-Schalter (Wunsch des Nutzers,
+#                     25.09.2026): der getippte Teil leuchtet sofort; den
+#                     Befehl an evcc haengt .pv-dashboard_ha.yaml an
+#                     (select.select_option), im Simulator bleibt es beim
+#                     Leuchten
 #
 # Flaeche x 4..1276, y 84..736. Zwei Karten je 632 x 512 (x 4 und 644,
 # y 84), darunter die Monatskachel 1272 x 132 (y 604). Karte innen
 # 610 x 490:
-#   Kopf          0..36   Symbol f_icon, Name f_bar (29), Schalter 300 x 36
+#   Kopf          0..44   Symbol f_icon, Name f_bar (29) bei y 7, Schalter
+#                         300 x 44 (Tippflaeche je Teil 98 x 38)
 #   Sitzung      70..168  vier Spalten je 145, Abstand 10: Beschriftung
 #                         70..90 (f_text_s), Wert 94..133 (f_val_xl),
 #                         Einheit 135..152 (f_unit), Phasen 162..168
@@ -48,6 +54,20 @@
 substitutions:
   name_wb_1: "Wallbox 1"       # 100 von 266 (f_bar, gemessen)
   name_wb_2: "Wallbox 2"       # 100 von 266
+
+globals:
+  # Getippter Modus je Wallbox (0 Aus, 1 Smart, 2 Schnell; -1 = keiner) und
+  # wann. Bis evcc ihn meldet, hoechstens 10 s, zeigt wallbox_update ihn
+  # statt des gemeldeten -- sonst sprang der Schalter bei jedem anderen
+  # neuen Wert der Karte zurueck.
+  - id: wb_mode_pending
+    type: std::array<int, 2>
+    restore_value: false
+    initial_value: '{-1, -1}'
+  - id: wb_mode_pending_ms
+    type: std::array<uint32_t, 2>
+    restore_value: false
+    initial_value: '{0, 0}'
 
 script:
   # ---------------------------------------------------------------------
@@ -118,6 +138,14 @@ script:
             active = 1;
           else if (mode == "now")
             active = 2;
+          // Getippt (wallbox_mode_set): gilt, bis evcc ihn meldet oder 10 s um sind
+          int &pend = id(wb_mode_pending)[wb];
+          if (pend >= 0) {
+            if (pend == active || millis() - id(wb_mode_pending_ms)[wb] >= 10000)
+              pend = -1;
+            else
+              active = pend;
+          }
           for (int i = 0; i < 3; i++) {
             lv_obj_set_style_bg_opa(c.seg[i], i == active ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
             lv_obj_set_style_text_color(c.seg_lbl[i], i == active ? lv_color_hex($col_bg) : lv_color_hex($col_ink2), 0);
@@ -158,6 +186,37 @@ script:
           lv_label_set_text(c.plan, plan.empty() ? "--" : plan.c_str());
           lv_label_set_text(c.plan_sub, plan.empty() ? "kein Plan" : "Abfahrt");
           lv_label_set_text(c.limit, fmt(limit, "%.0f", "--").c_str());
+
+  # ---------------------------------------------------------------------
+  # Tipp auf den Modus-Schalter einer Karte (on_click der Teile unten).
+  #   wb   0..1 = Wallbox 1..2
+  #   seg  0 Aus, 1 Smart, 2 Schnell
+  # Fehlt die Wallbox (dev_present, Referenz nicht belegt oder ohne Wert),
+  # geschieht nichts. Sonst leuchtet der Teil sofort und bleibt vorgemerkt
+  # (wb_mode_pending). Diese Datei fasst Home Assistant nicht an:
+  # .pv-dashboard_ha.yaml haengt mit !extend wallbox_mode_set die Aktion
+  # select.select_option an und zeichnet die Karte nach 10 s bzw. bei
+  # einem Fehler aus dem gemeldeten Zustand neu. Simulator und Screenshots
+  # binden das Paket nicht ein; dort bleibt es beim Leuchten.
+  # ---------------------------------------------------------------------
+  - id: wallbox_mode_set
+    mode: parallel
+    parameters:
+      wb: int
+      seg: int
+    then:
+      - lambda: |-
+          if (wb < 0 || wb > 1 || seg < 0 || seg > 2 || !((id(dev_present) >> (15 + wb)) & 1u))
+            return;
+          id(wb_mode_pending)[wb] = seg;
+          id(wb_mode_pending_ms)[wb] = millis();
+          lv_obj_t *const S[2][3] = {{id(wb1_seg0), id(wb1_seg1), id(wb1_seg2)}, {id(wb2_seg0), id(wb2_seg1), id(wb2_seg2)}};
+          lv_obj_t *const L[2][3] = {{id(wb1_seg0_lbl), id(wb1_seg1_lbl), id(wb1_seg2_lbl)},
+                                     {id(wb2_seg0_lbl), id(wb2_seg1_lbl), id(wb2_seg2_lbl)}};
+          for (int i = 0; i < 3; i++) {
+            lv_obj_set_style_bg_opa(S[wb][i], i == seg ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+            lv_obj_set_style_text_color(L[wb][i], i == seg ? lv_color_hex($col_bg) : lv_color_hex($col_ink2), 0);
+          }
 
   # ---------------------------------------------------------------------
   # Monatskachel, beide Wallboxen zusammen (evcc "Ladevorgaenge").
@@ -201,16 +260,17 @@ lvgl:
             height: 512
             widgets:
               # Kopf: Symbol und Name links, Modus-Schalter rechts. Der
-              # Schalter ist eine Pille mit Rahmen 1 (innen 298 x 34), darin
-              # drei Teile je 98 x 30 bei x 2 / 100 / 198, y 2.
-              - label: { x: 0, y: 6, text: "\U000F05F1", text_font: f_icon, text_color: $col_evcc }
-              - label: { x: 34, y: 3, width: 266, height: 29, long_mode: DOT, text: "${name_wb_1}", text_font: f_bar, text_color: $col_ink }
+              # Schalter ist eine Pille mit Rahmen 1 (innen 298 x 42), darin
+              # drei Teile je 98 x 38 bei x 2 / 100 / 198, y 2. Jeder Teil
+              # ist ganz Tippflaeche (wallbox_mode_set), gedrueckt halb gruen.
+              - label: { x: 0, y: 10, text: "\U000F05F1", text_font: f_icon, text_color: $col_evcc }
+              - label: { x: 34, y: 7, width: 266, height: 29, long_mode: DOT, text: "${name_wb_1}", text_font: f_bar, text_color: $col_ink }
               - obj:
                   x: 310
                   y: 0
                   width: 300
-                  height: 36
-                  radius: 18
+                  height: 44
+                  radius: 22
                   bg_opa: TRANSP
                   border_color: $col_line
                   border_width: 1
@@ -224,14 +284,17 @@ lvgl:
                         x: 2
                         y: 2
                         width: 98
-                        height: 30
-                        radius: 15
+                        height: 38
+                        radius: 19
                         bg_color: $col_evcc
                         bg_opa: TRANSP
                         border_width: 0
                         pad_all: 0
-                        clickable: false
                         scrollable: false
+                        pressed:
+                          bg_opa: 50%
+                        on_click:
+                          - script.execute: { id: wallbox_mode_set, wb: 0, seg: 0 }
                         widgets:
                           - label: { id: wb1_seg0_lbl, align: CENTER, text: "Aus", text_font: f_text_s, text_color: $col_ink2 }
                     - obj:
@@ -239,14 +302,17 @@ lvgl:
                         x: 100
                         y: 2
                         width: 98
-                        height: 30
-                        radius: 15
+                        height: 38
+                        radius: 19
                         bg_color: $col_evcc
                         bg_opa: TRANSP
                         border_width: 0
                         pad_all: 0
-                        clickable: false
                         scrollable: false
+                        pressed:
+                          bg_opa: 50%
+                        on_click:
+                          - script.execute: { id: wallbox_mode_set, wb: 0, seg: 1 }
                         widgets:
                           - label: { id: wb1_seg1_lbl, align: CENTER, text: "Smart", text_font: f_text_s, text_color: $col_ink2 }
                     - obj:
@@ -254,14 +320,17 @@ lvgl:
                         x: 198
                         y: 2
                         width: 98
-                        height: 30
-                        radius: 15
+                        height: 38
+                        radius: 19
                         bg_color: $col_evcc
                         bg_opa: TRANSP
                         border_width: 0
                         pad_all: 0
-                        clickable: false
                         scrollable: false
+                        pressed:
+                          bg_opa: 50%
+                        on_click:
+                          - script.execute: { id: wallbox_mode_set, wb: 0, seg: 2 }
                         widgets:
                           - label: { id: wb1_seg2_lbl, align: CENTER, text: "Schnell", text_font: f_text_s, text_color: $col_ink2 }
               # Sitzung: vier Spalten, aussen buendig, innen mittig
@@ -312,16 +381,17 @@ lvgl:
             height: 512
             widgets:
               # Kopf: Symbol und Name links, Modus-Schalter rechts. Der
-              # Schalter ist eine Pille mit Rahmen 1 (innen 298 x 34), darin
-              # drei Teile je 98 x 30 bei x 2 / 100 / 198, y 2.
-              - label: { x: 0, y: 6, text: "\U000F05F1", text_font: f_icon, text_color: $col_evcc }
-              - label: { x: 34, y: 3, width: 266, height: 29, long_mode: DOT, text: "${name_wb_2}", text_font: f_bar, text_color: $col_ink }
+              # Schalter ist eine Pille mit Rahmen 1 (innen 298 x 42), darin
+              # drei Teile je 98 x 38 bei x 2 / 100 / 198, y 2. Jeder Teil
+              # ist ganz Tippflaeche (wallbox_mode_set), gedrueckt halb gruen.
+              - label: { x: 0, y: 10, text: "\U000F05F1", text_font: f_icon, text_color: $col_evcc }
+              - label: { x: 34, y: 7, width: 266, height: 29, long_mode: DOT, text: "${name_wb_2}", text_font: f_bar, text_color: $col_ink }
               - obj:
                   x: 310
                   y: 0
                   width: 300
-                  height: 36
-                  radius: 18
+                  height: 44
+                  radius: 22
                   bg_opa: TRANSP
                   border_color: $col_line
                   border_width: 1
@@ -335,14 +405,17 @@ lvgl:
                         x: 2
                         y: 2
                         width: 98
-                        height: 30
-                        radius: 15
+                        height: 38
+                        radius: 19
                         bg_color: $col_evcc
                         bg_opa: TRANSP
                         border_width: 0
                         pad_all: 0
-                        clickable: false
                         scrollable: false
+                        pressed:
+                          bg_opa: 50%
+                        on_click:
+                          - script.execute: { id: wallbox_mode_set, wb: 1, seg: 0 }
                         widgets:
                           - label: { id: wb2_seg0_lbl, align: CENTER, text: "Aus", text_font: f_text_s, text_color: $col_ink2 }
                     - obj:
@@ -350,14 +423,17 @@ lvgl:
                         x: 100
                         y: 2
                         width: 98
-                        height: 30
-                        radius: 15
+                        height: 38
+                        radius: 19
                         bg_color: $col_evcc
                         bg_opa: TRANSP
                         border_width: 0
                         pad_all: 0
-                        clickable: false
                         scrollable: false
+                        pressed:
+                          bg_opa: 50%
+                        on_click:
+                          - script.execute: { id: wallbox_mode_set, wb: 1, seg: 1 }
                         widgets:
                           - label: { id: wb2_seg1_lbl, align: CENTER, text: "Smart", text_font: f_text_s, text_color: $col_ink2 }
                     - obj:
@@ -365,14 +441,17 @@ lvgl:
                         x: 198
                         y: 2
                         width: 98
-                        height: 30
-                        radius: 15
+                        height: 38
+                        radius: 19
                         bg_color: $col_evcc
                         bg_opa: TRANSP
                         border_width: 0
                         pad_all: 0
-                        clickable: false
                         scrollable: false
+                        pressed:
+                          bg_opa: 50%
+                        on_click:
+                          - script.execute: { id: wallbox_mode_set, wb: 1, seg: 2 }
                         widgets:
                           - label: { id: wb2_seg2_lbl, align: CENTER, text: "Schnell", text_font: f_text_s, text_color: $col_ink2 }
               # Sitzung: vier Spalten, aussen buendig, innen mittig

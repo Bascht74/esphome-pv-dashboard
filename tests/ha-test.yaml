@@ -16,6 +16,9 @@
 # auf stdout -- dev_present, ausgeblendete Kaesten, Texte einzelner Labels,
 # offene Systemmeldungen, Prognose- und Statistikreihen. Die Probe liest
 # nur diese Zeilen. probe_shot(name) legt auf Wunsch ein Bild ab.
+# probe_tap(wb, seg) tippt einen Teil des Modus-Schalters an: Es schickt
+# LV_EVENT_CLICKED an wb<N>_seg<S>, also denselben Weg wie ein Finger
+# (on_click -> wallbox_mode_set); einen Touchscreen hat der Test nicht.
 ##############################################################################
 
 substitutions:
@@ -42,6 +45,15 @@ api:
         - snapshot.take:
             id: main_display
             filename: !lambda 'return name;'
+    - action: probe_tap
+      variables:
+        wb: int
+        seg: int
+      then:
+        - lambda: |-
+            lv_obj_t *const S[2][3] = {{id(wb1_seg0), id(wb1_seg1), id(wb1_seg2)}, {id(wb2_seg0), id(wb2_seg1), id(wb2_seg2)}};
+            if (wb >= 0 && wb <= 1 && seg >= 0 && seg <= 2)
+              lv_obj_send_event(S[wb][seg], LV_EVENT_CLICKED, nullptr);
 
 logger:
   level: INFO
@@ -150,6 +162,16 @@ interval:
             return std::isnan(v) ? "nan" : std::to_string(v);
           };
           j += ",\"inv_temp\":[\"" + wert(id(pv_inv_temp)[0]) + "\",\"" + wert(id(pv_inv_temp)[1]) + "\"]";
+          // Modus-Schalter je Wallbox: welcher Teil leuchtet (-1 = keiner)
+          auto seg = [](lv_obj_t *a, lv_obj_t *b, lv_obj_t *c) -> int {
+            lv_obj_t *const s[3] = {a, b, c};
+            for (int i = 0; i < 3; i++)
+              if (lv_obj_get_style_bg_opa(s[i], LV_PART_MAIN) == LV_OPA_COVER)
+                return i;
+            return -1;
+          };
+          j += ",\"wb_seg\":[" + std::to_string(seg(id(wb1_seg0), id(wb1_seg1), id(wb1_seg2))) + "," +
+               std::to_string(seg(id(wb2_seg0), id(wb2_seg1), id(wb2_seg2))) + "]";
           j += ",\"wx_stamp\":\"" + esc(id(ha_wx_stamp)) + "\"}";
           printf("PROBE %s\n", j.c_str());
           fflush(stdout);

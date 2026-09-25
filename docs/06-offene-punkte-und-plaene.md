@@ -624,13 +624,18 @@ Assistant". Es geht also noch nichts an Geräte oder HA, und die Liste lebt nur 
 **Entscheidungsstand: offen**, es ist nicht notiert, wie die Quittung zurücklaufen soll.
 
 **Nicht gebaut, bewusst (25.09.2026):** Meldungen über einen Neustart hinweg speichern
-(NVS-Platz, Quittung nach HA offen) und Steuern vom Panel aus (Wallbox-Modus,
-Nilan-Stufe) — die Knöpfe der Wallbox-Seite zeigen nur an. Jeweils auf Zuruf.
+(NVS-Platz, Quittung nach HA offen) und Steuern der Nilan-Stufe vom Panel aus.
+Jeweils auf Zuruf. Der **Wallbox-Modus** (Aus / Smart / Schnell) ist seit dem
+25.09.2026 abends vom Panel aus schaltbar, auf Wunsch des Nutzers:
+`select.select_option` über Home Assistant (Dokument 03, Datenweg, „Steuern“).
+Offen [A]: am eigenen Home Assistant prüfen, welche Optionsliste die
+Modus-Entität hat und dass die Aktion ankommt (Option „Allow the device to
+perform Home Assistant actions“).
 Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Stand: 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
 Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc

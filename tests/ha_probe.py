@@ -25,6 +25,11 @@ Entitaet weg -> nur der Wert weg):
   G  Prognosen und Statistik fuellen die Seiten
   I  leerer Wert in einer Summe (Waermepumpe, Wallbox 1) -> Summe leer
   H  Trennung von HA -> genau eine Sammelmeldung; Verbinden -> sie ist weg
+  K  Modus-Schalter Wallbox (Wunsch des Nutzers, 25.09.2026): Tipp (probe_tap,
+     LV_EVENT_CLICKED wie ein Finger) -> Teil leuchtet sofort, bleibt bis
+     evcc meldet, select.select_option mit Entitaet und Option nach dem
+     Attribut options (off/pv/minpv/now bzw. off/smart/now); Fehler oder
+     10 s ohne Meldung -> gemeldeter Modus; Wallbox fehlt -> kein Befehl
   J  in keinem Label irgendwo "inf" oder "nan", ueber den ganzen Lauf
 
 Liest keine secrets.yaml und nicht .pv-dashboard_anlage.yaml. Ergebnis:
@@ -158,6 +163,9 @@ class FakeHA:
         self.tag = parse(render(hb.DUMMY_TAG))
         self.cli = None
         self.aktionen = []
+        self.select = []           # (entity_id, option) je select.select_option
+        self.select_folgt = True   # HA uebernimmt die Option sofort in den Zustand
+        self.select_fehler = False  # HA lehnt ab (wie eine unbekannte Option)
 
     async def verbinden(self, frist=60):
         self.cli = APIClient("127.0.0.1", PORT, None)
@@ -186,12 +194,24 @@ class FakeHA:
         self.state[E(name)] = wert
         self.cli.send_home_assistant_state(E(name), "", wert)
 
+    def setzen_attr(self, name, attr, wert):
+        ATTR[(E(name), attr)] = wert
+        self.cli.send_home_assistant_state(E(name), attr, wert)
+
     def aktion(self, c):
         data = dict(c.data)
         try:
             for k, v in c.data_template.items():
                 data[k] = parse(render(v))
-            if c.service == "weather.get_forecasts":
+            if c.service == "select.select_option":
+                self.select.append((data.get("entity_id"), data.get("option")))
+                if self.select_fehler:
+                    raise Exception(f"Option {data.get('option')} ist nicht gueltig")
+                if self.select_folgt:
+                    self.state[data["entity_id"]] = data["option"]
+                    self.cli.send_home_assistant_state(data["entity_id"], "", data["option"])
+                resp = {}
+            elif c.service == "weather.get_forecasts":
                 resp = {data["entity_id"]: {"forecast": self.stunde if data["type"] == "hourly" else self.tag}}
             elif c.service == "recorder.get_statistics":
                 resp = statistik(data)
@@ -209,11 +229,26 @@ class FakeHA:
             return
         # snapshot.take ueberschreibt nie: alte Datei vorher weg
         (SHOTS / name).unlink(missing_ok=True)
+        await self.dienst("probe_shot", {"name": name})
+        await asyncio.sleep(1.0)
+
+    async def dienst(self, name, args):
         _, dienste = await self.cli.list_entities_services()
         for d in dienste:
-            if d.name == "probe_shot":
-                await self.cli.execute_service(d, {"name": name})
-                await asyncio.sleep(1.0)
+            if d.name == name:
+                await self.cli.execute_service(d, args)
+                return
+        raise RuntimeError(f"Aktion {name} fehlt in tests/ha-test.yaml")
+
+    async def tippen(self, wb, seg):
+        """Tipp auf Teil seg (0 Aus, 1 Smart, 2 Schnell) von Wallbox wb (0, 1)."""
+        await self.dienst("probe_tap", {"wb": wb, "seg": seg})
+
+    async def warte_select(self, n, frist=3.0):
+        ende = time.monotonic() + frist
+        while len(self.select) < n and time.monotonic() < ende:
+            await asyncio.sleep(0.1)
+        return self.select[n - 1] if len(self.select) >= n else None
 
 
 # --------------------------------------------------------------------------
@@ -353,6 +388,64 @@ async def ablauf(panel, ha, bilder):
     pruefe("G", "Aktionen beantwortet (Wetter, Statistik)",
            any(s == "weather.get_forecasts" and ok for s, ok in ha.aktionen)
            and any(s == "recorder.get_statistics" and ok for s, ok in ha.aktionen), ha.aktionen)
+
+    # K: Modus-Schalter Wallbox 1 (Wallbox 2 fehlt in HA, s. B)
+    ent1 = E("wb1_mode")
+    d = panel.letzte
+    pruefe("K", "Ausgang: Wallbox 1 meldet pv -> Smart leuchtet", d["wb_seg"][0] == 1, d["wb_seg"])
+    ha.select_folgt = False
+    await ha.tippen(0, 2)
+    d = await panel.warten(lambda d: d["wb_seg"][0] == 2, 3)
+    pruefe("K", "Tipp Schnell: leuchtet sofort, bevor HA etwas meldet", d, panel.letzte["wb_seg"])
+    s = await ha.warte_select(1)
+    pruefe("K", "Tipp Schnell: select.select_option mit Entitaet und now", s == (ent1, "now"), s)
+    ha.setzen("wb1_energy", "13.1")        # anderer Wert der Karte, Modus noch pv
+    await asyncio.sleep(2.5)
+    pruefe("K", "bis evcc meldet, bleibt der getippte Teil (anderer Wert kam)", panel.letzte["wb_seg"][0] == 2,
+           panel.letzte["wb_seg"])
+    ha.setzen("wb1_mode", "now")
+    await asyncio.sleep(2)
+    pruefe("K", "evcc meldet now: Schnell leuchtet", panel.letzte["wb_seg"][0] == 2, panel.letzte["wb_seg"])
+    ha.select_folgt = True
+    await ha.tippen(0, 1)
+    s = await ha.warte_select(2)
+    pruefe("K", "Optionen off/pv/minpv/now: Smart schickt pv", s == (ent1, "pv"), s)
+    d = await panel.warten(lambda d: d["wb_seg"][0] == 1, 3)
+    pruefe("K", "Zustand pv kommt zurueck: Smart leuchtet", d, panel.letzte["wb_seg"])
+    ha.setzen_attr("wb1_mode", "options", str(hb.MODUS_OPTIONEN_NEU))
+    ha.setzen("wb1_mode", "off")
+    await asyncio.sleep(2)
+    await ha.tippen(0, 1)
+    s = await ha.warte_select(3)
+    pruefe("K", "Optionen off/smart/now: Smart schickt smart", s == (ent1, "smart"), s)
+    d = await panel.warten(lambda d: d["wb_seg"][0] == 1, 3)
+    await ha.tippen(0, 0)
+    s = await ha.warte_select(4)
+    pruefe("K", "Tipp Aus: off", s == (ent1, "off"), s)
+    await asyncio.sleep(1.5)
+    n = len(ha.select)
+    seg2 = panel.letzte["wb_seg"][1]
+    await ha.tippen(1, 2)
+    await asyncio.sleep(2)
+    pruefe("K", "Wallbox 2 fehlt: kein Befehl, Schalter unveraendert",
+           len(ha.select) == n and panel.letzte["wb_seg"][1] == seg2, (ha.select[n:], panel.letzte["wb_seg"]))
+    # HA lehnt ab -> sofort zurueck auf den gemeldeten Modus (off = Aus)
+    ha.select_fehler = True
+    await ha.tippen(0, 2)
+    await ha.warte_select(n + 1)
+    d = await panel.warten(lambda d: d["wb_seg"][0] == 0, 4)
+    pruefe("K", "HA lehnt ab: zurueck auf den gemeldeten Modus", d and ("select.select_option", False) in ha.aktionen,
+           panel.letzte["wb_seg"])
+    ha.select_fehler = False
+    # HA nimmt an, evcc meldet nichts -> nach 10 s zurueck
+    ha.select_folgt = False
+    await ha.tippen(0, 1)
+    d = await panel.warten(lambda d: d["wb_seg"][0] == 1, 3)
+    d2 = await panel.warten(lambda d: d["wb_seg"][0] == 0, 15)
+    pruefe("K", "keine Meldung von evcc: nach etwa 10 s zurueck", d and d2, panel.letzte["wb_seg"])
+    ha.select_folgt = True
+    if bilder:
+        await ha.bild("probe_4_wallbox.bmp")
 
     # H
     await ha.trennen()

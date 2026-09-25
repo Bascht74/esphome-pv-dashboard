@@ -38,6 +38,9 @@
 #     capture_response; die Jinja-Vorlage rechnet sie in Home Assistant auf
 #     kurze Reihen zusammen. Abruf 20 s / 30 s nach dem Verbinden, dann
 #     Prognosen alle 30 min, Statistik stuendlich ab Minute 2.
+#   - Steuern: Der Modus-Schalter der Seite Wallboxen (wallbox_mode_set)
+#     schickt select.select_option an ${ha_wb<N>_mode}, Optionen nach
+#     dem Attribut options (off/smart/now oder off/pv/minpv/now).
 #
 # [A] = vorgeschlagene ID bzw. Annahme, am eigenen Home Assistant pruefen
 # (Einstellungen > Entitaeten). Zum Testen ohne die Integrationen:
@@ -143,7 +146,7 @@ substitutions:
   ha_tariff_grid: sensor.evcc_tariff_grid  # EUR/kWh -> ct
   ha_tariff_home: sensor.evcc_tariff_price_home  # EUR/kWh -> ct
   ha_tariff_feedin: sensor.evcc_tariff_feed_in  # EUR/kWh -> ct
-  ha_wb1_mode: select.evcc_wallbox_1_mode  # off/pv/minpv/now
+  ha_wb1_mode: select.evcc_wallbox_1_mode  # off/smart/now bzw. off/pv/minpv/now
   ha_wb1_charging: binary_sensor.evcc_wallbox_1_charging
   ha_wb1_connected: binary_sensor.evcc_wallbox_1_connected
   ha_wb1_power: sensor.evcc_wallbox_1_charge_power  # kW
@@ -156,7 +159,7 @@ substitutions:
   ha_wb1_range: sensor.evcc_wallbox_1_vehicle_range
   ha_wb1_limit: sensor.evcc_wallbox_1_effective_limit_soc
   ha_wb1_plan: sensor.evcc_wallbox_1_effective_plan_time  # Zeitstempel -> "Mo 07:00"
-  ha_wb2_mode: select.evcc_wallbox_2_mode  # off/pv/minpv/now
+  ha_wb2_mode: select.evcc_wallbox_2_mode  # off/smart/now bzw. off/pv/minpv/now
   ha_wb2_charging: binary_sensor.evcc_wallbox_2_charging
   ha_wb2_connected: binary_sensor.evcc_wallbox_2_connected
   ha_wb2_power: sensor.evcc_wallbox_2_charge_power  # kW
@@ -1523,6 +1526,13 @@ text_sensor:
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00010000u;'
   - platform: homeassistant
+    id: ha_wb1_mode_options
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_mode | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_mode }"
+    attribute: options
+    internal: true
+    on_value:
+      - lambda: 'id(ha_dirty) |= 0x00010000u;'
+  - platform: homeassistant
     id: ha_wb1_vehicle
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_vehicle | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_vehicle }"
     internal: true
@@ -1537,6 +1547,13 @@ text_sensor:
   - platform: homeassistant
     id: ha_wb2_mode
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_mode | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_mode }"
+    internal: true
+    on_value:
+      - lambda: 'id(ha_dirty) |= 0x00020000u;'
+  - platform: homeassistant
+    id: ha_wb2_mode_options
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_mode | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_mode }"
+    attribute: options
     internal: true
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00020000u;'
@@ -2304,6 +2321,52 @@ script:
           on_error:
             - lambda: 'ESP_LOGW("ha", "Statistik 24 h: %s", error.c_str());'
 
+  # Modus-Schalter der Seite Wallboxen: wallbox_mode_set
+  # (.pv-dashboard_page_wallbox.yaml) laesst den getippten Teil leuchten;
+  # hier kommt der Befehl an evcc dazu (!extend: die Schritte laufen nach
+  # denen der Seite). Nicht belegt oder Wallbox nicht da: nichts.
+  # Optionen nach marq24/ha-evcc (pyevcc_ha/keys.py): MODE_SMART
+  # off/smart/now, wenn evcc alwaysCharge kennt, sonst MODE_PV_MINPV
+  # off/pv/minpv/now -- beide unter derselben ID. Smart heisst dann "pv"
+  # (evcc hat pv in smart umbenannt). Welche Liste gilt, steht im Attribut
+  # options; fehlt es, entscheidet der gemeldete Modus, sonst "smart".
+  # Faellt die Aktion durch (Option unbekannt, Aktionen in Home Assistant
+  # nicht erlaubt) oder meldet evcc nach 10 s nichts Neues, zeichnet die
+  # Karte aus dem gemeldeten Zustand neu.
+  - id: !extend wallbox_mode_set
+    then:
+      - if:
+          condition:
+            lambda: |-
+              constexpr bool B[2] = {${ 'false' if (ha_wb1_mode | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' }, ${ 'false' if (ha_wb2_mode | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' }};
+              return wb >= 0 && wb <= 1 && seg >= 0 && seg <= 2 && B[wb] && ((id(dev_present) >> (15 + wb)) & 1u);
+          then:
+            - homeassistant.action:
+                action: select.select_option
+                data:
+                  entity_id: !lambda 'return std::string(wb == 0 ? "${ha_wb1_mode}" : "${ha_wb2_mode}");'
+                  option: !lambda |-
+                    if (seg == 0)
+                      return std::string("off");
+                    if (seg == 2)
+                      return std::string("now");
+                    const auto *o = wb == 0 ? id(ha_wb1_mode_options) : id(ha_wb2_mode_options);
+                    const auto *m = wb == 0 ? id(ha_wb1_mode) : id(ha_wb2_mode);
+                    if (o->has_state() && o->state.find("smart") != std::string::npos)
+                      return std::string("smart");
+                    if (o->has_state() && o->state.find("pv") != std::string::npos)
+                      return std::string("pv");
+                    if (m->has_state() && (m->state == "pv" || m->state == "minpv"))
+                      return std::string("pv");
+                    return std::string("smart");
+                on_error:
+                  - lambda: |-
+                      ESP_LOGW("ha", "select.select_option Wallbox %d: %s", wb + 1, error.c_str());
+                      id(wb_mode_pending)[wb] = -1;
+                      id(ha_dirty) |= 0x00030000u;
+            - delay: 10s
+            - lambda: 'id(ha_dirty) |= 0x00030000u;'
+
 interval:
   # Drosselung: je Gruppe hoechstens ein Aufruf der Seitenskripte je Sekunde
   - interval: 1s
@@ -2695,11 +2758,11 @@ interval:
           }
           // 16 Wallbox 1
           if ((d & (1u << 16)) && (dev & 0x00008000u) &&
-              (ready || id(ha_wb1_mode).has_state() || id(ha_wb1_charging).has_state() || id(ha_wb1_connected).has_state() ||
-               id(ha_wb1_power).has_state() || id(ha_wb1_phases).has_state() || id(ha_wb1_energy).has_state() ||
-               id(ha_wb1_solar).has_state() || id(ha_wb1_minutes).has_state() || id(ha_wb1_vehicle).has_state() ||
-               id(ha_wb1_soc).has_state() || id(ha_wb1_range).has_state() || id(ha_wb1_limit).has_state() ||
-               id(ha_wb1_plan).has_state())) {
+              (ready || id(ha_wb1_mode).has_state() || id(ha_wb1_mode_options).has_state() || id(ha_wb1_charging).has_state() ||
+               id(ha_wb1_connected).has_state() || id(ha_wb1_power).has_state() || id(ha_wb1_phases).has_state() ||
+               id(ha_wb1_energy).has_state() || id(ha_wb1_solar).has_state() || id(ha_wb1_minutes).has_state() ||
+               id(ha_wb1_vehicle).has_state() || id(ha_wb1_soc).has_state() || id(ha_wb1_range).has_state() ||
+               id(ha_wb1_limit).has_state() || id(ha_wb1_plan).has_state())) {
             {
               const bool con = id(ha_wb1_connected).state, chg = id(ha_wb1_charging).state;
               const float kw = V(id(ha_wb1_power), B_wb1_power), kwh = V(id(ha_wb1_energy), B_wb1_energy);
@@ -2713,11 +2776,11 @@ interval:
           }
           // 17 Wallbox 2
           if ((d & (1u << 17)) && (dev & 0x00010000u) &&
-              (ready || id(ha_wb2_mode).has_state() || id(ha_wb2_charging).has_state() || id(ha_wb2_connected).has_state() ||
-               id(ha_wb2_power).has_state() || id(ha_wb2_phases).has_state() || id(ha_wb2_energy).has_state() ||
-               id(ha_wb2_solar).has_state() || id(ha_wb2_minutes).has_state() || id(ha_wb2_vehicle).has_state() ||
-               id(ha_wb2_soc).has_state() || id(ha_wb2_range).has_state() || id(ha_wb2_limit).has_state() ||
-               id(ha_wb2_plan).has_state())) {
+              (ready || id(ha_wb2_mode).has_state() || id(ha_wb2_mode_options).has_state() || id(ha_wb2_charging).has_state() ||
+               id(ha_wb2_connected).has_state() || id(ha_wb2_power).has_state() || id(ha_wb2_phases).has_state() ||
+               id(ha_wb2_energy).has_state() || id(ha_wb2_solar).has_state() || id(ha_wb2_minutes).has_state() ||
+               id(ha_wb2_vehicle).has_state() || id(ha_wb2_soc).has_state() || id(ha_wb2_range).has_state() ||
+               id(ha_wb2_limit).has_state() || id(ha_wb2_plan).has_state())) {
             {
               const bool con = id(ha_wb2_connected).state, chg = id(ha_wb2_charging).state;
               const float kw = V(id(ha_wb2_power), B_wb2_power), kwh = V(id(ha_wb2_energy), B_wb2_energy);
