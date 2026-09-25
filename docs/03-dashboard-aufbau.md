@@ -125,7 +125,7 @@ je einer Datei pro Seite. Der Kern bindet die Seiten über einen eigenen
 `packages:`-Block ein — **diese Reihenfolge ist die Reihenfolge der Seiten**.
 ESPHome hängt Listen aus Packages in der Reihenfolge aneinander, in der die
 Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnung:
-Übersicht, PV, Prognose, Wetter, Speicher, Wallboxen, Wärmepumpe, Haus, Netz, Statistik, Meldungen. Der Reiter der Seite PV & Prognose heißt seit dem 25.09.2026 nur noch „PV“, damit elf Reiter in die Leiste passen (Lücke 6 px statt der Vorgabe, `pad_column`); „Wärmepumpe“ ist der breiteste und hat links und rechts noch etwa 5 px Luft.
+Übersicht, Wallboxen, Speicher, PV, Prognose, Haus, Wärmepumpe, Netz, Wetter, Statistik, Meldungen (Reihenfolge laut Nutzer, 25.09.2026). Der Reiter der Seite PV & Prognose heißt seit dem 25.09.2026 nur noch „PV“, damit elf Reiter in die Leiste passen (Lücke 6 px statt der Vorgabe, `pad_column`); „Wärmepumpe“ ist der breiteste und hat links und rechts noch etwa 5 px Luft.
 
 | Datei | Zeilen | Blöcke, Zeilennummern |
 | --- | --- | --- |

@@ -31,18 +31,18 @@ substitutions:
 # Listen aus Paketen in der Reihenfolge aneinander, in der die Pakete
 # deklariert sind (config_helpers.merge_config: alt + neu, dazu die
 # Umkehrung in packages._walk_package_dict). Die Reiter unten in der
-# Menueleiste zaehlen auf dieselbe Ordnung: Uebersicht, PV, Prognose,
-# Wetter, Speicher, Wallboxen, Waermepumpe, Haus, Netz, Statistik, Meldungen.
+# Menueleiste zaehlen auf dieselbe Ordnung: Uebersicht, Wallboxen, Speicher,
+# PV, Prognose, Haus, Waermepumpe, Netz, Wetter, Statistik, Meldungen.
 packages:
   page_overview: !include .pv-dashboard_page_overview.yaml
+  page_wallbox:  !include .pv-dashboard_page_wallbox.yaml
+  page_battery:  !include .pv-dashboard_page_battery.yaml
   page_pv:       !include .pv-dashboard_page_pv.yaml
   page_forecast: !include .pv-dashboard_page_forecast.yaml
-  page_weather:  !include .pv-dashboard_page_weather.yaml
-  page_battery:  !include .pv-dashboard_page_battery.yaml
-  page_wallbox:  !include .pv-dashboard_page_wallbox.yaml
-  page_heatpump: !include .pv-dashboard_page_heatpump.yaml
   page_house:    !include .pv-dashboard_page_house.yaml
+  page_heatpump: !include .pv-dashboard_page_heatpump.yaml
   page_grid:     !include .pv-dashboard_page_grid.yaml
+  page_weather:  !include .pv-dashboard_page_weather.yaml
   page_stats:    !include .pv-dashboard_page_stats.yaml
   page_alerts:   !include .pv-dashboard_page_alerts.yaml
 
@@ -1161,6 +1161,16 @@ lvgl:
                         control: { checkable: true, checked: true }
                         on_press:
                           - lvgl.page.show: page_overview
+                      - text: "Wallboxen"
+                        id: btn_nav_wallbox
+                        control: { checkable: true }
+                        on_press:
+                          - lvgl.page.show: page_wallbox
+                      - text: "Speicher"
+                        id: btn_nav_battery
+                        control: { checkable: true }
+                        on_press:
+                          - lvgl.page.show: page_battery
                       - text: "PV"
                         id: btn_nav_pv
                         control: { checkable: true }
@@ -1171,36 +1181,26 @@ lvgl:
                         control: { checkable: true }
                         on_press:
                           - lvgl.page.show: page_forecast
-                      - text: "Wetter"
-                        id: btn_nav_weather
-                        control: { checkable: true }
-                        on_press:
-                          - lvgl.page.show: page_weather
-                      - text: "Speicher"
-                        id: btn_nav_battery
-                        control: { checkable: true }
-                        on_press:
-                          - lvgl.page.show: page_battery
-                      - text: "Wallboxen"
-                        id: btn_nav_wallbox
-                        control: { checkable: true }
-                        on_press:
-                          - lvgl.page.show: page_wallbox
-                      - text: "Wärmepumpe"
-                        id: btn_nav_heatpump
-                        control: { checkable: true }
-                        on_press:
-                          - lvgl.page.show: page_heatpump
                       - text: "Haus"
                         id: btn_nav_house
                         control: { checkable: true }
                         on_press:
                           - lvgl.page.show: page_house
+                      - text: "Wärmepumpe"
+                        id: btn_nav_heatpump
+                        control: { checkable: true }
+                        on_press:
+                          - lvgl.page.show: page_heatpump
                       - text: "Netz"
                         id: btn_nav_grid
                         control: { checkable: true }
                         on_press:
                           - lvgl.page.show: page_grid
+                      - text: "Wetter"
+                        id: btn_nav_weather
+                        control: { checkable: true }
+                        on_press:
+                          - lvgl.page.show: page_weather
                       - text: "Statistik"
                         id: btn_nav_stats
                         control: { checkable: true }
