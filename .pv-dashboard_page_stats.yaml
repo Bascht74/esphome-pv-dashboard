@@ -1,0 +1,400 @@
+##############################################################################
+# Package: Seite 10 -- Statistik
+#
+# Auf Wunsch des Nutzers (25.09.2026) nach dem Projekt-Review: Erzeugung und
+# Verbrauch ueber Woche, Monat und Jahr, wie sie Home Assistant (Energie-
+# Dashboard), evcc oder die Portale der Wechselrichter zeigen. Oben die
+# Summen des gewaehlten Zeitraums mit Autarkie, Eigenverbrauch und Ertrag,
+# unten je Tag bzw. Monat ein Balkenpaar Erzeugung / Verbrauch.
+#
+# Die Reihen kommen fertig herein (Home Assistant fuehrt die Statistik),
+# die Seite rechnet nur Summen und Quoten:
+#   Autarkie        = (Verbrauch - Bezug) / Verbrauch
+#   Eigenverbrauch  = (Erzeugung - Einspeisung) / Erzeugung
+# Welche Kreise in "Erzeugung" stecken, entscheidet der Aufrufer (docs/06).
+#
+# Zwei Skripte gehoeren dazu:
+#   stats_update  eine Reihe (Woche, Monat oder Jahr) setzen
+#   stats_show    Zeitraum umschalten (die drei Knoepfe)
+# Die Reihen liegen in globals, weil beide Skripte sie brauchen; sie werden
+# nicht gespeichert und kommen nach einem Neustart neu von der Quelle.
+#
+# Flaeche x 4..1276, y 84..736.
+#   Kopf     x 4, y 84, 1272 x 120, innen 1250 x 98: Titel 0..17,
+#            Knoepfe 360 x 36 rechts oben, fuenf Spalten je 250:
+#            Beschriftung 44..64 (f_text_s), Wert 66..96 (f_val_l)
+#   Balken   x 4, y 212, 1272 x 524, innen 1250 x 502: Titel 0..17,
+#            Balken 40..440 (400), Grundlinie 440, Beschriftung 448..465,
+#            bis zu 31 Plaetze
+##############################################################################
+
+globals:
+  # Je Zeitraum 0 Woche, 1 Monat, 2 Jahr: Beschriftungen und vier Reihen
+  # als kommagetrennter Text, dazu Zeitraum-Text und Ertrag in Euro.
+  - id: stats_text
+    type: std::array<std::string, 18>
+    restore_value: false
+  - id: stats_money
+    type: std::array<float, 3>
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN}'
+  - id: stats_range
+    type: int
+    restore_value: false
+    initial_value: '0'
+
+script:
+  # ---------------------------------------------------------------------
+  # Eine Reihe setzen:
+  #   range   0 = Woche (7 Tage), 1 = Monat (bis 31 Tage), 2 = Jahr (12
+  #           Monate)
+  #   period  Zeitraum als Text, z. B. "22.09. bis 28.09.2026"
+  #   labels  Beschriftungen der Plaetze, kommagetrennt ("Mo,Di,...")
+  #   prod, cons, imp, exp
+  #           Erzeugung, Verbrauch, Netzbezug, Einspeisung je Platz in kWh,
+  #           kommagetrennt, gleich viele Werte wie labels
+  #   money   Ertrag des Zeitraums in Euro (Foerderung + Ersparnis - Bezug)
+  # ---------------------------------------------------------------------
+  - id: stats_update
+    parameters:
+      range: int
+      period: string
+      labels: string
+      prod: string
+      cons: string
+      imp: string
+      exp: string
+      money: float
+    then:
+      - lambda: |-
+          if (range < 0 || range > 2)
+            return;
+          auto &t = id(stats_text);
+          t[range * 6 + 0] = period;
+          t[range * 6 + 1] = labels;
+          t[range * 6 + 2] = prod;
+          t[range * 6 + 3] = cons;
+          t[range * 6 + 4] = imp;
+          t[range * 6 + 5] = exp;
+          id(stats_money)[range] = money;
+      - if:
+          condition:
+            lambda: 'return range == id(stats_range);'
+          then:
+            - script.execute: stats_redraw
+
+  # ---------------------------------------------------------------------
+  # Zeitraum umschalten (Knoepfe oben rechts)
+  # ---------------------------------------------------------------------
+  - id: stats_show
+    parameters:
+      range: int
+    then:
+      - lambda: 'id(stats_range) = std::max(0, std::min(range, 2));'
+      # Knoepfe mitziehen, falls der Aufruf nicht vom Knopf selbst kommt
+      # (Skript, Home Assistant): erst alle frei, dann den einen gedrueckt.
+      - lvgl.matrix.button.update: { id: [st_btn_0, st_btn_1, st_btn_2], control: { checked: false } }
+      - if:
+          condition:
+            lambda: 'return id(stats_range) == 0;'
+          then:
+            - lvgl.matrix.button.update: { id: st_btn_0, control: { checked: true } }
+      - if:
+          condition:
+            lambda: 'return id(stats_range) == 1;'
+          then:
+            - lvgl.matrix.button.update: { id: st_btn_1, control: { checked: true } }
+      - if:
+          condition:
+            lambda: 'return id(stats_range) == 2;'
+          then:
+            - lvgl.matrix.button.update: { id: st_btn_2, control: { checked: true } }
+      - script.execute: stats_redraw
+
+  # Zeichnet Kopf und Balken fuer stats_range. Von Hand ruft es niemand.
+  - id: stats_redraw
+    then:
+      - lambda: |-
+          const int r = id(stats_range);
+          const auto &t = id(stats_text);
+          auto parse = [](const std::string &s, float *out, int max) -> int {
+            int n = 0;
+            const char *q = s.c_str();
+            while (*q && n < max) {
+              char *end = nullptr;
+              const float v = strtof(q, &end);
+              if (end == q)
+                break;
+              out[n++] = std::isnan(v) ? 0.0f : std::max(v, 0.0f);
+              q = end;
+              while (*q == ',' || *q == ' ')
+                q++;
+            }
+            return n;
+          };
+          float prod[31] = {0}, cons[31] = {0}, imp[31] = {0}, exp[31] = {0};
+          const int n = parse(t[r * 6 + 2], prod, 31);
+          parse(t[r * 6 + 3], cons, 31);
+          parse(t[r * 6 + 4], imp, 31);
+          parse(t[r * 6 + 5], exp, 31);
+          // Beschriftungen
+          std::string lab[31];
+          {
+            const std::string &s = t[r * 6 + 1];
+            size_t pos = 0;
+            for (int i = 0; i < 31 && pos <= s.size(); i++) {
+              const size_t c = s.find(',', pos);
+              lab[i] = s.substr(pos, c == std::string::npos ? std::string::npos : c - pos);
+              if (c == std::string::npos)
+                break;
+              pos = c + 1;
+            }
+          }
+          float sp = 0, sc = 0, si = 0, se = 0, peak = 0.1f;
+          for (int i = 0; i < n; i++) {
+            sp += prod[i];
+            sc += cons[i];
+            si += imp[i];
+            se += exp[i];
+            peak = std::max(peak, std::max(prod[i], cons[i]));
+          }
+          // Kopf: Energie unter 1000 kWh mit einer Stelle, darueber ganz
+          // mit Tausenderpunkt
+          auto kwh = [](float v, bool known) -> std::string {
+            if (!known)
+              return std::string("--");
+            if (v < 999.95f)
+              return id(fmt_num)(v, "%.1f", "--");
+            return id(fmt_watt)(v, "--");
+          };
+          const bool known = n > 0;
+          lv_label_set_text(id(st_prod), kwh(sp, known).c_str());
+          lv_label_set_text(id(st_cons), kwh(sc, known).c_str());
+          if (known && sc > 0.0f)
+            lv_label_set_text_fmt(id(st_autarky), "%d", (int) lroundf(std::max(sc - si, 0.0f) / sc * 100.0f));
+          else
+            lv_label_set_text(id(st_autarky), "--");
+          if (known && sp > 0.0f)
+            lv_label_set_text_fmt(id(st_selfuse), "%d", (int) lroundf(std::max(sp - se, 0.0f) / sp * 100.0f));
+          else
+            lv_label_set_text(id(st_selfuse), "--");
+          lv_label_set_text(id(st_money), id(fmt_num)(id(stats_money)[r], "%.2f", "--,--").c_str());
+          static const char *const NAMES[3] = {"STATISTIK · WOCHE", "STATISTIK · MONAT", "STATISTIK · JAHR"};
+          std::string head = NAMES[r];
+          if (!t[r * 6 + 0].empty())
+            head += " · " + t[r * 6 + 0];
+          lv_label_set_text(id(st_title), head.c_str());
+          lv_label_set_text(id(st_scale), known ? ("Skala bis " + id(fmt_num)(peak, "%.1f", "--") + " kWh").c_str() : "");
+
+          // Balken: n Plaetze auf 1250 px verteilt
+          lv_obj_t *const bp[31] = {id(sb_p_00), id(sb_p_01), id(sb_p_02), id(sb_p_03), id(sb_p_04), id(sb_p_05), id(sb_p_06), id(sb_p_07), id(sb_p_08), id(sb_p_09), id(sb_p_10), id(sb_p_11), id(sb_p_12), id(sb_p_13), id(sb_p_14), id(sb_p_15), id(sb_p_16), id(sb_p_17), id(sb_p_18), id(sb_p_19), id(sb_p_20), id(sb_p_21), id(sb_p_22), id(sb_p_23), id(sb_p_24), id(sb_p_25), id(sb_p_26), id(sb_p_27), id(sb_p_28), id(sb_p_29), id(sb_p_30)};
+          lv_obj_t *const bc[31] = {id(sb_c_00), id(sb_c_01), id(sb_c_02), id(sb_c_03), id(sb_c_04), id(sb_c_05), id(sb_c_06), id(sb_c_07), id(sb_c_08), id(sb_c_09), id(sb_c_10), id(sb_c_11), id(sb_c_12), id(sb_c_13), id(sb_c_14), id(sb_c_15), id(sb_c_16), id(sb_c_17), id(sb_c_18), id(sb_c_19), id(sb_c_20), id(sb_c_21), id(sb_c_22), id(sb_c_23), id(sb_c_24), id(sb_c_25), id(sb_c_26), id(sb_c_27), id(sb_c_28), id(sb_c_29), id(sb_c_30)};
+          lv_obj_t *const bl[31] = {id(sb_l_00), id(sb_l_01), id(sb_l_02), id(sb_l_03), id(sb_l_04), id(sb_l_05), id(sb_l_06), id(sb_l_07), id(sb_l_08), id(sb_l_09), id(sb_l_10), id(sb_l_11), id(sb_l_12), id(sb_l_13), id(sb_l_14), id(sb_l_15), id(sb_l_16), id(sb_l_17), id(sb_l_18), id(sb_l_19), id(sb_l_20), id(sb_l_21), id(sb_l_22), id(sb_l_23), id(sb_l_24), id(sb_l_25), id(sb_l_26), id(sb_l_27), id(sb_l_28), id(sb_l_29), id(sb_l_30)};
+          const int H = 400, BASE = 440;
+          const float slot = n > 0 ? 1250.0f / n : 1250.0f;
+          const int bw = std::min(48, (int) (slot * 0.35f));
+          for (int i = 0; i < 31; i++) {
+            if (i >= n) {
+              lv_obj_add_flag(bp[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_add_flag(bc[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_add_flag(bl[i], LV_OBJ_FLAG_HIDDEN);
+              continue;
+            }
+            const int cx = (int) lroundf(slot * i + slot / 2);
+            const int hp = (int) lroundf(prod[i] / peak * H);
+            const int hc = (int) lroundf(cons[i] / peak * H);
+            lv_obj_set_pos(bp[i], cx - bw - 2, BASE - hp);
+            lv_obj_set_size(bp[i], bw, std::max(hp, 1));
+            lv_obj_set_pos(bc[i], cx + 2, BASE - hc);
+            lv_obj_set_size(bc[i], bw, std::max(hc, 1));
+            lv_obj_clear_flag(bp[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(bc[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_x(bl[i], cx - 30);
+            lv_label_set_text(bl[i], lab[i].c_str());
+            lv_obj_clear_flag(bl[i], LV_OBJ_FLAG_HIDDEN);
+          }
+
+lvgl:
+  pages:
+    - id: page_stats
+      bg_color: $col_bg
+      scrollable: false
+      scroll_dir: NONE
+      widgets:
+        # ---------------- Kopf mit Summen -----------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 84
+            width: 1272
+            height: 120
+            widgets:
+              - label: { id: st_title, x: 0, y: 0, width: 860, height: 17, long_mode: DOT, styles: st_label, text: "STATISTIK · WOCHE" }
+              # Zeitraum waehlen, gestaltet wie die Reiter unten
+              - buttonmatrix:
+                  x: 890
+                  y: 0
+                  width: 360
+                  height: 36
+                  bg_opa: TRANSP
+                  border_width: 0
+                  pad_all: 0
+                  one_checked: true
+                  items:
+                    bg_color: $col_surface
+                    bg_opa: COVER
+                    border_color: $col_line
+                    border_width: 1
+                    radius: 9
+                    text_color: $col_ink2
+                    text_font: f_text_s
+                    pressed:
+                      bg_color: $col_batt
+                      bg_opa: 20%
+                      text_color: $col_batt
+                    checked:
+                      bg_color: $col_batt
+                      bg_opa: 18%
+                      border_color: $col_batt
+                      text_color: $col_batt
+                  rows:
+                    - buttons:
+                        - text: "Woche"
+                          id: st_btn_0
+                          control: { checkable: true, checked: true }
+                          on_press:
+                            - script.execute: { id: stats_show, range: 0 }
+                        - text: "Monat"
+                          id: st_btn_1
+                          control: { checkable: true }
+                          on_press:
+                            - script.execute: { id: stats_show, range: 1 }
+                        - text: "Jahr"
+                          id: st_btn_2
+                          control: { checkable: true }
+                          on_press:
+                            - script.execute: { id: stats_show, range: 2 }
+              - label: { x: 0, y: 44, width: 240, height: 20, long_mode: DOT, text: "Erzeugung in kWh", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: st_prod, x: 0, y: 66, width: 240, height: 30, long_mode: DOT, text: "--", text_font: f_val_l, text_color: $col_solar }
+              - label: { x: 250, y: 44, width: 240, height: 20, long_mode: DOT, text: "Verbrauch in kWh", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: st_cons, x: 250, y: 66, width: 240, height: 30, long_mode: DOT, text: "--", text_font: f_val_l, text_color: $col_ink }
+              - label: { x: 500, y: 44, width: 240, height: 20, long_mode: DOT, text: "Autarkie in %", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: st_autarky, x: 500, y: 66, width: 240, height: 30, long_mode: DOT, text: "--", text_font: f_val_l, text_color: $col_ink }
+              - label: { x: 750, y: 44, width: 240, height: 20, long_mode: DOT, text: "Eigenverbrauch in %", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: st_selfuse, x: 750, y: 66, width: 240, height: 30, long_mode: DOT, text: "--", text_font: f_val_l, text_color: $col_ink }
+              - label: { x: 1000, y: 44, width: 240, height: 20, long_mode: DOT, text: "Ertrag in €", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: st_money, x: 1000, y: 66, width: 240, height: 30, long_mode: DOT, text: "--", text_font: f_val_l, text_color: $col_batt }
+        # ---------------- Balken --------------------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 212
+            width: 1272
+            height: 524
+            widgets:
+              - label: { x: 0, y: 0, width: 500, height: 17, long_mode: DOT, styles: st_label, text: "ERZEUGUNG UND VERBRAUCH" }
+              - obj: { x: 760, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 778, y: 0, width: 80, height: 17, long_mode: DOT, text: "Erzeugung", text_font: f_unit, text_color: $col_ink3 }
+              - obj: { x: 860, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 878, y: 0, width: 80, height: 17, long_mode: DOT, text: "Verbrauch", text_font: f_unit, text_color: $col_ink3 }
+              - label: { id: st_scale, x: 960, y: 0, width: 290, height: 17, long_mode: DOT, text_align: RIGHT, text: "", text_font: f_unit, text_color: $col_ink3 }
+              - obj: { x: 0, y: 440, width: 1250, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: sb_p_00, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_00, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_00, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_01, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_01, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_01, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_02, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_02, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_02, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_03, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_03, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_03, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_04, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_04, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_04, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_05, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_05, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_05, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_06, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_06, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_06, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_07, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_07, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_07, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_08, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_08, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_08, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_09, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_09, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_09, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_10, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_10, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_10, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_11, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_11, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_11, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_12, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_12, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_12, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_13, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_13, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_13, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_14, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_14, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_14, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_15, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_15, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_15, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_16, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_16, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_16, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_17, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_17, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_17, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_18, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_18, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_18, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_19, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_19, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_19, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_20, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_20, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_20, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_21, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_21, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_21, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_22, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_22, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_22, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_23, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_23, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_23, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_24, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_24, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_24, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_25, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_25, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_25, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_26, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_26, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_26, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_27, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_27, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_27, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_28, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_28, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_28, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_29, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_29, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_29, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }
+              - obj: { id: sb_p_30, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - obj: { id: sb_c_30, x: 0, y: 439, width: 10, height: 1, radius: 2, bg_color: $col_ink3, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: sb_l_30, x: 0, y: 448, width: 60, height: 17, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_unit, text_color: $col_ink3, hidden: true }

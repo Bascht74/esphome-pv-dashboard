@@ -1,9 +1,185 @@
 ##############################################################################
-# Package: Seite 4 -- Wallboxen
+# Package: Seite 6 -- Wallboxen
 #
-# Platzhalterseite, Inhalt kommt spaeter. y 10: mittig in der sichtbaren
-# Flaeche 76..744 (Mitte 410), nicht auf der Schirmmitte.
+# Aufbau nach dem Vorbild von evcc (Wunsch des Nutzers, 24.09.2026), dessen
+# Ladepunkt-Karte in Version 0.316.0 so gegliedert ist: Kopf mit Name und
+# Modus-Schalter (Aus / Smart / Schnell), darunter die Sitzungswerte
+# (Leistung mit Phasen, Geladen, Zusatzwert wie Sonne oder Ladedauer),
+# Trennlinie, dann das Fahrzeug mit Status, Ladestandsbalken samt
+# Limit-Marke und der Zeile Ladestand / Ladeplan / Ladelimit. Uebernommen
+# sind Gliederung, Beschriftungen und das evcc-Gruen (col_evcc). Die Farben
+# der Flaechen und die Einheitenregel (Einheit unter dem Wert, docs/01)
+# bleiben die des Dashboards. Unten eine Kachel mit den Monatswerten, wie
+# sie evcc unter "Ladevorgaenge" fuehrt.
+#
+# Zwei Skripte gehoeren dazu; kuenftige Sensoren (evcc ueber Home
+# Assistant oder MQTT) rufen nur diese auf, bis dahin stehen Striche:
+#   wallbox_update  eine Ladepunkt-Karte
+#   wallbox_month   die Monatskachel
+#
+# Flaeche x 4..1276, y 84..736. Zwei Karten je 632 x 512 (x 4 und 644,
+# y 84), darunter die Monatskachel 1272 x 132 (y 604). Karte innen
+# 610 x 490:
+#   Kopf          0..36   Symbol f_icon, Name f_bar (29), Schalter 300 x 36
+#   Sitzung      70..168  vier Spalten je 145, Abstand 10: Beschriftung
+#                         70..90 (f_text_s), Wert 94..133 (f_val_xl),
+#                         Einheit 135..152 (f_unit), Phasen 162..168
+#   Linie       196
+#   Fahrzeug    222..244  Name (f_text 22), Status 248..268 (f_text_s)
+#   Balken      294..334  (40), Limit-Marke 288..340
+#   Fahrzeug-
+#   werte       366..448  drei Spalten je 190, Abstand 20, wie die Sitzung
+#   -> Reserve 42
+# Monatskachel innen 1250 x 110: Titel 0..17, vier Spalten je 305,
+# Beschriftung 26..46, Wert 50..89, Einheit 91..108 -> Reserve 2.
 ##############################################################################
+
+##############################################################################
+# Standardbeschriftungen (Demo-Anlage)
+#
+# Dieselben zwei Namen wie im Schema der Uebersicht. Der Standard steht
+# deshalb doppelt -- auch in .pv-dashboard_page_overview.yaml. Beide Stellen
+# muessen gleich lauten; ein Wert aus .pv-dashboard_anlage.yaml sticht
+# ohnehin beide. Laufen die Pakete auseinander, gewinnt stillschweigend
+# dieses hier (spaeter im packages-Block von .pv-dashboard_ui.yaml), wie
+# bei den Speichernamen (docs/01).
+##############################################################################
+
+substitutions:
+  name_wb_1: "Wallbox 1"       # 100 von 266 (f_bar, gemessen)
+  name_wb_2: "Wallbox 2"       # 100 von 266
+
+script:
+  # ---------------------------------------------------------------------
+  # Eine Ladepunkt-Karte. Die Namen folgen der evcc-API (Ladepunkt):
+  #   wb        0..1 = Wallbox 1..2 (name_wb_1..2)
+  #   mode      "off" / "smart" / "now"; aeltere evcc-Versionen melden
+  #             "pv" und "minpv", die hier wie "smart" leuchten; sonst
+  #             leuchtet keiner
+  #   charging  true = Ladevorgang aktiv (Blitz, Phasen gruen)
+  #   power     Ladeleistung in kW
+  #   phases    aktive Phasen 0..3
+  #   energy    geladene Energie der Sitzung in kWh
+  #   solar     Sonnenanteil der Sitzung in %
+  #   minutes   Ladedauer der Sitzung in Minuten, < 0 = keine
+  #   vehicle   Fahrzeugname, "" = keins verbunden
+  #   status    Statuszeile, frei, z. B. "Ladevorgang aktiv …"
+  #   soc       Ladestand des Fahrzeugs in %
+  #   range     Reichweite in km
+  #   limit     Ladelimit in %
+  #   plan      naechster Ladeplan als Text, z. B. "Mo 07:00"; "" = keiner
+  #   NAN = kein Wert (Striche)
+  # ---------------------------------------------------------------------
+  - id: wallbox_update
+    parameters:
+      wb: int
+      mode: string
+      charging: bool
+      power: float
+      phases: int
+      energy: float
+      solar: float
+      minutes: int
+      vehicle: string
+      status: string
+      soc: float
+      range: float
+      limit: float
+      plan: string
+    then:
+      - lambda: |-
+          id(data_seen)[2] = millis();  // Datenalter, sys_refresh
+          if (wb < 0 || wb > 1)
+            return;
+          auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
+          struct Card {
+            lv_obj_t *seg[3], *seg_lbl[3], *bolt, *power, *ph[3], *energy, *solar, *dur,
+                     *vehicle, *status, *bar_limit, *bar_soc, *marker, *soc, *soc_sub, *plan,
+                     *plan_sub, *limit;
+          };
+          const Card cards[2] = {
+            {{id(wb1_seg0), id(wb1_seg1), id(wb1_seg2)}, {id(wb1_seg0_lbl), id(wb1_seg1_lbl), id(wb1_seg2_lbl)},
+             id(wb1_bolt), id(wb1_power), {id(wb1_ph1), id(wb1_ph2), id(wb1_ph3)}, id(wb1_energy), id(wb1_solar), id(wb1_dur),
+             id(wb1_vehicle), id(wb1_status), id(wb1_bar_limit), id(wb1_bar_soc), id(wb1_marker), id(wb1_soc), id(wb1_soc_sub),
+             id(wb1_plan), id(wb1_plan_sub), id(wb1_limit)},
+            {{id(wb2_seg0), id(wb2_seg1), id(wb2_seg2)}, {id(wb2_seg0_lbl), id(wb2_seg1_lbl), id(wb2_seg2_lbl)},
+             id(wb2_bolt), id(wb2_power), {id(wb2_ph1), id(wb2_ph2), id(wb2_ph3)}, id(wb2_energy), id(wb2_solar), id(wb2_dur),
+             id(wb2_vehicle), id(wb2_status), id(wb2_bar_limit), id(wb2_bar_soc), id(wb2_marker), id(wb2_soc), id(wb2_soc_sub),
+             id(wb2_plan), id(wb2_plan_sub), id(wb2_limit)}
+          };
+          const Card &c = cards[wb];
+          const lv_color_t green = lv_color_hex($col_evcc);
+
+          // Modus-Schalter: aktiver Teil gruen gefuellt, Schrift dunkel
+          int active = -1;
+          if (mode == "off")
+            active = 0;
+          else if (mode == "smart" || mode == "pv" || mode == "minpv")
+            active = 1;
+          else if (mode == "now")
+            active = 2;
+          for (int i = 0; i < 3; i++) {
+            lv_obj_set_style_bg_opa(c.seg[i], i == active ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+            lv_obj_set_style_text_color(c.seg_lbl[i], i == active ? lv_color_hex($col_bg) : lv_color_hex($col_ink2), 0);
+          }
+
+          // Sitzung
+          if (charging)
+            lv_obj_clear_flag(c.bolt, LV_OBJ_FLAG_HIDDEN);
+          else
+            lv_obj_add_flag(c.bolt, LV_OBJ_FLAG_HIDDEN);
+          lv_label_set_text(c.power, fmt(power, "%.1f", "--,-").c_str());
+          for (int i = 0; i < 3; i++)
+            lv_obj_set_style_bg_color(c.ph[i], charging && i < phases ? green : lv_color_hex($col_line), 0);
+          lv_label_set_text(c.energy, fmt(energy, "%.1f", "--,-").c_str());
+          lv_label_set_text(c.solar, fmt(solar, "%.0f", "--").c_str());
+          if (minutes < 0)
+            lv_label_set_text(c.dur, "-:--");
+          else
+            lv_label_set_text_fmt(c.dur, "%d:%02d", minutes / 60, minutes % 60);
+
+          // Fahrzeug
+          lv_label_set_text(c.vehicle, vehicle.empty() ? "Kein Fahrzeug" : vehicle.c_str());
+          lv_label_set_text(c.status, status.empty() ? "--" : status.c_str());
+          const float s = std::isnan(soc) ? 0.0f : std::clamp(soc, 0.0f, 100.0f);
+          const float l = std::isnan(limit) ? 0.0f : std::clamp(limit, 0.0f, 100.0f);
+          lv_bar_set_value(c.bar_soc, (int32_t) lroundf(s), LV_ANIM_OFF);
+          // Hinter dem Ladestand der Rest bis zum Limit, gedaempft wie in evcc
+          lv_bar_set_value(c.bar_limit, (int32_t) lroundf(std::max(s, l)), LV_ANIM_OFF);
+          if (std::isnan(limit)) {
+            lv_obj_add_flag(c.marker, LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_clear_flag(c.marker, LV_OBJ_FLAG_HIDDEN);
+            // Marke 4 breit, mittig auf dem Limit; Balken 610 breit
+            lv_obj_set_x(c.marker, (int32_t) lroundf(l / 100.0f * 606.0f));
+          }
+          lv_label_set_text(c.soc, fmt(soc, "%.0f", "--").c_str());
+          lv_label_set_text(c.soc_sub, ("% · " + fmt(range, "%.0f", "---") + " km").c_str());
+          lv_label_set_text(c.plan, plan.empty() ? "--" : plan.c_str());
+          lv_label_set_text(c.plan_sub, plan.empty() ? "kein Plan" : "Abfahrt");
+          lv_label_set_text(c.limit, fmt(limit, "%.0f", "--").c_str());
+
+  # ---------------------------------------------------------------------
+  # Monatskachel, beide Wallboxen zusammen (evcc "Ladevorgaenge").
+  #   energy  geladene Energie im laufenden Monat in kWh
+  #   solar   Sonnenanteil in %
+  #   cost    Kosten in Euro
+  #   price   Durchschnittspreis in ct/kWh
+  #   NAN = kein Wert (Striche)
+  # ---------------------------------------------------------------------
+  - id: wallbox_month
+    parameters:
+      energy: float
+      solar: float
+      cost: float
+      price: float
+    then:
+      - lambda: |-
+          auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
+          lv_label_set_text(id(wbm_energy), fmt(energy, "%.1f", "---,-").c_str());
+          lv_label_set_text(id(wbm_solar), fmt(solar, "%.0f", "--").c_str());
+          lv_label_set_text(id(wbm_cost), fmt(cost, "%.2f", "--,--").c_str());
+          lv_label_set_text(id(wbm_price), fmt(price, "%.1f", "--,-").c_str());
 
 lvgl:
   pages:
@@ -12,4 +188,249 @@ lvgl:
       scrollable: false
       scroll_dir: NONE
       widgets:
-        - label: { align: CENTER, y: 10, text: "Wallboxen", text_color: $col_ink3 }
+        # ---------------- Wallbox 1 --------------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 84
+            width: 632
+            height: 512
+            widgets:
+              # Kopf: Symbol und Name links, Modus-Schalter rechts. Der
+              # Schalter ist eine Pille mit Rahmen 1 (innen 298 x 34), darin
+              # drei Teile je 98 x 30 bei x 2 / 100 / 198, y 2.
+              - label: { x: 0, y: 6, text: "\U000F05F1", text_font: f_icon, text_color: $col_evcc }
+              - label: { x: 34, y: 3, width: 266, height: 29, long_mode: DOT, text: "${name_wb_1}", text_font: f_bar, text_color: $col_ink }
+              - obj:
+                  x: 310
+                  y: 0
+                  width: 300
+                  height: 36
+                  radius: 18
+                  bg_opa: TRANSP
+                  border_color: $col_line
+                  border_width: 1
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj:
+                        id: wb1_seg0
+                        x: 2
+                        y: 2
+                        width: 98
+                        height: 30
+                        radius: 15
+                        bg_color: $col_evcc
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        clickable: false
+                        scrollable: false
+                        widgets:
+                          - label: { id: wb1_seg0_lbl, align: CENTER, text: "Aus", text_font: f_text_s, text_color: $col_ink2 }
+                    - obj:
+                        id: wb1_seg1
+                        x: 100
+                        y: 2
+                        width: 98
+                        height: 30
+                        radius: 15
+                        bg_color: $col_evcc
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        clickable: false
+                        scrollable: false
+                        widgets:
+                          - label: { id: wb1_seg1_lbl, align: CENTER, text: "Smart", text_font: f_text_s, text_color: $col_ink2 }
+                    - obj:
+                        id: wb1_seg2
+                        x: 198
+                        y: 2
+                        width: 98
+                        height: 30
+                        radius: 15
+                        bg_color: $col_evcc
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        clickable: false
+                        scrollable: false
+                        widgets:
+                          - label: { id: wb1_seg2_lbl, align: CENTER, text: "Schnell", text_font: f_text_s, text_color: $col_ink2 }
+              # Sitzung: vier Spalten, aussen buendig, innen mittig
+              - label: { x: 0, y: 70, width: 145, height: 20, long_mode: DOT, text: "Leistung", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb1_power, x: 0, y: 94, width: 90, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { id: wb1_bolt, x: 96, y: 101, text: "\U000F140B", text_font: f_icon, text_color: $col_evcc, hidden: true }
+              - label: { x: 0, y: 135, width: 145, height: 17, long_mode: DOT, styles: st_unit, text: "kW" }
+              - obj: { id: wb1_ph1, x:  0, y: 162, width: 24, height: 6, radius: 3, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wb1_ph2, x: 28, y: 162, width: 24, height: 6, radius: 3, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wb1_ph3, x: 56, y: 162, width: 24, height: 6, radius: 3, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 155, y: 70, width: 145, height: 20, long_mode: DOT, text_align: CENTER, text: "Geladen", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb1_energy, x: 155, y: 94, width: 145, height: 39, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 155, y: 135, width: 145, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "kWh" }
+              - label: { x: 310, y: 70, width: 145, height: 20, long_mode: DOT, text_align: CENTER, text: "Sonne", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb1_solar, x: 310, y: 94, width: 145, height: 39, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 310, y: 135, width: 145, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "%" }
+              - label: { x: 465, y: 70, width: 145, height: 20, long_mode: DOT, text_align: RIGHT, text: "Ladedauer", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb1_dur, x: 465, y: 94, width: 145, height: 39, long_mode: DOT, text_align: RIGHT, text: "-:--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 465, y: 135, width: 145, height: 17, long_mode: DOT, text_align: RIGHT, styles: st_unit, text: "h:mm" }
+              - obj: { x: 0, y: 196, width: 610, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              # Fahrzeug
+              - label: { id: wb1_vehicle, x: 0, y: 222, width: 610, height: 22, long_mode: DOT, text: "Kein Fahrzeug", text_color: $col_ink }
+              - label: { id: wb1_status, x: 0, y: 248, width: 610, height: 20, long_mode: DOT, text: "--", text_font: f_text_s, text_color: $col_ink3 }
+              # Zwei Balken uebereinander: hinten bis zum Limit gedaempft,
+              # vorn der Ladestand; darueber die Limit-Marke.
+              - bar: { id: wb1_bar_limit, x: 0, y: 294, width: 610, height: 40, min_value: 0, max_value: 100, value: 0, bg_color: $col_bg, bg_opa: COVER, radius: 8, indicator: { bg_color: $col_evcc, bg_opa: 25%, radius: 8 } }
+              - bar: { id: wb1_bar_soc, x: 0, y: 294, width: 610, height: 40, min_value: 0, max_value: 100, value: 0, bg_opa: TRANSP, radius: 8, indicator: { bg_color: $col_evcc, bg_opa: COVER, radius: 8 } }
+              - obj: { id: wb1_marker, x: 0, y: 288, width: 4, height: 52, radius: 2, bg_color: $col_ink, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { x: 0, y: 366, width: 190, height: 20, long_mode: DOT, text: "Ladestand", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb1_soc, x: 0, y: 390, width: 190, height: 39, long_mode: DOT, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { id: wb1_soc_sub, x: 0, y: 431, width: 190, height: 17, long_mode: DOT, styles: st_unit, text: "% · --- km" }
+              - label: { x: 210, y: 366, width: 190, height: 20, long_mode: DOT, text_align: CENTER, text: "Ladeplan", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb1_plan, x: 210, y: 390, width: 190, height: 39, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { id: wb1_plan_sub, x: 210, y: 431, width: 190, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "kein Plan" }
+              - label: { x: 420, y: 366, width: 190, height: 20, long_mode: DOT, text_align: RIGHT, text: "Ladelimit", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb1_limit, x: 420, y: 390, width: 190, height: 39, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 420, y: 431, width: 190, height: 17, long_mode: DOT, text_align: RIGHT, styles: st_unit, text: "%" }
+        # ---------------- Wallbox 2 --------------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 644
+            y: 84
+            width: 632
+            height: 512
+            widgets:
+              # Kopf: Symbol und Name links, Modus-Schalter rechts. Der
+              # Schalter ist eine Pille mit Rahmen 1 (innen 298 x 34), darin
+              # drei Teile je 98 x 30 bei x 2 / 100 / 198, y 2.
+              - label: { x: 0, y: 6, text: "\U000F05F1", text_font: f_icon, text_color: $col_evcc }
+              - label: { x: 34, y: 3, width: 266, height: 29, long_mode: DOT, text: "${name_wb_2}", text_font: f_bar, text_color: $col_ink }
+              - obj:
+                  x: 310
+                  y: 0
+                  width: 300
+                  height: 36
+                  radius: 18
+                  bg_opa: TRANSP
+                  border_color: $col_line
+                  border_width: 1
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - obj:
+                        id: wb2_seg0
+                        x: 2
+                        y: 2
+                        width: 98
+                        height: 30
+                        radius: 15
+                        bg_color: $col_evcc
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        clickable: false
+                        scrollable: false
+                        widgets:
+                          - label: { id: wb2_seg0_lbl, align: CENTER, text: "Aus", text_font: f_text_s, text_color: $col_ink2 }
+                    - obj:
+                        id: wb2_seg1
+                        x: 100
+                        y: 2
+                        width: 98
+                        height: 30
+                        radius: 15
+                        bg_color: $col_evcc
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        clickable: false
+                        scrollable: false
+                        widgets:
+                          - label: { id: wb2_seg1_lbl, align: CENTER, text: "Smart", text_font: f_text_s, text_color: $col_ink2 }
+                    - obj:
+                        id: wb2_seg2
+                        x: 198
+                        y: 2
+                        width: 98
+                        height: 30
+                        radius: 15
+                        bg_color: $col_evcc
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        clickable: false
+                        scrollable: false
+                        widgets:
+                          - label: { id: wb2_seg2_lbl, align: CENTER, text: "Schnell", text_font: f_text_s, text_color: $col_ink2 }
+              # Sitzung: vier Spalten, aussen buendig, innen mittig
+              - label: { x: 0, y: 70, width: 145, height: 20, long_mode: DOT, text: "Leistung", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb2_power, x: 0, y: 94, width: 90, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { id: wb2_bolt, x: 96, y: 101, text: "\U000F140B", text_font: f_icon, text_color: $col_evcc, hidden: true }
+              - label: { x: 0, y: 135, width: 145, height: 17, long_mode: DOT, styles: st_unit, text: "kW" }
+              - obj: { id: wb2_ph1, x:  0, y: 162, width: 24, height: 6, radius: 3, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wb2_ph2, x: 28, y: 162, width: 24, height: 6, radius: 3, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wb2_ph3, x: 56, y: 162, width: 24, height: 6, radius: 3, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 155, y: 70, width: 145, height: 20, long_mode: DOT, text_align: CENTER, text: "Geladen", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb2_energy, x: 155, y: 94, width: 145, height: 39, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 155, y: 135, width: 145, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "kWh" }
+              - label: { x: 310, y: 70, width: 145, height: 20, long_mode: DOT, text_align: CENTER, text: "Sonne", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb2_solar, x: 310, y: 94, width: 145, height: 39, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 310, y: 135, width: 145, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "%" }
+              - label: { x: 465, y: 70, width: 145, height: 20, long_mode: DOT, text_align: RIGHT, text: "Ladedauer", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb2_dur, x: 465, y: 94, width: 145, height: 39, long_mode: DOT, text_align: RIGHT, text: "-:--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 465, y: 135, width: 145, height: 17, long_mode: DOT, text_align: RIGHT, styles: st_unit, text: "h:mm" }
+              - obj: { x: 0, y: 196, width: 610, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              # Fahrzeug
+              - label: { id: wb2_vehicle, x: 0, y: 222, width: 610, height: 22, long_mode: DOT, text: "Kein Fahrzeug", text_color: $col_ink }
+              - label: { id: wb2_status, x: 0, y: 248, width: 610, height: 20, long_mode: DOT, text: "--", text_font: f_text_s, text_color: $col_ink3 }
+              # Zwei Balken uebereinander: hinten bis zum Limit gedaempft,
+              # vorn der Ladestand; darueber die Limit-Marke.
+              - bar: { id: wb2_bar_limit, x: 0, y: 294, width: 610, height: 40, min_value: 0, max_value: 100, value: 0, bg_color: $col_bg, bg_opa: COVER, radius: 8, indicator: { bg_color: $col_evcc, bg_opa: 25%, radius: 8 } }
+              - bar: { id: wb2_bar_soc, x: 0, y: 294, width: 610, height: 40, min_value: 0, max_value: 100, value: 0, bg_opa: TRANSP, radius: 8, indicator: { bg_color: $col_evcc, bg_opa: COVER, radius: 8 } }
+              - obj: { id: wb2_marker, x: 0, y: 288, width: 4, height: 52, radius: 2, bg_color: $col_ink, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { x: 0, y: 366, width: 190, height: 20, long_mode: DOT, text: "Ladestand", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb2_soc, x: 0, y: 390, width: 190, height: 39, long_mode: DOT, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { id: wb2_soc_sub, x: 0, y: 431, width: 190, height: 17, long_mode: DOT, styles: st_unit, text: "% · --- km" }
+              - label: { x: 210, y: 366, width: 190, height: 20, long_mode: DOT, text_align: CENTER, text: "Ladeplan", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb2_plan, x: 210, y: 390, width: 190, height: 39, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { id: wb2_plan_sub, x: 210, y: 431, width: 190, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "kein Plan" }
+              - label: { x: 420, y: 366, width: 190, height: 20, long_mode: DOT, text_align: RIGHT, text: "Ladelimit", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wb2_limit, x: 420, y: 390, width: 190, height: 39, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 420, y: 431, width: 190, height: 17, long_mode: DOT, text_align: RIGHT, styles: st_unit, text: "%" }
+
+        # ---------------- Monatswerte, beide Wallboxen -------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 604
+            width: 1272
+            height: 132
+            widgets:
+              - label: { x: 0, y: 0, width: 600, height: 17, long_mode: DOT, styles: st_label, text: "LADEVORGÄNGE IM MONAT" }
+              - label: { x: 650, y: 0, width: 600, height: 17, long_mode: DOT, text_align: RIGHT, styles: st_sub, text: "beide Wallboxen" }
+              - label: { x: 0, y: 26, width: 305, height: 20, long_mode: DOT, text_align: CENTER, text: "Geladen", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wbm_energy, x: 0, y: 50, width: 305, height: 39, long_mode: DOT, text_align: CENTER, text: "---,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 0, y: 91, width: 305, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "kWh" }
+              - label: { x: 315, y: 26, width: 305, height: 20, long_mode: DOT, text_align: CENTER, text: "Sonnenanteil", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wbm_solar, x: 315, y: 50, width: 305, height: 39, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 315, y: 91, width: 305, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "%" }
+              - label: { x: 630, y: 26, width: 305, height: 20, long_mode: DOT, text_align: CENTER, text: "Kosten", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wbm_cost, x: 630, y: 50, width: 305, height: 39, long_mode: DOT, text_align: CENTER, text: "--,--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 630, y: 91, width: 305, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "€" }
+              - label: { x: 945, y: 26, width: 305, height: 20, long_mode: DOT, text_align: CENTER, text: "Ø Preis", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: wbm_price, x: 945, y: 50, width: 305, height: 39, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 945, y: 91, width: 305, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "ct/kWh" }

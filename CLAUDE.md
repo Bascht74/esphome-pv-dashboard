@@ -10,6 +10,10 @@ bis `docs/06`.
   ausschnittsweise, auch nicht zur Prüfung, ob ein Schlüssel existiert. Bei
   Suchen ausschließen (`grep --exclude=secrets.yaml`).
 - Werte nur über `!secret <name>`, und das steht **nur** in `pv-dashboard.yaml`.
+- `.pv-dashboard_anlage.yaml` hält die eigene Anlage (Beschriftungen, Tarife)
+  und bleibt lokal (`.gitignore`). Zum Messen von Breiten darf sie gelesen
+  werden; ihre Werte aber nie in Repo-Dateien, Commits oder Doku übernehmen.
+  Im Repo steht nur die Vorlage `.pv-dashboard_anlage.yaml.example`.
   Neuer Schlüssel: dem Nutzer den Namen nennen, den er selbst einträgt und in
   `secrets.yaml.example` dokumentiert.
 - Keine Zugangsdaten, WLAN-Namen, Schlüssel, IP- oder MAC-Adressen in Ausgaben.
@@ -24,6 +28,13 @@ bis `docs/06`.
 
 Niemals von sich aus committen oder pushen — auch nicht „gleich mit", nur auf
 ausdrückliche Aufforderung. Nach Änderungen berichten, was geändert wurde.
+
+**Gearbeitet wird auf `dev`, nicht auf `main`.** Jede Änderung geht auf diesen
+Zweig; `main` wird nur angefasst, wenn der Nutzer es ausdrücklich sagt. Das Gerät
+baut aus `main` (`ref: main` im `packages:`-Block), eine Änderung auf `dev` erreicht
+das Panel also nicht — genau das ist der Zweck. Ist eine Änderung geprüft, führt der
+Nutzer sie nach `main`. Sitzungen, denen die Umgebung einen eigenen Zweig zuweist,
+arbeiten trotzdem gegen `dev` und fragen, bevor etwas nach `main` geht.
 
 ## Rückfragen
 
@@ -83,16 +94,19 @@ normales Deutsch mit Umlauten.
 
 ## Kurz und wichtig
 
-- `pv-dashboard.yaml` ist die einzige Datei zum Anfassen. Daneben
+- Zum Anfassen sind `pv-dashboard.yaml` und die lokale
+  `.pv-dashboard_anlage.yaml`. Daneben
   `.pv-dashboard_core.yaml`, `_display`, `_audio`, `_utility` und die
-  Oberfläche: Kern `.pv-dashboard_ui.yaml` plus sieben Seitendateien in der
+  Oberfläche: Kern `.pv-dashboard_ui.yaml` plus elf Seitendateien in der
   Reihenfolge seines `packages:`-Blocks. Nicht am Stück lesen — Dateitabelle in
   `docs/03`. Ein neues Skript gehört zu der Seite, die es benutzt.
 - Der Block zwischen `# >>> flow-animation` und `# <<< flow-animation` und die
   Widgets `flNN`/`flNNb` der Übersichtsseite stammen **nur** von
   `tools/flow_animation.py` — nie von Hand ändern.
-- PV & Prognose, Wallboxen, Wärmepumpe, Haus und die BMS-Anbindung sind bewusst
-  Platzhalter. Nur bauen, wenn der Nutzer es verlangt (`docs/06`).
+- Die BMS-Anbindung ist bewusst ein Platzhalter. Nur bauen, wenn der Nutzer
+  es verlangt (`docs/06`). Alle Detailseiten sind gebaut (PV & Prognose
+  23.09.2026, Wallboxen, Wärmepumpe und Haus 24.09.2026, Netz, Statistik,
+  Prognose und Wetter 25.09.2026); ihre Werte kommen über je ein Skript, bis dahin stehen Striche.
 - Die sechs `docs/`-Dateien liegen als Kopie im Claude-Projekt; nach einer
   Änderung sagen, welche neu hochzuladen ist (Anleitung im Ordner
   `~/esphome-claude-projekt`).

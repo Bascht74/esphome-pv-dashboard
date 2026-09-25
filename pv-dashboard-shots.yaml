@@ -18,8 +18,9 @@
 #
 # Baut den Simulator (pv-dashboard-sim.yaml, hier als Package eingebunden)
 # mit headless-Display: Es oeffnet sich kein Fenster. Das Programm zeigt
-# nacheinander alle sieben Seiten -- der passende Reiter unten ist dabei
-# markiert -- und die beiden Overlays Sprachassistent und Firmware-Update,
+# nacheinander alle elf Seiten (die Statistik zweimal, Woche und Monat) --
+# der passende Reiter unten ist dabei markiert -- und die drei Fenster
+# Sprachassistent, Firmware-Update und System,
 # legt jedes Bild als BMP ab und beendet sich dann selbst.
 #
 # Die Bilder landen in shots/ unterhalb des Verzeichnisses, aus dem der
@@ -76,8 +77,9 @@ script:
   - id: shots_nav_clear
     then:
       - lvgl.matrix.button.update:
-          id: [btn_nav_overview, btn_nav_pv, btn_nav_battery, btn_nav_wallbox,
-               btn_nav_heatpump, btn_nav_house, btn_nav_alerts]
+          id: [btn_nav_overview, btn_nav_pv, btn_nav_forecast, btn_nav_weather,
+               btn_nav_battery, btn_nav_wallbox, btn_nav_heatpump, btn_nav_house,
+               btn_nav_grid, btn_nav_stats, btn_nav_alerts]
           control:
             checked: false
 
@@ -100,16 +102,17 @@ script:
       # Uhr sofort fuellen, sonst steht bis zur naechsten vollen Minute --:--
       - script.execute: update_clock
 
-      # Beispieldaten, damit Meldungen, Speicher und die Meldungszeile nicht
-      # leer auf den Bildern stehen -- nur hier, nie im Geraet. Aelteste
+      # Beispieldaten, damit Meldungen, Speicher, PV und die Meldungszeile
+      # nicht leer auf den Bildern stehen -- nur hier, nie im Geraet. Aelteste
       # Meldung zuerst: jede neue rutscht oben in die Liste.
       #
       # Die Geraetenamen kommen aus denselben Substitutions wie die Kaesten
       # im Schema, damit die Meldungen zur abgebildeten Anlage passen. Es
       # sind dabei immer die Demo-Standards aus den Seiten-Paketen: Dieser
       # Lauf bindet pv-dashboard-sim.yaml ein, und weder der Simulator noch
-      # dieser Lauf binden pv-dashboard.yaml ein. Eigene Werte von dort
-      # erreichen das Bild also nicht (geprueft mit 2026.9.0). Wer die
+      # dieser Lauf binden pv-dashboard.yaml und damit
+      # .pv-dashboard_anlage.yaml ein. Eigene Werte von dort erreichen das
+      # Bild also nicht (geprueft mit 2026.9.0). Wer die
       # eigene Beschriftung gerendert sehen will, traegt sie zum Messen
       # voruebergehend in das jeweilige Seiten-Paket ein.
       - script.execute: { id: alert_push, severity: 0, device: "${name_heatpump}", text: "Filterwechsel in 14 Tagen fällig" }
@@ -131,6 +134,263 @@ script:
       - script.execute: { id: storage_update, bat: 0, soc: 72, current: 12.4, cell_min: 3.281, cell_max: 3.302, temp_min: 18, temp_max: 21, cycles: 412 }
       - script.execute: { id: storage_update, bat: 1, soc: 38, current: -8.9, cell_min: 3.195, cell_max: 3.377, temp_min: 19, temp_max: 24, cycles: 398 }
       - script.execute: { id: storage_update, bat: 2, soc: 100, current: 0.0, cell_min: 3.402, cell_max: 3.411, temp_min: 17, temp_max: 19, cycles: 1287 }
+      # Seite PV & Prognose: Wechselrichter und Flaechen. Die Tageswerte der
+      # Wechselrichter ergeben zusammen die 147,0 kWh der Beispielkurve
+      # unten.
+      - script.execute: { id: pv_update, inv: 0, pv: -1, power: 6214, energy: 38.5 }
+      - script.execute: { id: pv_update, inv: 1, pv: -1, power: 588, energy: 3.9 }
+      - script.execute: { id: pv_update, inv: 2, pv: -1, power: 7835, energy: 58.2 }
+      - script.execute: { id: pv_update, inv: 3, pv: -1, power: 5231, energy: 46.4 }
+      - script.execute: { id: pv_update, inv: -1, pv: 0, power: 3412, energy: 20.1 }
+      - script.execute: { id: pv_update, inv: -1, pv: 1, power: 2980, energy: 19.2 }
+      - script.execute: { id: pv_update, inv: -1, pv: 2, power: 312, energy: 2.0 }
+      - script.execute: { id: pv_update, inv: -1, pv: 3, power: 298, energy: 2.0 }
+      - script.execute: { id: pv_update, inv: -1, pv: 4, power: 4120, energy: 30.4 }
+      - script.execute: { id: pv_update, inv: -1, pv: 5, power: 3890, energy: 29.1 }
+      - script.execute: { id: pv_update, inv: -1, pv: 6, power: 3650, energy: 31.2 }
+      # Flaeche 8 (pv: 7) bleibt ohne Aufruf: So steht das Strichmuster mit
+      # auf dem Bild.
+      # Wallboxen: Wallbox 2 bleibt ohne Aufruf, auch hier fuer das
+      # Strichmuster. Werte und Texte sind Beispiele im Format der
+      # evcc-API (mode "off" / "smart" / "now").
+      - script.execute:
+          id: wallbox_update
+          wb: 0
+          mode: "smart"
+          charging: true
+          power: 7.4
+          phases: 3
+          energy: 12.8
+          solar: 86
+          minutes: 104
+          vehicle: "Kombi"
+          status: "Ladevorgang aktiv …"
+          soc: 64
+          range: 312
+          limit: 80
+          plan: "Mo 07:00"
+      - script.execute: { id: wallbox_month, energy: 412.6, solar: 71, cost: 38.40, price: 9.3 }
+      # Waermepumpe
+      - script.execute:
+          id: heatpump_update
+          outdoor: 8.4
+          room: 21.6
+          humidity: 48
+          co2: 640
+          dhw: 51.2
+          eheat: true
+          fan: 2
+          vent_mode: "Auto"
+          season: "Winter"
+          bypass: "Geschlossen"
+          compressor: "Warmwasser"
+          supply: 19.8
+          exhaust: 9.1
+          power: 0.62
+          energy: 4.8
+          alarm: 0
+      - script.execute:
+          id: heatpump_extra
+          room_set: 21.5
+          dhw_set: 50
+          fan_supply: 45
+          fan_extract: 48
+          filter_days: 23
+          defrost: false
+          legionella: true
+      # Haus: Energiefluss wie evcc. Wallbox 1 laedt mit 7,4 kW, PV
+      # reicht nicht, der Speicher gibt dazu, der Rest kommt aus dem Netz:
+      # In 6400 + 2000 + 450 = Out 1450 + 7400 = 8850 W.
+      - script.execute:
+          id: house_flow
+          pv: 6400
+          bat_out: 2000
+          grid_in: 450
+          home: 1450
+          loadpoints: 7400
+          bat_in: 0
+          grid_out: 0
+          soc: 71
+          forecast: 12.4
+          price_grid: 32.1
+          price_home: 9.8
+          price_feed: 8.2
+      - script.execute: { id: house_battery, bat: 0, power: 700, soc: 72 }
+      - script.execute: { id: house_battery, bat: 1, power: 650, soc: 70 }
+      - script.execute: { id: house_battery, bat: 2, power: 650, soc: 71 }
+      - script.execute: { id: house_loadpoint, wb: 0, power: 7400, soc: 64 }
+      - script.execute: { id: house_loadpoint, wb: 1, power: 0, soc: !lambda "return NAN;" }
+      # Verbraucher: zusammen 1450 W wie "Verbrauch" oben
+      - script.execute: { id: house_update, dev: 0, power: 620, energy: 4.8 }
+      - script.execute: { id: house_update, dev: 1, power: 0, energy: 1.2 }
+      - script.execute: { id: house_update, dev: 2, power: 180, energy: 0.9 }
+      - script.execute: { id: house_update, dev: 3, power: 0, energy: 1.1 }
+      - script.execute: { id: house_update, dev: 4, power: 338, energy: 0.6 }
+      - script.execute: { id: house_update, dev: 5, power: 312, energy: 7.5 }
+      - script.execute:
+          id: house_history
+          home: "0.4,0.3,0.3,0.3,0.3,0.4,0.6,0.9,0.8,0.7,1.1,2.4,1.9,1.2,0.9,1,1.3,4.8,6.2,7.9,3.1,1.4,1,6.8"
+          solar: "0,0,0,0,0,0,0.1,0.5,0.8,0.7,1.1,2.4,1.9,1.2,0.9,1,1.2,3.6,2.4,0.9,0.1,0,0,0"
+          hour: 23
+      # Netzseite: Werte wie vom Shelly Pro 3EM, gerade Einspeisung. L3 mit
+      # 254 V, damit die gelbe Spannungsmarke mit auf dem Bild ist.
+      - script.execute: { id: grid_update, power: -8420, freq: 50.02, curtailed: 1.8, n_current: 1.4 }
+      - script.execute: { id: grid_phase, phase: 0, voltage: 236.4, current: 12.1, power: -2710, apparent: 2860, pf: 0.95 }
+      - script.wait: grid_phase
+      - script.execute: { id: grid_phase, phase: 1, voltage: 238.9, current: 13.4, power: -3050, apparent: 3200, pf: 0.95 }
+      - script.wait: grid_phase
+      - script.execute: { id: grid_phase, phase: 2, voltage: 254.1, current: 11.0, power: -2660, apparent: 2795, pf: 0.95 }
+      - script.wait: grid_phase
+      - script.execute: { id: grid_meter, meter: 0, total: 4812.3, today: 3.4 }
+      - script.wait: grid_meter
+      - script.execute: { id: grid_meter, meter: 1, total: 11873.9, today: 41.2 }
+      - script.wait: grid_meter
+      - script.execute: { id: grid_meter, meter: 2, total: 21342.6, today: 88.7 }
+      - script.wait: grid_meter
+      - script.execute: { id: grid_meter, meter: 3, total: 9120.4, today: 12.9 }
+      - script.wait: grid_meter
+      - script.execute: { id: grid_meter, meter: 4, total: 6410.2, today: 30.6 }
+      - script.wait: grid_meter
+      - script.execute: { id: grid_rules, limit_active: true, spot_ct: -0.8, neg_quarters: 6, neg_paid: true, p14a_active: false, p14a_kw: 4.2, smart_meter: false }
+      # Statistik: Woche, Monat, Jahr; gezeigt wird die Woche.
+      - script.execute:
+          id: stats_update
+          range: 0
+          period: "22.09. bis 28.09.2026"
+          labels: "Mo,Di,Mi,Do,Fr,Sa,So"
+          prod: "112.4,98.1,131.9,64.2,120.7,135.3,88.0"
+          cons: "31.2,28.4,35.9,40.1,29.8,33.6,37.2"
+          imp: "4.1,5.3,3.2,14.8,4.6,3.9,9.7"
+          exp: "85.3,75.0,99.2,38.9,95.5,105.6,60.5"
+          money: 19.83
+      - script.wait: stats_update
+      - script.execute:
+          id: stats_update
+          range: 1
+          period: "September 2026"
+          labels: "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30"
+          prod: "140,152,98,77,160,171,165,120,64,58,133,149,150,142,110,95,160,158,149,90,72,112,98,132,64,121,135,88,0,0"
+          cons: "30,32,35,29,31,36,34,33,40,42,31,30,29,33,35,38,30,31,32,36,39,31,28,36,40,30,34,37,0,0"
+          imp: "3,4,9,11,2,2,3,5,18,20,4,3,3,4,7,10,2,3,3,9,13,4,5,3,15,5,4,10,0,0"
+          exp: "113,124,72,59,131,137,134,92,42,36,106,122,124,113,82,67,132,130,120,63,46,85,75,99,39,96,105,61,0,0"
+          money: 612.40
+      - script.wait: stats_update
+      - script.execute:
+          id: stats_update
+          range: 2
+          period: "2026"
+          labels: "J,F,M,A,M,J,J,A,S,O,N,D"
+          prod: "620,1150,2480,3620,4410,4690,4580,3960,3050,0,0,0"
+          cons: "1480,1310,1190,980,930,880,910,940,1010,0,0,0"
+          imp: "1120,860,540,260,190,160,170,210,320,0,0,0"
+          exp: "210,640,1790,2880,3650,3950,3820,3200,2340,0,0,0"
+          money: 5210.55
+      - script.wait: stats_update
+      - script.execute: { id: stats_show, range: 0 }
+      # Wechselrichter 4 mit Stoerung, die anderen mit Temperatur.
+      - script.execute: { id: pv_status, inv: 0, ok: true, text: "", temp: 41.5 }
+      - script.wait: pv_status
+      - script.execute: { id: pv_status, inv: 1, ok: true, text: "", temp: 38.0 }
+      - script.wait: pv_status
+      - script.execute: { id: pv_status, inv: 2, ok: true, text: "", temp: 39.2 }
+      - script.wait: pv_status
+      - script.execute: { id: pv_status, inv: 3, ok: false, text: "Isolationsfehler 0x2011", temp: !lambda "return NAN;" }
+      - script.wait: pv_status
+      # Prognose (Solcast): Kennzahlen, Halbstunden (Glocke um 13 Uhr) und
+      # sieben Tage; die Wetterbilder der Tage kommen als Lage mit.
+      - script.execute:
+          id: fc_today
+          p50: 155.0
+          p10: 128.4
+          p90: 171.9
+          remaining: 12.6
+          power_now: 0
+          next_hour: 0
+          peak_kw: 22.0
+          peak_time: "13:15"
+          updated: "00:15"
+          api_used: 4
+          api_limit: 10
+      - script.execute:
+          id: fc_slots
+          p50: "0,0,0,0,0,0,0,0,0,0,0.1,0.1,0.2,0.5,0.8,1.4,2.2,3.4,5.1,7.1,9.6,12.4,15.2,17.9,20.1,21.5,22,21.5,20.1,17.9,15.2,12.4,9.6,7.1,5.1,3.4,2.2,1.4,0.8,0.5,0.2,0.1,0.1,0,0,0,0,0"
+          p10: "0,0,0,0,0,0,0,0,0,0,0,0.1,0.2,0.4,0.6,1.1,1.8,2.7,4,5.7,7.7,9.9,12.2,14.3,16.1,17.2,17.6,17.2,16.1,14.3,12.2,9.9,7.7,5.7,4,2.7,1.8,1.1,0.6,0.4,0.2,0.1,0,0,0,0,0,0"
+          p90: "0,0,0,0,0,0,0,0,0,0,0.1,0.1,0.3,0.5,0.9,1.5,2.5,3.8,5.7,8,10.8,13.9,17.1,20,22.5,24.1,24.6,24.1,22.5,20,17.1,13.9,10.8,8,5.7,3.8,2.5,1.5,0.9,0.5,0.3,0.1,0.1,0,0,0,0,0"
+      - script.wait: fc_slots
+      - script.execute: { id: fc_day, day: 0, label: "Heute", cond: "partlycloudy", p50: 155.0, p10: 128.4, p90: 171.9 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 1, label: "Morgen", cond: "sunny", p50: 171.2, p10: 150.3, p90: 180.6 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 2, label: "So 27.09.", cond: "rainy", p50: 48.6, p10: 22.1, p90: 90.4 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 3, label: "Mo 28.09.", cond: "cloudy", p50: 72.3, p10: 41.0, p90: 118.2 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 4, label: "Di 29.09.", cond: "partlycloudy", p50: 121.8, p10: 80.5, p90: 152.7 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 5, label: "Mi 30.09.", cond: "lightning-rainy", p50: 66.0, p10: 30.2, p90: 124.9 }
+      - script.wait: fc_day
+      - script.execute: { id: fc_day, day: 6, label: "Do 01.10.", cond: "sunny", p50: 158.4, p10: 112.0, p90: 175.3 }
+      - script.wait: fc_day
+      # Wetter (DWD): jetzt, zwoelf Stundenspalten, sieben Tage, eine Warnung
+      - script.execute:
+          id: wx_now
+          cond: "clear-night"
+          temp: 11.4
+          tmax: 19.0
+          tmin: 8.0
+          humidity: 82
+          pressure: 1017
+          wind: 14
+          bearing: 225
+          gust: 31
+          clouds: 20
+          rain: 0.4
+          sun_h: 6.2
+          sunrise: "07:12"
+          sunset: "19:18"
+          updated: "00:00"
+      - script.execute: { id: wx_hour, slot: 0, hour: 2, cond: "clear-night", temp: 10, rain: 0, prob: 0 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 1, hour: 4, cond: "clear-night", temp: 9, rain: 0, prob: 0 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 2, hour: 6, cond: "fog", temp: 8, rain: 0, prob: 10 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 3, hour: 8, cond: "partlycloudy", temp: 11, rain: 0, prob: 10 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 4, hour: 10, cond: "sunny", temp: 15, rain: 0, prob: 5 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 5, hour: 12, cond: "sunny", temp: 18, rain: 0, prob: 0 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 6, hour: 14, cond: "partlycloudy", temp: 19, rain: 0, prob: 10 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 7, hour: 16, cond: "cloudy", temp: 17, rain: 0.3, prob: 40 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 8, hour: 18, cond: "rainy", temp: 14, rain: 1.8, prob: 80 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 9, hour: 20, cond: "pouring", temp: 12, rain: 4.2, prob: 90 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 10, hour: 22, cond: "rainy", temp: 11, rain: 0.9, prob: 60 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_hour, slot: 11, hour: 0, cond: "cloudy", temp: 10, rain: 0.1, prob: 30 }
+      - script.wait: wx_hour
+      - script.execute: { id: wx_day, day: 0, label: "Heute", cond: "partlycloudy", tmax: 19, tmin: 8, rain: 2.4, prob: 70, sun_h: 6.2, wind: 14 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 1, label: "Morgen", cond: "sunny", tmax: 22, tmin: 9, rain: 0, prob: 5, sun_h: 10.1, wind: 9 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 2, label: "So 27.09.", cond: "rainy", tmax: 14, tmin: 10, rain: 11.3, prob: 95, sun_h: 0.4, wind: 28 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 3, label: "Mo 28.09.", cond: "cloudy", tmax: 15, tmin: 9, rain: 1.2, prob: 40, sun_h: 1.8, wind: 19 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 4, label: "Di 29.09.", cond: "partlycloudy", tmax: 17, tmin: 7, rain: 0.3, prob: 20, sun_h: 5.5, wind: 12 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 5, label: "Mi 30.09.", cond: "lightning-rainy", tmax: 18, tmin: 11, rain: 8.7, prob: 85, sun_h: 2.1, wind: 33 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_day, day: 6, label: "Do 01.10.", cond: "sunny", tmax: 20, tmin: 8, rain: 0, prob: 10, sun_h: 9.4, wind: 8 }
+      - script.wait: wx_day
+      - script.execute: { id: wx_warning, level: 2, text: "Sturmböen bis 70 km/h, So 27.09. 12:00 bis 20:00" }
+      - script.wait: wx_warning
+      # Geldrechnung des Tages aus den Demo-Tarifen.
+      - script.execute: { id: money_update, full_feed: 88.7, surplus: 30.6, self_use: 17.9, grid_in: 3.4 }
       # Beispielkurven fuer die Kachel Tagesertrag (Ist und Prognose). Das ui-
       # Package startet mit 16 x 0; publish_state speichert nicht im NVS.
       - lambda: |-
@@ -157,6 +417,18 @@ script:
       - script.execute: { id: shots_take, name: 02_pv.bmp }
       - script.wait: shots_take
 
+      - lvgl.page.show: page_forecast
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_forecast, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 13_forecast.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_weather
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_weather, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 14_weather.bmp }
+      - script.wait: shots_take
+
       - lvgl.page.show: page_battery
       - script.execute: shots_nav_clear
       - lvgl.matrix.button.update: { id: btn_nav_battery, control: { checked: true } }
@@ -181,10 +453,26 @@ script:
       - script.execute: { id: shots_take, name: 06_house.bmp }
       - script.wait: shots_take
 
+      - lvgl.page.show: page_grid
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_grid, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 07_grid.bmp }
+      - script.wait: shots_take
+
+      - lvgl.page.show: page_stats
+      - script.execute: shots_nav_clear
+      - lvgl.matrix.button.update: { id: btn_nav_stats, control: { checked: true } }
+      - script.execute: { id: shots_take, name: 08_stats.bmp }
+      - script.wait: shots_take
+      # Monat mit 30 Plaetzen: die dichteste Reihe, Beschriftung pruefen.
+      - script.execute: { id: stats_show, range: 1 }
+      - script.execute: { id: shots_take, name: 08_stats_month.bmp }
+      - script.wait: shots_take
+
       - lvgl.page.show: page_alerts
       - script.execute: shots_nav_clear
       - lvgl.matrix.button.update: { id: btn_nav_alerts, control: { checked: true } }
-      - script.execute: { id: shots_take, name: 07_alerts.bmp }
+      - script.execute: { id: shots_take, name: 09_alerts.bmp }
       - script.wait: shots_take
 
       # Overlays im top_layer, wie im Betrieb ueber der Uebersicht. Die Texte
@@ -202,7 +490,7 @@ script:
           id: lbl_assist_response
           text: "Heute wurden bisher 23,4 kWh erzeugt, davon 17,9 kWh selbst verbraucht. Der Speicher ist zu 72 % geladen, bis zum Abend werden noch etwa 6 kWh erwartet. Die Wallbox 1 meldet einen Fehlerstrom."
       - lvgl.widget.show: voice_panel
-      - script.execute: { id: shots_take, name: 08_voice_panel.bmp }
+      - script.execute: { id: shots_take, name: 10_voice_panel.bmp }
       - script.wait: shots_take
       - lvgl.widget.hide: voice_panel
 
@@ -213,9 +501,16 @@ script:
           id: lbl_ota_pct
           text: "42"
       - lvgl.widget.show: ota_panel
-      - script.execute: { id: shots_take, name: 09_ota_panel.bmp }
+      - script.execute: { id: shots_take, name: 11_ota_panel.bmp }
       - script.wait: shots_take
       - lvgl.widget.hide: ota_panel
+
+      # Systemfenster (Tipp auf die Symbole oben rechts)
+      - script.execute: sys_refresh
+      - lvgl.widget.show: sys_panel
+      - script.execute: { id: shots_take, name: 12_system.bmp }
+      - script.wait: shots_take
+      - lvgl.widget.hide: sys_panel
 
       - delay: 200ms
       - lambda: 'exit(0);'

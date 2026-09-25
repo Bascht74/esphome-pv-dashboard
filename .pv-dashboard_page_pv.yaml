@@ -1,9 +1,230 @@
 ##############################################################################
 # Package: Seite 2 -- PV & Prognose
 #
-# Platzhalterseite, Inhalt kommt spaeter. y 10: mittig in der sichtbaren
-# Flaeche 76..744 (Mitte 410), nicht auf der Schirmmitte.
+# Oben die Erzeugung je Wechselrichter und je Flaeche, getrennt nach den
+# zwei Energiekreisen (docs/01): links der Kreis Volleinspeisung, rechts der
+# Kreis Hausnetz. Unten der Tagesverlauf Ist gegen Prognose in gross, links
+# daneben vier Kennzahlen daraus.
+#
+# Zwei Skripte gehoeren dazu:
+#   pv_update       fuellt Wechselrichter- und Flaechenkaesten. Kuenftige
+#                   Sensoren (Modbus der Wechselrichter) rufen nur dieses
+#                   Skript auf; bis dahin stehen dort Striche.
+#   pv_redraw_curve zeichnet Balken und Prognoselinie aus day_curve und
+#                   forecast_curve und rechnet die vier Kennzahlen. Es haengt
+#                   wie redraw_curve der Uebersicht an on_value beider
+#                   Reihen (.pv-dashboard_ui.yaml) und schreibt keine Reihe.
+#
+# Flaeche x 4..1276, y 84..736 (je 8 Abstand zu Meldungszeile und
+# Menueleiste). Zwei Spalten wie die Kreise: links x 4, 322 breit (innen
+# 300), rechts ab x 334, 942 breit (innen 920 = 3 x 300 + 2 x 10). Die
+# untere Reihe teilt genauso, die Kanten fluchten.
+#   oben    y  84..342 (258): innen 236, belegt 0..234, Reserve 2
+#   unten   y 350..736 (386): innen 364
+#
+# Die Namen kommen aus denselben Substitutions wie im Schema der Uebersicht
+# (name_pv_1..8, name_inv_1..4). Die Kaesten hier sind breiter als dort
+# (Flaeche 135 statt 88 px, Wechselrichter 284 statt 132 px); die Breiten in
+# .pv-dashboard_anlage.yaml.example bleiben damit die engere Grenze.
 ##############################################################################
+
+globals:
+  # Wechselrichter mit Stoerung (Bit je Wechselrichter), gesetzt von
+  # pv_status; pv_update laesst deren Zweitzeile dann stehen
+  - id: pv_fault
+    type: int
+    restore_value: false
+    initial_value: '0'
+  # Tageswert und Temperatur je Wechselrichter, damit pv_update und
+  # pv_status dieselbe Zweitzeile schreiben
+  - id: pv_inv_energy
+    type: std::array<float, 4>
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN, NAN}'
+  - id: pv_inv_temp
+    type: std::array<float, 4>
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN, NAN}'
+
+script:
+  # ---------------------------------------------------------------------
+  # Zustand eines Wechselrichters (Review 25.09.2026):
+  #   inv   0..3 = Wechselrichter 1..4 (name_inv_1..4)
+  #   ok    false = Stoerung: Rahmen und Punkt rot, die Zweitzeile zeigt
+  #         text; beim Uebergang in die Stoerung kommt eine Meldung
+  #   text  Fehlertext bzw. Fehlercode des Wechselrichters
+  #   temp  Temperatur in °C, NAN = keine; steht sonst in der Zweitzeile
+  #         hinter dem Tageswert
+  # ---------------------------------------------------------------------
+  - id: pv_status
+    parameters:
+      inv: int
+      ok: bool
+      text: string
+      temp: float
+    then:
+      - lambda: |-
+          if (inv < 0 || inv > 3)
+            return;
+          static const char *const NAME[4] = {"${name_inv_1}", "${name_inv_2}", "${name_inv_3}", "${name_inv_4}"};
+          lv_obj_t *const box[4] = {id(pv_inv_box_1), id(pv_inv_box_2), id(pv_inv_box_3), id(pv_inv_box_4)};
+          lv_obj_t *const dot[4] = {id(pv_inv_dot_1), id(pv_inv_dot_2), id(pv_inv_dot_3), id(pv_inv_dot_4)};
+          lv_obj_t *const sb[4] = {id(pv_inv_sub_1), id(pv_inv_sub_2), id(pv_inv_sub_3), id(pv_inv_sub_4)};
+          const uint32_t norm[4] = {$col_full, $col_solar, $col_solar, $col_solar};
+          const bool was = id(pv_fault) & (1 << inv);
+          id(pv_inv_temp)[inv] = temp;
+          lv_obj_clear_flag(dot[inv], LV_OBJ_FLAG_HIDDEN);
+          if (!ok) {
+            id(pv_fault) |= (1 << inv);
+            lv_obj_set_style_border_color(box[inv], lv_color_hex($col_crit), 0);
+            lv_obj_set_style_bg_color(dot[inv], lv_color_hex($col_crit), 0);
+            lv_label_set_text(sb[inv], text.empty() ? "Störung" : text.c_str());
+            lv_obj_set_style_text_color(sb[inv], lv_color_hex($col_crit), 0);
+            if (!was)
+              id(alert_push).execute(2, std::string(NAME[inv]), text.empty() ? std::string("Störung") : text);
+          } else {
+            id(pv_fault) &= ~(1 << inv);
+            lv_obj_set_style_border_color(box[inv], lv_color_hex(norm[inv]), 0);
+            lv_obj_set_style_bg_color(dot[inv], lv_color_hex($col_feed), 0);
+            lv_obj_set_style_text_color(sb[inv], lv_color_hex($col_ink2), 0);
+            std::string t = "W · " + id(fmt_num)(id(pv_inv_energy)[inv], "%.1f", "--,-") + " kWh";
+            if (!std::isnan(temp))
+              t += " · " + id(fmt_num)(temp, "%.0f", "--") + " °C";
+            lv_label_set_text(sb[inv], t.c_str());
+          }
+
+  # ---------------------------------------------------------------------
+  # Werte der oberen Reihe. Kuenftige Sensoren rufen nur dieses Skript auf.
+  #   inv 0..3 = Wechselrichter 1..4 (name_inv_1..4), -1 = keiner
+  #   pv  0..7 = Flaeche/Modul 1..8 (name_pv_1..8),   -1 = keine
+  #   power in W, energy in kWh (heute); NAN = kein Wert (Striche)
+  # Ein Aufruf setzt einen Wechselrichter, eine Flaeche oder beides, z. B.
+  #   { id: pv_update, inv: -1, pv: 4, power: 4120, energy: 30.4 }
+  # ---------------------------------------------------------------------
+  - id: pv_update
+    parameters:
+      inv: int
+      pv: int
+      power: float
+      energy: float
+    then:
+      - lambda: |-
+          id(data_seen)[0] = millis();  // Datenalter, sys_refresh
+          // Leistung ganzzahlig mit Tausenderpunkt ("3.412"), Energie mit
+          // einer Nachkommastelle und Dezimalkomma -- wie im Schema.
+          auto &watt = id(fmt_watt);  // Formate: .pv-dashboard_ui.yaml
+          auto sub = [](float e) { return "W · " + id(fmt_num)(e, "%.1f", "--,-") + " kWh"; };
+          if (inv >= 0 && inv <= 3) {
+            lv_obj_t *const val[4] = {id(pv_inv_val_1), id(pv_inv_val_2), id(pv_inv_val_3), id(pv_inv_val_4)};
+            lv_obj_t *const sb[4] = {id(pv_inv_sub_1), id(pv_inv_sub_2), id(pv_inv_sub_3), id(pv_inv_sub_4)};
+            lv_label_set_text(val[inv], watt(power, "--.---").c_str());
+            // Bei Stoerung traegt die Zweitzeile den Fehlertext (pv_status)
+            id(pv_inv_energy)[inv] = energy;
+            if (!(id(pv_fault) & (1 << inv))) {
+              std::string t = sub(energy);
+              if (!std::isnan(id(pv_inv_temp)[inv]))
+                t += " · " + id(fmt_num)(id(pv_inv_temp)[inv], "%.0f", "--") + " °C";
+              lv_label_set_text(sb[inv], t.c_str());
+            }
+          }
+          if (pv >= 0 && pv <= 7) {
+            lv_obj_t *const val[8] = {id(pv_str_val_1), id(pv_str_val_2), id(pv_str_val_3), id(pv_str_val_4),
+                                      id(pv_str_val_5), id(pv_str_val_6), id(pv_str_val_7), id(pv_str_val_8)};
+            lv_obj_t *const sb[8] = {id(pv_str_sub_1), id(pv_str_sub_2), id(pv_str_sub_3), id(pv_str_sub_4),
+                                     id(pv_str_sub_5), id(pv_str_sub_6), id(pv_str_sub_7), id(pv_str_sub_8)};
+            lv_label_set_text(val[pv], watt(power, "-.---").c_str());
+            lv_label_set_text(sb[pv], sub(energy).c_str());
+          }
+
+  # ---------------------------------------------------------------------
+  # Tagesverlauf der unteren Reihe. Liest dieselben Reihen wie redraw_curve
+  # der Uebersicht (Platz 0 = 06..07 Uhr ... Platz 15 = 21..22 Uhr) und
+  # zeichnet beide auf gemeinsamem Massstab. Die Zerlegung steht damit zum
+  # dritten Mal da (record_hour, redraw_curve) -- mit Absicht gleich, jede
+  # Stelle baut fuer sich.
+  # Kennzahlen: "abgeschlossen" sind die Plaetze vor der laufenden Stunde
+  # (Stunde - 6). Restprognose = Prognose ab der laufenden Stunde bis
+  # 22 Uhr. Ohne gueltige Uhrzeit bleiben diese beiden auf Strichen. Neu
+  # gerechnet wird mit jeder Reihe, also spaetestens um HH:00:05, wenn
+  # record_hour die abgelaufene Stunde schreibt.
+  # ---------------------------------------------------------------------
+  - id: pv_redraw_curve
+    then:
+      - lambda: |-
+          // Zerlegt "1.2,3.4,..." in 16 Werte. Fehlende Felder bleiben 0.
+          auto parse_curve = [](const std::string &src, float *out) {
+            size_t pos = 0;
+            for (int i = 0; i < 16 && pos <= src.size(); i++) {
+              size_t comma = src.find(',', pos);
+              std::string field = src.substr(pos, comma == std::string::npos
+                                                  ? std::string::npos : comma - pos);
+              float f = field.empty() ? 0.0f : strtof(field.c_str(), nullptr);
+              // Von Hand gesetzte Reihe (nan, negativ, 1e30) -> 0..999
+              out[i] = std::isfinite(f) ? std::clamp(f, 0.0f, 999.0f) : 0.0f;
+              if (comma == std::string::npos)
+                break;
+              pos = comma + 1;
+            }
+          };
+          // Dezimalkomma wie ueberall (fmt_num, .pv-dashboard_ui.yaml)
+          auto fmt = [](float v, const char *f) { return id(fmt_num)(v, f, "--"); };
+          float ist[16] = {0}, pro[16] = {0};
+          parse_curve(id(day_curve).state, ist);
+          parse_curve(id(forecast_curve).state, pro);
+          // Gemeinsamer Massstab, sonst waere der Vergleich wertlos
+          float peak = 0.1f, sum_ist = 0.0f, sum_pro = 0.0f;
+          for (int i = 0; i < 16; i++) {
+            peak = std::max(peak, ist[i]);
+            peak = std::max(peak, pro[i]);
+            sum_ist += ist[i];
+            sum_pro += pro[i];
+          }
+          // Balken sind lv_obj_t*, die Linie ein Wrapper mit ->obj (siehe
+          // redraw_curve in der Uebersicht).
+          lv_obj_t *const bars[16] = {
+            id(pv_bar_00), id(pv_bar_01), id(pv_bar_02), id(pv_bar_03),
+            id(pv_bar_04), id(pv_bar_05), id(pv_bar_06), id(pv_bar_07),
+            id(pv_bar_08), id(pv_bar_09), id(pv_bar_10), id(pv_bar_11),
+            id(pv_bar_12), id(pv_bar_13), id(pv_bar_14), id(pv_bar_15) };
+          for (int i = 0; i < 16; i++)
+            lv_bar_set_value(bars[i], (int32_t) (ist[i] / peak * 100.0f), LV_ANIM_OFF);
+          // Punkte auf den Balkenmitten (Balken i bei x 12 + 57 i, 41 breit,
+          // Mitte + 20), y 0..300 wie die Balkenhoehe. Die Liste muss das
+          // Widget ueberleben, daher static.
+          static lv_point_precise_t pts[16];
+          for (int i = 0; i < 16; i++) {
+            pts[i].x = 12 + i * 57 + 20;
+            pts[i].y = (lv_value_precise_t) (300 - pro[i] / peak * 300.0f);
+          }
+          lv_line_set_points(id(pv_line_forecast)->obj, pts, 16);
+          // peak bleibt 0,1, solange beide Reihen leer sind -- dann Striche
+          std::string scale = peak > 0.1f ? fmt(peak, "%.1f") : std::string("--,-");
+          lv_label_set_text_fmt(id(pv_lbl_scale), "Balken Ist · Linie Prognose · Skala bis %s kWh",
+                                scale.c_str());
+          lv_label_set_text(id(pv_kpi_ist), fmt(sum_ist, "%.1f").c_str());
+          lv_label_set_text(id(pv_kpi_pro), fmt(sum_pro, "%.1f").c_str());
+
+          auto t = id(dash_time).now();
+          if (!t.is_valid()) {
+            lv_label_set_text(id(pv_kpi_rest), "--,-");
+            lv_label_set_text(id(pv_kpi_ratio), "--");
+            return;
+          }
+          const int cur = std::clamp((int) t.hour - 6, 0, 16);   // erster offener Platz
+          float rest = 0.0f, done_ist = 0.0f, done_pro = 0.0f;
+          for (int i = 0; i < 16; i++) {
+            if (i < cur) {
+              done_ist += ist[i];
+              done_pro += pro[i];
+            } else {
+              rest += pro[i];
+            }
+          }
+          lv_label_set_text(id(pv_kpi_rest), fmt(rest, "%.1f").c_str());
+          // Unter 0,1 kWh Prognose (vor 7 Uhr, trueber Morgen) waere der
+          // Anteil nur Rauschen
+          std::string ratio = done_pro >= 0.1f ? fmt(done_ist / done_pro * 100.0f, "%.0f") : std::string("--");
+          lv_label_set_text(id(pv_kpi_ratio), ratio.c_str());
 
 lvgl:
   pages:
@@ -12,4 +233,228 @@ lvgl:
       scrollable: false
       scroll_dir: NONE
       widgets:
-        - label: { align: CENTER, y: 10, text: "PV & Prognose", text_color: $col_ink3 }
+        # ---------------- obere Reihe: Erzeugung je Kreis ---------------
+        # Je Wechselrichter eine Gruppe, 300 breit: oben der Wechselrichter,
+        # darunter seine zwei Flaechen nebeneinander (je 145, Abstand 10).
+        # Farben wie im Schema: col_full fuer die Volleinspeisung, col_solar
+        # fuer den Hausnetz-Kreis; Mini-WR mit dem Einzelmodul-Bild.
+        #
+        # Wechselrichter, st_box mit pad 0: innen 300 - 2 x 2 = 296 x 86.
+        #   Name 6..26 (f_text_s 20), Wert 29..59 (f_val_l 30),
+        #   Tageswert 62..79 (f_unit 17) -> oben 6, unten 7.
+        # Flaeche, Rahmen 1, pad 0: innen 143 x 106.
+        #   Bild 7..31 (24), Name 35..52 (17), Wert 55..80 (f_val_m 25),
+        #   Tageswert 83..100 (17) -> oben 7, unten 6.
+        # Gruppe innen y 26..116 und 126..234, Abstand 10 wie zwischen den
+        # Gruppen.
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 84
+            width: 322
+            height: 258
+            widgets:
+              - label:
+                  styles: st_label
+                  width: 300
+                  height: 17
+                  long_mode: DOT
+                  text: "KREIS VOLLEINSPEISUNG"
+              - obj: { id: pv_inv_box_1, styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 26, width: 300, height: 90,
+                       border_color: $col_full, bg_color: $col_box_full, pad_all: 0, widgets: [
+                  { label: { align: TOP_MID, y: 6, width: 284, height: 20, long_mode: DOT, text_align: CENTER, text: "${name_inv_1}", text_color: $col_ink, text_font: f_text_s } },
+                  { obj: { id: pv_inv_dot_1, x: 282, y: 8, width: 10, height: 10, radius: 5, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
+                  { label: { id: pv_inv_val_1, align: TOP_MID, y: 29, width: 284, height: 30, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_l, text_color: $col_full } },
+                  { label: { id: pv_inv_sub_1, align: TOP_MID, y: 62, width: 284, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 126, width: 145, height: 108,
+                       bg_opa: TRANSP, border_color: $col_line, border_width: 1, radius: $radius_box, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_full, image_recolor_opa: COVER, align: TOP_MID, y: 7 } },
+                  { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_1}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: pv_str_val_1, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_full } },
+                  { label: { id: pv_str_sub_1, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 155, y: 126, width: 145, height: 108,
+                       bg_opa: TRANSP, border_color: $col_line, border_width: 1, radius: $radius_box, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_full, image_recolor_opa: COVER, align: TOP_MID, y: 7 } },
+                  { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_2}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: pv_str_val_2, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_full } },
+                  { label: { id: pv_str_sub_2, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 334
+            y: 84
+            width: 942
+            height: 258
+            widgets:
+              - label:
+                  styles: st_label
+                  width: 920
+                  height: 17
+                  long_mode: DOT
+                  text: "KREIS HAUSNETZ"
+              - obj: { id: pv_inv_box_2, styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 26, width: 300, height: 90,
+                       border_color: $col_solar, bg_color: $col_box_solar, pad_all: 0, widgets: [
+                  { label: { align: TOP_MID, y: 6, width: 284, height: 20, long_mode: DOT, text_align: CENTER, text: "${name_inv_2}", text_color: $col_ink, text_font: f_text_s } },
+                  { obj: { id: pv_inv_dot_2, x: 282, y: 8, width: 10, height: 10, radius: 5, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
+                  { label: { id: pv_inv_val_2, align: TOP_MID, y: 29, width: 284, height: 30, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_l, text_color: $col_solar } },
+                  { label: { id: pv_inv_sub_2, align: TOP_MID, y: 62, width: 284, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 0, y: 126, width: 145, height: 108,
+                       bg_opa: TRANSP, border_color: $col_line, border_width: 1, radius: $radius_box, pad_all: 0, widgets: [
+                  { image: { src: img_solar_module, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 7 } },
+                  { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_3}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: pv_str_val_3, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_solar } },
+                  { label: { id: pv_str_sub_3, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 155, y: 126, width: 145, height: 108,
+                       bg_opa: TRANSP, border_color: $col_line, border_width: 1, radius: $radius_box, pad_all: 0, widgets: [
+                  { image: { src: img_solar_module, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 7 } },
+                  { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_4}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: pv_str_val_4, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_solar } },
+                  { label: { id: pv_str_sub_4, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { id: pv_inv_box_3, styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 310, y: 26, width: 300, height: 90,
+                       border_color: $col_solar, bg_color: $col_box_solar, pad_all: 0, widgets: [
+                  { label: { align: TOP_MID, y: 6, width: 284, height: 20, long_mode: DOT, text_align: CENTER, text: "${name_inv_3}", text_color: $col_ink, text_font: f_text_s } },
+                  { obj: { id: pv_inv_dot_3, x: 282, y: 8, width: 10, height: 10, radius: 5, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
+                  { label: { id: pv_inv_val_3, align: TOP_MID, y: 29, width: 284, height: 30, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_l, text_color: $col_solar } },
+                  { label: { id: pv_inv_sub_3, align: TOP_MID, y: 62, width: 284, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 310, y: 126, width: 145, height: 108,
+                       bg_opa: TRANSP, border_color: $col_line, border_width: 1, radius: $radius_box, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 7 } },
+                  { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_5}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: pv_str_val_5, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_solar } },
+                  { label: { id: pv_str_sub_5, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 465, y: 126, width: 145, height: 108,
+                       bg_opa: TRANSP, border_color: $col_line, border_width: 1, radius: $radius_box, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 7 } },
+                  { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_6}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: pv_str_val_6, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_solar } },
+                  { label: { id: pv_str_sub_6, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { id: pv_inv_box_4, styles: st_box, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 620, y: 26, width: 300, height: 90,
+                       border_color: $col_solar, bg_color: $col_box_solar, pad_all: 0, widgets: [
+                  { label: { align: TOP_MID, y: 6, width: 284, height: 20, long_mode: DOT, text_align: CENTER, text: "${name_inv_4}", text_color: $col_ink, text_font: f_text_s } },
+                  { obj: { id: pv_inv_dot_4, x: 282, y: 8, width: 10, height: 10, radius: 5, bg_color: $col_feed, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true } },
+                  { label: { id: pv_inv_val_4, align: TOP_MID, y: 29, width: 284, height: 30, long_mode: DOT, text_align: CENTER, text: "--.---", text_font: f_val_l, text_color: $col_solar } },
+                  { label: { id: pv_inv_sub_4, align: TOP_MID, y: 62, width: 284, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 620, y: 126, width: 145, height: 108,
+                       bg_opa: TRANSP, border_color: $col_line, border_width: 1, radius: $radius_box, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 7 } },
+                  { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_7}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: pv_str_val_7, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_solar } },
+                  { label: { id: pv_str_sub_7, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 775, y: 126, width: 145, height: 108,
+                       bg_opa: TRANSP, border_color: $col_line, border_width: 1, radius: $radius_box, pad_all: 0, widgets: [
+                  { image: { src: img_solar_field, image_recolor: $col_solar, image_recolor_opa: COVER, align: TOP_MID, y: 7 } },
+                  { label: { align: TOP_MID, y: 35, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "${name_pv_8}", text_color: $col_ink, text_font: f_unit } },
+                  { label: { id: pv_str_val_8, align: TOP_MID, y: 55, width: 135, height: 25, long_mode: DOT, text_align: CENTER, text: "-.---", text_font: f_val_m, text_color: $col_solar } },
+                  { label: { id: pv_str_sub_8, align: TOP_MID, y: 83, width: 135, height: 17, long_mode: DOT, text_align: CENTER, text: "W · --,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
+
+        # ---------------- untere Reihe: Kennzahlen und Tagesverlauf -----
+        # Vier Bloecke je 79 hoch: Titel 0..17 (f_label), Wert 21..60
+        # (f_val_xl 39), Zweitzeile 62..79 (f_unit). Raster 94 ab y 0, der
+        # erste Titel fluchtet mit dem Titel des Tagesverlaufs:
+        # 0 / 94 / 188 / 282, Ende 361 von 364 -> Reserve 3.
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 350
+            width: 322
+            height: 386
+            widgets:
+              - label: { x: 0, y: 0, width: 300, height: 17, long_mode: DOT, styles: st_label, text: "IST HEUTE" }
+              - label: { id: pv_kpi_ist, x: 0, y: 21, width: 300, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 0, y: 62, width: 300, height: 17, long_mode: DOT, styles: st_sub, text: "kWh, 06 – 22 Uhr" }
+              - label: { x: 0, y: 94, width: 300, height: 17, long_mode: DOT, styles: st_label, text: "PROGNOSE HEUTE" }
+              - label: { id: pv_kpi_pro, x: 0, y: 115, width: 300, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 0, y: 156, width: 300, height: 17, long_mode: DOT, styles: st_sub, text: "kWh, 06 – 22 Uhr" }
+              - label: { x: 0, y: 188, width: 300, height: 17, long_mode: DOT, styles: st_label, text: "RESTPROGNOSE" }
+              - label: { id: pv_kpi_rest, x: 0, y: 209, width: 300, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 0, y: 250, width: 300, height: 17, long_mode: DOT, styles: st_sub, text: "kWh ab der laufenden Stunde" }
+              - label: { x: 0, y: 282, width: 300, height: 17, long_mode: DOT, styles: st_label, text: "IST ZU PROGNOSE" }
+              - label: { id: pv_kpi_ratio, x: 0, y: 303, width: 300, height: 39, long_mode: DOT, text: "--", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 0, y: 344, width: 300, height: 17, long_mode: DOT, styles: st_sub, text: "% der abgeschlossenen Stunden" }
+
+        # Tagesverlauf, innen 920 x 364. Titel 0..17, rechts daneben die
+        # Legende mit der Skala (setzt pv_redraw_curve). 16 Balken im Raster
+        # 57, je 41 breit: 15 x 57 + 41 = 896, ab x 12 -> links und rechts
+        # je 12. Balken y 30..330 (300 hoch), Grundlinie 330..331, Stunden
+        # 336..353 (f_unit) -> Reserve 11. Fuellung grad_day_bar wie in der
+        # Uebersicht; die Prognoselinie liegt im YAML danach und damit
+        # darueber. Die Stunde unter einem Balken ist ihr Anfang: "06" steht
+        # fuer 06..07 Uhr.
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 334
+            y: 350
+            width: 942
+            height: 386
+            widgets:
+              - label:
+                  styles: st_label
+                  width: 500
+                  height: 17
+                  long_mode: DOT
+                  text: "TAGESVERLAUF · IST UND PROGNOSE"
+              - label:
+                  id: pv_lbl_scale
+                  x: 500
+                  y: 0
+                  width: 420
+                  height: 17
+                  long_mode: DOT
+                  text_align: RIGHT
+                  styles: st_sub
+                  text: "Balken Ist · Linie Prognose · Skala bis --,- kWh"
+              - bar: { id: pv_bar_00, x:  12, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_01, x:  69, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_02, x: 126, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_03, x: 183, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_04, x: 240, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_05, x: 297, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_06, x: 354, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_07, x: 411, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_08, x: 468, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_09, x: 525, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_10, x: 582, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_11, x: 639, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_12, x: 696, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_13, x: 753, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_14, x: 810, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - bar: { id: pv_bar_15, x: 867, y: 30, width: 41, height: 300, min_value: 0, max_value: 100, value: 0, bg_color: $col_surface, radius: 3, indicator: { bg_grad: grad_day_bar, radius: 3 } }
+              - obj: { x: 0, y: 330, width: 920, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - line:
+                  id: pv_line_forecast
+                  x: 0
+                  y: 30
+                  line_color: $col_ink2
+                  line_width: 3
+                  line_rounded: true
+                  points:
+                    - [32, 300]
+                    - [887, 300]
+              - label: { x:   4, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "06" }
+              - label: { x:  61, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "07" }
+              - label: { x: 118, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "08" }
+              - label: { x: 175, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "09" }
+              - label: { x: 232, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "10" }
+              - label: { x: 289, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "11" }
+              - label: { x: 346, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "12" }
+              - label: { x: 403, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "13" }
+              - label: { x: 460, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "14" }
+              - label: { x: 517, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "15" }
+              - label: { x: 574, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "16" }
+              - label: { x: 631, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "17" }
+              - label: { x: 688, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "18" }
+              - label: { x: 745, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "19" }
+              - label: { x: 802, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "20" }
+              - label: { x: 859, y: 336, width: 57, height: 17, text_align: CENTER, styles: st_unit, text: "21" }

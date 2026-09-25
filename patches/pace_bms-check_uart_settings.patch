@@ -1,0 +1,18 @@
+diff --git a/components/pace_bms/pace_bms_component_master.cpp b/components/pace_bms/pace_bms_component_master.cpp
+index 822d6c6..49f7706 100644
+--- a/components/pace_bms/pace_bms_component_master.cpp
++++ b/components/pace_bms/pace_bms_component_master.cpp
+@@ -75,8 +75,11 @@ void PaceBmsMaster::dump_config() {
+ 	ESP_LOGCONFIG(TAG, "  Rx Buffer Size: %i", this->rx_buffer_size_);
+ 	ESP_LOGCONFIG(TAG, "  Update Interval: %i", this->update_interval_);
+ 
+-	// print an error if the settings do not match
+-	this->check_uart_settings(9600, /*require_rx=True, require_tx=True,*/ 1, uart::UART_CONFIG_PARITY_NONE, 8);
++	// UARTDevice::check_uart_settings() is deprecated since ESPHome 2026.9.0 and
++	// removed in 2027.3.0; the UART requirements are checked in Python via
++	// uart.final_validate_device_schema() (see FINAL_VALIDATE_SCHEMA in __init__.py).
++	// Baud rate, parity, data and stop bits stay unenforced on purpose, so a BMS
++	// with unusual port settings (e.g. RS232 at 115200) can still be configured.
+ }
+ 
+ /*

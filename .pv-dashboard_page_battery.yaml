@@ -1,5 +1,5 @@
 ##############################################################################
-# Package: Seite 3 -- Speicher
+# Package: Seite 5 -- Speicher
 #
 # Ladezustand als Ringe, Zellwerte als Tabelle. storage_update gehoert dazu:
 # Es fuellt Spalte bat + 1 der Tabelle und Ring bat, kuenftige BMS-Sensoren
@@ -17,8 +17,9 @@
 #
 # Dieselben drei Namen wie im Schema der Uebersicht. Der Standard steht
 # deshalb doppelt -- auch in .pv-dashboard_page_overview.yaml. Beide Stellen
-# muessen gleich lauten; wer die Namen in pv-dashboard.yaml setzt, sticht
-# ohnehin beide (ESPHome laesst die Hauptdatei gewinnen, geprueft 2026.9.0).
+# muessen gleich lauten; wer die Namen in .pv-dashboard_anlage.yaml setzt,
+# sticht ohnehin beide (die Datei zaehlt als Hauptdatei, und ESPHome laesst
+# die Hauptdatei gewinnen, geprueft 2026.9.0).
 # Laufen die beiden Pakete auseinander, gewinnt stillschweigend dieses hier:
 # Es steht im packages-Block von .pv-dashboard_ui.yaml hinter der Uebersicht,
 # und unter Paketen sticht der spaetere Eintrag (geprueft mit 2026.9.0). Die
@@ -57,19 +58,11 @@ script:
       cycles: int
     then:
       - lambda: |-
+          id(data_seen)[1] = millis();  // Datenalter, sys_refresh
           if (bat < 0 || bat > 2)
             return;
-          // Dezimalkomma wie ueberall auf der Oberflaeche
-          auto fmt = [](float v, const char *f) -> std::string {
-            if (std::isnan(v))
-              return "--";
-            char b[24];
-            snprintf(b, sizeof(b), f, v);
-            for (char *p = b; *p; p++)
-              if (*p == '.')
-                *p = ',';
-            return std::string(b);
-          };
+          // Dezimalkomma wie ueberall (fmt_num, .pv-dashboard_ui.yaml)
+          auto fmt = [](float v, const char *f) { return id(fmt_num)(v, f, "--"); };
           // Reihenfolge = Tabellenzeilen 1..7
           std::string cell[7];
           cell[0] = fmt(soc, "%.0f");

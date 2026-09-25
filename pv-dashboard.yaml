@@ -8,9 +8,11 @@
 #   PSRAM      : 32 MB (im Chip-Package, HEX-Mode)
 #   Flash      : 32 MB NOR
 #
-# Dies ist die EINZIGE Datei, die beim Einrichten angefasst wird. Sie enthaelt
-# den Geraetenamen, die Zugangsdaten als Verweis auf die secrets.yaml und die
-# Liste der Pakete. Alles Weitere steht in den Paketen daneben.
+# Beim Einrichten werden zwei Dateien angefasst: diese und die eigene
+# .pv-dashboard_anlage.yaml (Beschriftungen und Tarife, nicht im Repo). Diese
+# hier enthaelt den Geraetenamen, die Zugangsdaten als Verweis auf die
+# secrets.yaml und die Liste der Pakete. Alles Weitere steht in den Paketen
+# daneben.
 ##############################################################################
 
 substitutions:
@@ -20,16 +22,17 @@ substitutions:
 
   # Zugangsdaten. Nur hier steht !secret -- die Pakete arbeiten ausschliesslich
   # mit ${...} und bleiben damit frei von Geheimnissen. Das ist Voraussetzung
-  # dafuer, sie spaeter aus dem GitHub-Repo nachzuladen, waehrend diese Datei
-  # und die secrets.yaml auf dem Rechner bleiben.
+  # dafuer, dass sie aus dem GitHub-Repo kommen (Block packages: unten),
+  # waehrend diese Datei und die secrets.yaml auf dem Rechner bleiben.
   #
   # Die Werte selbst stehen in secrets.yaml (nicht im Repo). Welche Schluessel
   # dort erwartet werden, zeigt secrets.yaml.example.
   #
-  # Geprueft mit 2026.9.0: ESPHome setzt substitutions erst nach dem
-  # Zusammenfuehren der Pakete ein und merkt sich dabei die Herkunft aus
-  # !secret. "esphome config" zeigt weiterhin nur "!secret '<name>'", nicht den
-  # Wert -- der Umweg ueber substitutions gibt also nichts preis.
+  # ACHTUNG, geprueft mit 2026.9.0: Seit die Pakete aus dem Repo kommen, zeigt
+  # "esphome config" die Werte aus der secrets.yaml AUFGELOEST, nicht mehr als
+  # "!secret '<name>'" (Begruendung unten bei "Was der Bezug aus dem Repo
+  # bedeutet"). Die Ausgabe nie in eine Datei umleiten, nie weitergeben, nie
+  # mit --show-secrets aufrufen.
   wifi_ssid:     !secret wifi_ssid
   wifi_password: !secret wifi_password
   ap_password:   !secret ap_password
@@ -37,100 +40,22 @@ substitutions:
   ota_password:  !secret ota_password
 
   ############################################################################
-  # HIER BESCHREIBEN SIE IHRE ANLAGE
+  # HIER BESCHREIBEN SIE IHRE ANLAGE -- in einer eigenen Datei
   #
-  # Die Beschriftungen im Anlagenschema und die drei Tarife. Jeder Wert hat
-  # im zugehoerigen Paket einen Standard; was hier steht, sticht ihn. ESPHome
-  # laesst dabei die Hauptdatei gewinnen -- geprueft mit 2026.9.0, die Pakete
-  # bleiben unangetastet. Eine geloeschte Zeile faellt auf den Demo-Wert
-  # zurueck, eine zusaetzliche Zeile gibt es nicht: Nur die hier genannten
-  # Namen werden im Schema eingesetzt.
+  # Die Beschriftungen im Anlagenschema und die drei Tarife stehen in
+  # .pv-dashboard_anlage.yaml. Die Datei liegt nur auf dem Rechner: .gitignore
+  # schliesst sie aus, ein "git add -A" nimmt die eigenen Werte also nicht
+  # mit. Diese Datei hier bleibt im Repo und traegt keine Anlagendaten mehr.
+  # Vorlage mit den Demo-Werten und den Breiten jedes Kastens:
   #
-  # Die Kaesten sind knapp gerechnet. Eine laengere Beschriftung sprengt den
-  # Kasten oder wird von LVGL mit "..." gekuerzt (long_mode DOT). Hinter
-  # jeder Zeile steht deshalb "Breite des Demo-Werts von verfuegbarer
-  # Breite", in Pixeln und in der Schrift des jeweiligen Kastens gemessen.
-  # Die Kontrolle fuer die eigenen Werte ist der Vergleich mit genau diesen
-  # Zahlen: Bleibt die eigene Beschriftung unter der verfuegbaren Breite,
-  # passt sie.
+  #   cp .pv-dashboard_anlage.yaml.example .pv-dashboard_anlage.yaml
   #
-  # Der Screenshot-Lauf zeigt die eigenen Werte NICHT. Er baut ueber
-  # pv-dashboard-sim.yaml, und keine der beiden Dateien bindet diese Datei
-  # hier ein -- auf den Bildern stehen immer die Demo-Werte aus den
-  # Seiten-Paketen (geprueft mit 2026.9.0). Wer eine eigene Beschriftung
-  # wirklich gerendert sehen will, traegt sie zum Messen voruebergehend in
-  # das jeweilige Seiten-Paket ein und rendert dann:
-  #
-  #   ~/.venvs/esphome-beta/bin/esphome run pv-dashboard-shots.yaml
-  #   sips -s format png shots/*.bmp --out shots/
-  #
-  # Danach die Checkliste in docs/04 durchgehen.
+  # "<<" fuegt die Eintraege der Datei hier ein, als stuenden sie in diesen
+  # substitutions. Sie gelten damit als Werte der Hauptdatei und stechen die
+  # Standards in den Seiten-Paketen (geprueft mit 2026.9.0). Fehlt die
+  # Datei, bricht "esphome config" mit "Could not find file" ab.
   ############################################################################
-
-  # --- Dachflaechen und Module (obere Reihe im Schema, je 88 px) ---------
-  # Reihenfolge von links nach rechts; Platz 3 und 4 sind die zwei
-  # Einzelmodule am Mini-Wechselrichter.
-  name_pv_1: "Dach Süd"        # 56 von 88
-  name_pv_2: "Dach West"       # 63 von 88
-  name_pv_3: "Modul 1"         # 48 von 88
-  name_pv_4: "Modul 2"         # 48 von 88
-  name_pv_5: "Dach Ost"        # 53 von 88
-  name_pv_6: "Nebendach"       # 67 von 88
-  name_pv_7: "Dach Nord"       # 62 von 88
-  name_pv_8: "Garagendach"     # 78 von 88
-
-  # --- Wechselrichter (zweite Reihe, je 132 px) -------------------------
-  # Je Geraet die zwei Flaechen darueber. Die Leistung gehoert in die
-  # Beschriftung, sie steht sonst nirgends auf der Seite.
-  name_inv_1: "Voll-WR 7 kW"       #  81 von 132, Flaechen 1 und 2
-  name_inv_2: "Mini-WR 0,8 kW"     #  94 von 132, Module 3 und 4
-  name_inv_3: "Hybrid 10 kW · A"   #  98 von 132, Flaechen 5 und 6
-  name_inv_4: "Hybrid 10 kW · B"   #  98 von 132, Flaechen 7 und 8
-
-  # --- Rahmen um die Volleinspeisung ------------------------------------
-  # Sitzt auf der unteren Rahmenlinie und stanzt sie frei. Zweizeilig: Das
-  # "\n" im Wert ist der Zeilenumbruch, jede Zeile hat 64 px.
-  name_feedin: "VOLLEIN-\nSPEISUNG"   # 58 / 64 von je 64
-
-  # --- Speicher (je 108 px im Schema, 300 px auf der Speicherseite) -----
-  # Dieselben drei Namen tragen auch die Ringe und die Tabellenkoepfe auf
-  # der Speicherseite; dort stehen sie in Grossbuchstaben.
-  name_bat_1: "Speicher 1"     # 63 von 108
-  name_bat_2: "Speicher 2"     # 63 von 108
-  name_bat_3: "Speicher 3"     # 63 von 108
-  # Zweitzeile unter dem Mittelwert auf der Speicherseite (326 px)
-  name_bat_summary: "Mittel der drei Speicher"   # 139 von 326
-
-  # --- Hausnetz und Verbraucherschiene ----------------------------------
-  name_house: "Hausnetz"       #  64 von 172
-  name_heatpump: "Wärmepumpe"  #  83 von 94
-  name_misc: "Sonstige"        #  50 von 94, Sammelposten fuer alles uebrige
-  name_wb_1: "Wallbox 1"       #  60 von 94
-  name_wb_2: "Wallbox 2"       #  60 von 94
-
-  # --- Zaehler (untere Reihe) -------------------------------------------
-  name_meter_pv: "PV-Zähler"      #  59 von 122, Zaehler des Volleinspeise-Kreises
-  name_grid: "Hausanschluss"      #  86 von 158, Netzpunkt in der Mitte
-  name_meter_house: "Hauszähler"  #  65 von 122, Einspeisung und Bezug des Hauses
-
-  # --- Zweitzeile der Kachel Eigenverbrauch (92 px) ---------------------
-  # Die Quote laesst die Volleinspeisung aussen vor (docs/01). Bewusst ein
-  # eigener Text und kein Verweis auf name_inv_1: Der Name traegt dort die
-  # Leistung mit, "ohne Voll-WR 7 kW" waere 112 px breit und wuerde in der
-  # nur 92 px schmalen Kachel umbrechen. Wer name_inv_1 aendert, zieht
-  # hier von Hand nach.
-  name_selfuse_note: "ohne Voll-WR"   # 79 von 92
-
-  # --- Tarife fuer die Geldrechnung, in Cent je kWh ----------------------
-  # Noch ohne Wirkung: Die Geldrechnung ist nicht gebaut (docs/06), keine
-  # Paketdatei liest diese drei Werte, und die Kachel TAGESERTRAG zeigt
-  # weiter Striche. Sie werden hier nur schon vorgehalten.
-  # Demo-Werte, bewusst rund. Die eigenen Tarife gehoeren hierher. Im Repo
-  # stehen die Demo-Werte; eigene Werte landen nur dann darin, wenn diese
-  # Datei committet wird.
-  tarif_volleinspeisung_ct: "20.0"  # Volleinspeisung
-  tarif_ueberschuss_ct: "10.0"      # Ueberschusseinspeisung
-  tarif_bezug_ct: "30.0"            # Strombezug
+  <<: !include .pv-dashboard_anlage.yaml
 
 esphome:
   name: "${devicename}"
@@ -174,7 +99,7 @@ packages:
 #     die Ausgabe den Namen zurueckholt. Die Ausgabe deshalb nicht in eine
 #     Datei schreiben und nicht weitergeben. Im Repo steht davon nichts, die
 #     Werte stehen ausschliesslich in der lokalen secrets.yaml.
-#   * Die sieben Seitendateien stehen mit Absicht NICHT in der Liste:
+#   * Die Seitendateien stehen mit Absicht NICHT in der Liste:
 #     .pv-dashboard_ui.yaml holt sie selbst ueber !include, aus demselben
 #     Checkout. Wer sie zusaetzlich auflistet, bekommt jede Seite zweimal und
 #     der Lauf bricht ab ("ID redraw_curve redefined"). Genauso kommt images/

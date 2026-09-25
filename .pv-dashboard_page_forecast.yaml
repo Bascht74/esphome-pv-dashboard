@@ -1,0 +1,434 @@
+##############################################################################
+# Package: Seite 3 -- Prognose (Solcast)
+#
+# Auf Wunsch des Nutzers (25.09.2026): die Solcast-Prognose, wie sie der
+# Blueprint ha-pv-optimizer (github.com/Bascht74/ha-pv-optimizer) benutzt.
+# Er liest aus der Solcast-Integration (HACS) die Tagesprognose mit dem
+# Attribut detailedForecast (Halbstunden, pv_estimate / pv_estimate10 /
+# pv_estimate90 in kW), die verbleibende Energie heute, die aktuelle
+# Leistung, die naechste Stunde und die Folgetage (morgen, Tag 3, Tag 4,
+# je mit estimate10). Diese Seite zeigt genau das:
+#
+#   Heute       P50 mit Spanne P10..P90, Rest heute, jetzt, naechste
+#               Stunde, Spitze mit Uhrzeit, Stand und API-Abrufe
+#   Verlauf     Halbstunden 05:00..22:00: Band P10..P90, Linie P50,
+#               Marke fuer jetzt
+#   Folgetage   sieben Tage: P50 als Balken, P10..P90 als Strich, dazu das
+#               Wetterbild des Tages (DWD, von der Seite Wetter)
+#
+# P10 ist die vorsichtige, P90 die mutige Schaetzung; der Blueprint mischt
+# P50 und P10 (blend_p50_anteil). Die Mischung rechnet der Blueprint,
+# hier stehen die Rohwerte.
+#
+# Drei Skripte gehoeren dazu; kuenftige Sensoren rufen nur diese auf, bis
+# dahin stehen Striche:
+#   fc_today   Kennzahlen heute       fc_slots  Halbstunden heute
+#   fc_day     ein Folgetag
+#
+# Flaeche x 4..1276, y 84..736.
+#   Heute     x 4, y 84, 400 x 300, innen 378 x 278: Titel 0..17,
+#             P50 30..69 (f_val_xl 39), Einheit 71..88, Spanne 94..114,
+#             Linie 124, zwei Zeilen Kennzahlen: Beschriftung 134..154 /
+#             194..214, Wert 156..181 / 216..241, Uhrzeit der Spitze
+#             243..260, Stand 261..278
+#   Verlauf   x 412, y 84, 864 x 300, innen 842 x 278: Titel 0..17, Flaeche
+#             30..240 (210), Grundlinie 240, Uhrzeiten 248..265; 34 Plaetze
+#             je 24,8 px
+#   Tage      x 4, y 392, 1272 x 344, innen 1250 x 322: Titel 0..17, sieben
+#             Spalten je 178,6: Tag 28..50, Wetterbild 54..98 (f_wx_l),
+#             Balken 110..262 (152), P50 268..293 (f_val_m), P10..P90
+#             296..313 -> Reserve 9
+##############################################################################
+
+globals:
+  # Halbstunden heute (48 Plaetze ab 00:00, kW) fuer den Verlauf; die Marke
+  # "jetzt" braucht sie nicht, das Band aber beim Neuzeichnen.
+  - id: fc_p50
+    type: std::array<float, 48>
+    restore_value: false
+  - id: fc_p10
+    type: std::array<float, 48>
+    restore_value: false
+  - id: fc_p90
+    type: std::array<float, 48>
+    restore_value: false
+  # Folgetage: je P50, P10, P90 in kWh, NAN = kein Wert
+  - id: fc_days
+    type: std::array<float, 21>
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN}'
+
+script:
+  # ---------------------------------------------------------------------
+  # Kennzahlen heute (Solcast-Integration):
+  #   p50, p10, p90  Tagesprognose in kWh (Zustand und Attribute
+  #                  estimate10 / estimate90 des Sensors "heute")
+  #   remaining      verbleibend heute in kWh
+  #   power_now      Leistung jetzt in W
+  #   next_hour      naechste Stunde in kWh
+  #   peak_kw        Spitze heute in kW, peak_time "HH:MM" (leer = keine)
+  #   updated        Zeit des letzten Abrufs "HH:MM" (leer = unbekannt)
+  #   api_used, api_limit  Abrufe heute; < 0 = unbekannt
+  #   NAN = kein Wert (Striche)
+  # ---------------------------------------------------------------------
+  - id: fc_today
+    parameters:
+      p50: float
+      p10: float
+      p90: float
+      remaining: float
+      power_now: float
+      next_hour: float
+      peak_kw: float
+      peak_time: string
+      updated: string
+      api_used: int
+      api_limit: int
+    then:
+      - lambda: |-
+          auto &num = id(fmt_num);
+          lv_label_set_text(id(fc_val_p50), num(p50, "%.1f", "---,-").c_str());
+          const std::string span = "P10 bis P90: " + num(p10, "%.1f", "--,-") + " bis " + num(p90, "%.1f", "--,-") + " kWh";
+          lv_label_set_text(id(fc_val_span), span.c_str());
+          lv_label_set_text(id(fc_val_rest), num(remaining, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(fc_val_now), id(fmt_watt)(power_now, "--.---").c_str());
+          lv_label_set_text(id(fc_val_next), num(next_hour, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(fc_val_peak), num(peak_kw, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(fc_peak_time), peak_time.empty() ? "um --:-- Uhr" : ("um " + peak_time + " Uhr").c_str());
+          std::string foot = "Stand " + (updated.empty() ? std::string("--:--") : updated);
+          if (api_used >= 0)
+            foot += " · API " + std::to_string(api_used) + (api_limit > 0 ? " von " + std::to_string(api_limit) : std::string(""));
+          lv_label_set_text(id(fc_foot), foot.c_str());
+          id(data_seen)[6] = millis();
+
+  # ---------------------------------------------------------------------
+  # Halbstunden heute: je 48 kommagetrennte Werte in kW ab 00:00 (so
+  # liefert detailedForecast den Tag), p10 und p90 duerfen leer sein.
+  # Gezeigt werden 05:00 bis 22:00.
+  # ---------------------------------------------------------------------
+  - id: fc_slots
+    parameters:
+      p50: string
+      p10: string
+      p90: string
+    then:
+      - lambda: |-
+          auto parse = [](const std::string &s, std::array<float, 48> &out) {
+            out.fill(NAN);
+            int n = 0;
+            const char *q = s.c_str();
+            while (*q && n < 48) {
+              char *end = nullptr;
+              const float v = strtof(q, &end);
+              if (end == q)
+                break;
+              out[n++] = v;
+              q = end;
+              while (*q == ',' || *q == ' ')
+                q++;
+            }
+          };
+          parse(p50, id(fc_p50));
+          parse(p10, id(fc_p10));
+          parse(p90, id(fc_p90));
+      - script.execute: fc_redraw
+
+  # ---------------------------------------------------------------------
+  # Ein Folgetag:
+  #   day    0..6 (0 = heute, 1 = morgen, ...)
+  #   label  Beschriftung ("Heute", "Morgen", "Sa 27.09.")
+  #   cond   Wetterlage des Tages wie Home Assistant sie nennt ("sunny",
+  #          "partlycloudy", "rainy" ...), leer = kein Bild
+  #   p50, p10, p90  Tagesprognose in kWh, NAN = kein Wert
+  # ---------------------------------------------------------------------
+  - id: fc_day
+    parameters:
+      day: int
+      label: string
+      cond: string
+      p50: float
+      p10: float
+      p90: float
+    then:
+      - lambda: |-
+          if (day < 0 || day >= 7)
+            return;
+          lv_obj_t *const lab[7] = {id(fc_day_0), id(fc_day_1), id(fc_day_2), id(fc_day_3), id(fc_day_4), id(fc_day_5), id(fc_day_6)};
+          lv_obj_t *const ico[7] = {id(fc_ico_0), id(fc_ico_1), id(fc_ico_2), id(fc_ico_3), id(fc_ico_4), id(fc_ico_5), id(fc_ico_6)};
+          lv_label_set_text(lab[day], label.c_str());
+          const auto c = id(wx_cond)(cond);
+          lv_label_set_text(ico[day], std::get<0>(c));
+          lv_obj_set_style_text_color(ico[day], lv_color_hex(std::get<1>(c)), 0);
+          auto &d = id(fc_days);
+          d[day * 3 + 0] = p50;
+          d[day * 3 + 1] = p10;
+          d[day * 3 + 2] = p90;
+      - script.execute: fc_redraw
+
+  # Zeichnet Verlauf, Marke und Folgetage neu. Von Hand ruft es niemand;
+  # das interval unten zieht die Marke jede Minute nach.
+  - id: fc_redraw
+    then:
+      - lambda: |-
+          // --- Verlauf 05:00..22:00 ---
+          lv_obj_t *const band[34] = {id(fc_band_00), id(fc_band_01), id(fc_band_02), id(fc_band_03), id(fc_band_04), id(fc_band_05), id(fc_band_06), id(fc_band_07), id(fc_band_08), id(fc_band_09), id(fc_band_10), id(fc_band_11), id(fc_band_12), id(fc_band_13), id(fc_band_14), id(fc_band_15), id(fc_band_16), id(fc_band_17), id(fc_band_18), id(fc_band_19), id(fc_band_20), id(fc_band_21), id(fc_band_22), id(fc_band_23), id(fc_band_24), id(fc_band_25), id(fc_band_26), id(fc_band_27), id(fc_band_28), id(fc_band_29), id(fc_band_30), id(fc_band_31), id(fc_band_32), id(fc_band_33)};
+          const auto &p50 = id(fc_p50), &p10 = id(fc_p10), &p90 = id(fc_p90);
+          float peak = 0.0f;
+          for (int i = 0; i < 34; i++) {
+            const int k = i + 10;
+            for (float v : {p50[k], p10[k], p90[k]})
+              if (!std::isnan(v))
+                peak = std::max(peak, v);
+          }
+          const bool known = peak > 0.0f;
+          if (!known)
+            peak = 1.0f;
+          const float H = 210.0f, BASE = 240.0f, SW = 24.7647f;
+          static lv_point_precise_t pts[34];
+          int np = 0;
+          for (int i = 0; i < 34; i++) {
+            const int k = i + 10;
+            const float lo = std::isnan(p10[k]) ? p50[k] : p10[k];
+            const float hi = std::isnan(p90[k]) ? p50[k] : p90[k];
+            if (std::isnan(lo) || std::isnan(hi)) {
+              lv_obj_add_flag(band[i], LV_OBJ_FLAG_HIDDEN);
+            } else {
+              const int y0 = (int) lroundf(BASE - hi / peak * H);
+              const int y1 = (int) lroundf(BASE - lo / peak * H);
+              lv_obj_set_y(band[i], y0);
+              lv_obj_set_height(band[i], std::max(y1 - y0, 2));
+              lv_obj_clear_flag(band[i], LV_OBJ_FLAG_HIDDEN);
+            }
+            if (!std::isnan(p50[k])) {
+              pts[np].x = (lv_value_precise_t) (SW * i + SW / 2);
+              pts[np].y = (lv_value_precise_t) (BASE - 30.0f - p50[k] / peak * H);  // Linie liegt bei y 30
+              np++;
+            }
+          }
+          lv_line_set_points(id(fc_line)->obj, pts, np);
+          if (np < 2)
+            lv_obj_add_flag(id(fc_line)->obj, LV_OBJ_FLAG_HIDDEN);
+          else
+            lv_obj_clear_flag(id(fc_line)->obj, LV_OBJ_FLAG_HIDDEN);
+          lv_label_set_text(id(fc_scale), known ? ("Skala bis " + id(fmt_num)(peak, "%.1f", "--") + " kW").c_str() : "");
+
+          // Marke jetzt
+          auto now = id(dash_time).now();
+          const float pos = now.is_valid() ? (now.hour * 60 + now.minute - 300) / 30.0f : -1.0f;
+          if (pos < 0.0f || pos >= 34.0f) {
+            lv_obj_add_flag(id(fc_now), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_set_x(id(fc_now), (int) lroundf(pos * SW) - 1);
+            lv_obj_clear_flag(id(fc_now), LV_OBJ_FLAG_HIDDEN);
+          }
+
+          // --- Folgetage ---
+          lv_obj_t *const bar[7] = {id(fc_bar_0), id(fc_bar_1), id(fc_bar_2), id(fc_bar_3), id(fc_bar_4), id(fc_bar_5), id(fc_bar_6)};
+          lv_obj_t *const rng[7] = {id(fc_rng_0), id(fc_rng_1), id(fc_rng_2), id(fc_rng_3), id(fc_rng_4), id(fc_rng_5), id(fc_rng_6)};
+          lv_obj_t *const val[7] = {id(fc_dval_0), id(fc_dval_1), id(fc_dval_2), id(fc_dval_3), id(fc_dval_4), id(fc_dval_5), id(fc_dval_6)};
+          lv_obj_t *const sub[7] = {id(fc_dsub_0), id(fc_dsub_1), id(fc_dsub_2), id(fc_dsub_3), id(fc_dsub_4), id(fc_dsub_5), id(fc_dsub_6)};
+          const auto &d = id(fc_days);
+          float dpeak = 0.0f;
+          for (int i = 0; i < 21; i++)
+            if (!std::isnan(d[i]))
+              dpeak = std::max(dpeak, d[i]);
+          if (dpeak <= 0.0f)
+            dpeak = 1.0f;
+          const float DH = 150.0f, DBASE = 262.0f;
+          for (int i = 0; i < 7; i++) {
+            const float v = d[i * 3], lo = d[i * 3 + 1], hi = d[i * 3 + 2];
+            lv_label_set_text(val[i], id(fmt_num)(v, "%.1f", "--,-").c_str());
+            if (std::isnan(v)) {
+              lv_obj_add_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
+            } else {
+              const int h = std::max((int) lroundf(v / dpeak * DH), 2);
+              lv_obj_set_y(bar[i], (int) DBASE - h);
+              lv_obj_set_height(bar[i], h);
+              lv_obj_clear_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
+            }
+            if (std::isnan(lo) || std::isnan(hi)) {
+              lv_obj_add_flag(rng[i], LV_OBJ_FLAG_HIDDEN);
+              lv_label_set_text(sub[i], "P10 bis P90 --");
+            } else {
+              const int y0 = (int) lroundf(DBASE - hi / dpeak * DH);
+              const int y1 = (int) lroundf(DBASE - lo / dpeak * DH);
+              lv_obj_set_y(rng[i], y0);
+              lv_obj_set_height(rng[i], std::max(y1 - y0, 2));
+              lv_obj_clear_flag(rng[i], LV_OBJ_FLAG_HIDDEN);
+              const std::string s = "P10 bis P90 " + id(fmt_num)(lo, "%.0f", "--") + " bis " + id(fmt_num)(hi, "%.0f", "--");
+              lv_label_set_text(sub[i], s.c_str());
+            }
+          }
+
+interval:
+  - interval: 60s
+    then:
+      - script.execute: fc_redraw
+
+lvgl:
+  pages:
+    - id: page_forecast
+      bg_color: $col_bg
+      scrollable: false
+      scroll_dir: NONE
+      widgets:
+        # ---------------- Heute ---------------------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 84
+            width: 400
+            height: 300
+            widgets:
+              - label: { x: 0, y: 0, width: 378, height: 17, long_mode: DOT, styles: st_label, text: "SOLCAST · HEUTE" }
+              - label: { id: fc_val_p50, x: 0, y: 30, width: 378, height: 39, long_mode: DOT, text: "---,-", text_font: f_val_xl, text_color: $col_solar }
+              - label: { x: 0, y: 71, width: 378, height: 17, long_mode: DOT, text: "kWh erwartet (P50)", styles: st_unit }
+              - label: { id: fc_val_span, x: 0, y: 94, width: 378, height: 20, long_mode: DOT, text: "P10 bis P90: --,- bis --,- kWh", text_font: f_text_s, text_color: $col_ink2 }
+              - obj: { x: 0, y: 124, width: 378, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 134, width: 184, height: 20, long_mode: DOT, text: "Rest heute in kWh", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: fc_val_rest, x: 0, y: 156, width: 184, height: 25, long_mode: DOT, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { x: 194, y: 134, width: 184, height: 20, long_mode: DOT, text: "Jetzt in W", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: fc_val_now, x: 194, y: 156, width: 184, height: 25, long_mode: DOT, text: "--.---", text_font: f_val_m, text_color: $col_ink }
+              - label: { x: 0, y: 194, width: 184, height: 20, long_mode: DOT, text: "Nächste Stunde in kWh", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: fc_val_next, x: 0, y: 216, width: 184, height: 25, long_mode: DOT, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { x: 194, y: 194, width: 184, height: 20, long_mode: DOT, text: "Spitze in kW", text_font: f_text_s, text_color: $col_ink3 }
+              - label: { id: fc_val_peak, x: 194, y: 216, width: 184, height: 25, long_mode: DOT, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { id: fc_peak_time, x: 194, y: 243, width: 184, height: 17, long_mode: DOT, text: "um --:-- Uhr", styles: st_unit }
+              - label: { id: fc_foot, x: 0, y: 261, width: 378, height: 17, long_mode: DOT, text: "Stand --:--", styles: st_unit }
+        # ---------------- Verlauf heute -------------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 412
+            y: 84
+            width: 864
+            height: 300
+            widgets:
+              - label: { x: 0, y: 0, width: 400, height: 17, long_mode: DOT, styles: st_label, text: "HEUTE IM HALBSTUNDENTAKT" }
+              - obj: { x: 420, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_solar_deep, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 438, y: 0, width: 90, height: 17, long_mode: DOT, text: "P10 bis P90", styles: st_unit }
+              - obj: { x: 532, y: 8, width: 16, height: 3, radius: 1, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 554, y: 0, width: 40, height: 17, long_mode: DOT, text: "P50", styles: st_unit }
+              - obj: { x: 600, y: 1, width: 2, height: 16, radius: 0, bg_color: $col_ink, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 608, y: 0, width: 40, height: 17, long_mode: DOT, text: "jetzt", styles: st_unit }
+              - label: { id: fc_scale, x: 650, y: 0, width: 192, height: 17, long_mode: DOT, text_align: RIGHT, text: "", styles: st_unit }
+              - obj: { x: 0, y: 240, width: 842, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_00, x: 4, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_01, x: 29, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_02, x: 54, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_03, x: 79, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_04, x: 103, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_05, x: 128, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_06, x: 153, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_07, x: 178, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_08, x: 202, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_09, x: 227, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_10, x: 252, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_11, x: 277, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_12, x: 302, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_13, x: 326, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_14, x: 351, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_15, x: 376, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_16, x: 401, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_17, x: 425, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_18, x: 450, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_19, x: 475, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_20, x: 500, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_21, x: 524, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_22, x: 549, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_23, x: 574, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_24, x: 599, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_25, x: 624, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_26, x: 648, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_27, x: 673, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_28, x: 698, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_29, x: 723, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_30, x: 747, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_31, x: 772, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_32, x: 797, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_band_33, x: 822, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - line:
+                  id: fc_line
+                  x: 0
+                  y: 30
+                  line_color: $col_solar
+                  line_width: 3
+                  line_rounded: true
+                  hidden: true
+                  points:
+                    - [12, 210]
+                    - [830, 210]
+              - obj: { id: fc_now, x: 0, y: 30, width: 2, height: 210, radius: 0, bg_color: $col_ink, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 30, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "06" }
+              - label: { x: 129, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "08" }
+              - label: { x: 228, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "10" }
+              - label: { x: 327, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "12" }
+              - label: { x: 426, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "14" }
+              - label: { x: 525, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "16" }
+              - label: { x: 624, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "18" }
+              - label: { x: 723, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "20" }
+              - label: { x: 802, y: 248, width: 40, height: 17, text_align: RIGHT, styles: st_unit, text: "22" }
+        # ---------------- Folgetage -----------------------------------------
+        - obj:
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            x: 4
+            y: 392
+            width: 1272
+            height: 344
+            widgets:
+              - label: { x: 0, y: 0, width: 600, height: 17, long_mode: DOT, styles: st_label, text: "PROGNOSE DER NÄCHSTEN TAGE · kWh" }
+              - obj: { x: 900, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 918, y: 0, width: 60, height: 17, long_mode: DOT, text: "P50", styles: st_unit }
+              - obj: { x: 990, y: 1, width: 4, height: 16, radius: 1, bg_color: $col_ink2, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 1000, y: 0, width: 250, height: 17, long_mode: DOT, text: "P10 bis P90", styles: st_unit }
+              - obj: { x: 0, y: 262, width: 1250, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: fc_day_0, x: 4, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
+              - label: { id: fc_ico_0, x: 4, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
+              - obj: { id: fc_bar_0, x: 61, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_rng_0, x: 87, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: fc_dval_0, x: 4, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { id: fc_dsub_0, x: 4, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
+              - label: { id: fc_day_1, x: 183, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
+              - label: { id: fc_ico_1, x: 183, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
+              - obj: { id: fc_bar_1, x: 240, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_rng_1, x: 266, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: fc_dval_1, x: 183, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { id: fc_dsub_1, x: 183, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
+              - label: { id: fc_day_2, x: 361, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
+              - label: { id: fc_ico_2, x: 361, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
+              - obj: { id: fc_bar_2, x: 418, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_rng_2, x: 444, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: fc_dval_2, x: 361, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { id: fc_dsub_2, x: 361, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
+              - label: { id: fc_day_3, x: 540, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
+              - label: { id: fc_ico_3, x: 540, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
+              - obj: { id: fc_bar_3, x: 597, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_rng_3, x: 623, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: fc_dval_3, x: 540, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { id: fc_dsub_3, x: 540, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
+              - label: { id: fc_day_4, x: 718, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
+              - label: { id: fc_ico_4, x: 718, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
+              - obj: { id: fc_bar_4, x: 776, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_rng_4, x: 802, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: fc_dval_4, x: 718, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { id: fc_dsub_4, x: 718, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
+              - label: { id: fc_day_5, x: 897, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
+              - label: { id: fc_ico_5, x: 897, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
+              - obj: { id: fc_bar_5, x: 954, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_rng_5, x: 980, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: fc_dval_5, x: 897, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { id: fc_dsub_5, x: 897, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
+              - label: { id: fc_day_6, x: 1075, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
+              - label: { id: fc_ico_6, x: 1075, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
+              - obj: { id: fc_bar_6, x: 1133, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: fc_rng_6, x: 1159, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { id: fc_dval_6, x: 1075, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
+              - label: { id: fc_dsub_6, x: 1075, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }

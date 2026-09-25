@@ -1,5 +1,5 @@
 ##############################################################################
-# Package: Seite 7 -- Meldungen
+# Package: Seite 11 -- Meldungen
 #
 # Alle Meldungen aller Geraete, neueste oben. Die drei alert_*-Skripte
 # gehoeren dazu: alert_push fuellt die Liste, alert_ack quittiert,

@@ -16,32 +16,43 @@ nicht. Der Aufbau und die festgelegten Kennzahlen-Definitionen stehen in
 **Die Beschriftungen im Repo sind Demo-Werte.** Jede anlagenabhängige
 Beschriftung — Dachflächen, Wechselrichter, Speicher, Verbraucher, Zähler — und
 die drei Tarife sind `substitutions`. Der Standard steht im jeweiligen Paket, die
-eigene Anlage wird in `pv-dashboard.yaml` beschrieben und sticht ihn. Im Repo
-stehen die Demo-Werte; eigene Angaben gehen nur mit, wenn diese Datei committet
-wird. Zugangsdaten stehen ohnehin in `secrets.yaml` außerhalb des Repos.
+eigene Anlage wird in `.pv-dashboard_anlage.yaml` beschrieben und sticht ihn.
+Diese Datei steht in `.gitignore` und bleibt auf dem Rechner; im Repo liegt nur
+die Vorlage `.pv-dashboard_anlage.yaml.example` mit den Demo-Werten.
+Zugangsdaten stehen ohnehin in `secrets.yaml` außerhalb des Repos.
 
 
 ## Was das Panel zeigt
 
-Sieben Seiten über eine Menüleiste am unteren Rand, dazu eine Statusleiste mit
-Uhr und eine Meldungszeile:
+Elf Seiten über eine Menüleiste am unteren Rand, dazu eine Statusleiste mit
+Uhr und Systemsymbolen (WLAN, Home Assistant, Daten aktuell) und eine Meldungszeile:
 
 | Seite | Stand |
 | --- | --- |
-| Übersicht | Anlagenschema mit Flussanimation, rechte Kennzahlenspalte, Ringe und Tagesertrag |
-| PV & Prognose | Platzhalter |
+| Übersicht | Anlagenschema mit Flussanimation, rechte Kennzahlenspalte, Ringe und Tagesertrag in Euro (auch als Sensoren für Home Assistant) |
+| PV & Prognose | Leistung und Tageswert je Wechselrichter und Fläche, getrennt nach Volleinspeisung und Hausnetz, Status mit Fehlertext und Temperatur; Tagesverlauf Ist gegen Prognose mit vier Kennzahlen |
+| Prognose | Solcast: heute P50 mit P10 bis P90, Rest, jetzt, Spitze; Halbstunden als Band mit Linie; sieben Tage mit Wetterbild |
+| Wetter | DWD: jetzt mit Wind, Feuchte, Druck, Sonne; nächste 24 Stunden mit Temperaturkurve und Regen; sieben Tage; DWD-Warnung |
 | Speicher | Tabelle mit Zellwerten, drei SoC-Ringe |
-| Wallboxen | Platzhalter |
-| Wärmepumpe | Platzhalter |
-| Haus | Platzhalter |
+| Wallboxen | im Stil von evcc: je Wallbox Modus, Leistung mit Phasen, Geladen, Sonnenanteil, Ladedauer, Fahrzeug mit Ladestand, Ladeplan und Limit; Monatswerte |
+| Wärmepumpe | grafisch im Aufbau des Nilan-Touch-Bedienteils (Compact P, Werte aus dem klassischen CTS700): außen, Raum, Feuchte, CO2, Warmwasser, Lüftungsstufe mit Ventilatoren; Betriebsart, Bypass, Kompressor, Zu-/Fortluft, Filter, Strom |
+| Haus | im Stil von evcc: Energiefluss-Balken, Tabelle In / Out / Verbraucher, Verbrauch jetzt mit Herkunft, Verbrauch der letzten 24 Stunden |
+| Netz | Hausanschluss mit Einspeisegrenze, Phasen L1 bis L3 (Shelly Pro 3EM), Zählerstände, Netzvorgaben (Börsenpreis, negative Preise, § 14a) |
+| Statistik | Woche, Monat, Jahr: Erzeugung gegen Verbrauch, Autarkie, Eigenverbrauch, Ertrag |
 | Meldungen | Liste aller Meldungen, neueste oben, Quittieren per Antippen |
 
-Dazu zwei Overlays über der Oberfläche: Sprachassistent (`voice_panel`) und
-Firmware-Update mit Fortschrittsbalken (`ota_panel`).
+Dazu drei Fenster über der Oberfläche: Sprachassistent (`voice_panel`),
+Firmware-Update mit Fortschrittsbalken (`ota_panel`) und System (`sys_panel`,
+Tipp auf die Symbole oben rechts) mit dem Alter der Werte je Quelle.
 
 **Es sind noch keine echten Daten angebunden.** Die Oberfläche wird über feste
-Skript-Schnittstellen gefüttert (`alert_push`, `storage_update`, `record_hour`).
-Beispielwerte für Meldungen und Speicher gibt es nur im Screenshot-Lauf
+Skript-Schnittstellen gefüttert (`alert_push`, `storage_update`, `pv_update`,
+`pv_status`, `money_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`, `wx_hour`,
+`wx_day`, `wx_warning`, `grid_update`, `grid_phase`, `grid_meter`, `grid_rules`,
+`stats_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`,
+`house_battery`, `house_loadpoint`, `house_update`, `house_history`, `record_hour`).
+Beispielwerte für Meldungen, Speicher, PV, Wallboxen, Wärmepumpe, Haus, Netz, Statistik, Prognose und Wetter gibt es
+nur im Screenshot-Lauf
 (`shots_run` in `pv-dashboard-shots.yaml`). Die Demo-Leistungen der
 Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen
 host-Plattform — im Simulator wie im Screenshot-Lauf. **Auf dem Panel steht
@@ -62,12 +73,15 @@ Hardware (nächster Abschnitt).
    die die Konfiguration erwartet — kopieren und die eigenen Werte eintragen.
    Wer den ESPHome Device Builder benutzt, bekommt die Datei in aller Regel von
    ihm angelegt. `secrets.yaml` steht in `.gitignore` und gehört nicht ins Repo.
-4. **`pv-dashboard.yaml` anpassen** — die einzige Datei zum Anfassen. Oben der
-   Gerätename, darunter der Block „HIER BESCHREIBEN SIE IHRE ANLAGE“ mit jeder
-   anlagenabhängigen Beschriftung und den drei Tarifen. Hinter jeder Zeile
-   stehen die gemessene Breite des Demo-Werts und die verfügbare Breite; wer
-   sie überschreitet, bekommt einen gekürzten oder umgebrochenen Text. Jede
-   nicht angepasste Zeile bleibt auf dem Demo-Wert aus dem jeweiligen Paket.
+4. **Die eigene Anlage beschreiben.** `cp .pv-dashboard_anlage.yaml.example
+   .pv-dashboard_anlage.yaml`, dann dort jede anlagenabhängige Beschriftung
+   und die drei Tarife eintragen. Die Datei steht in `.gitignore`, ein
+   `git add -A` nimmt sie nicht mit. Hinter jeder Zeile stehen die gemessene
+   Breite des Demo-Werts und die verfügbare Breite; wer sie überschreitet,
+   bekommt einen gekürzten oder umgebrochenen Text. Jede gelöschte Zeile
+   fällt auf den Demo-Wert aus dem jeweiligen Paket zurück. In
+   `pv-dashboard.yaml` steht oben nur noch der Gerätename; sie bindet die
+   Datei ein und bricht ohne sie mit „Could not find file“ ab.
 5. **Prüfen** mit `esphome config pv-dashboard.yaml` — nie mit
    `--show-secrets`. Das ist die einzige lokale Kontrolle für die
    geräteeigenen Packages. (In dieser Arbeitsumgebung gehört der volle Pfad
@@ -146,18 +160,23 @@ API-Schlüssel im Klartext.
 
 | Datei | Inhalt |
 | --- | --- |
-| `pv-dashboard.yaml` | Die einzige Datei zum Anfassen: Gerätename, die Verweise auf `secrets.yaml` als `substitutions`, der Block „HIER BESCHREIBEN SIE IHRE ANLAGE“ mit allen Beschriftungen und den drei Tarifen, Liste der Packages; am Ende der auskommentierte Block, der dieselben Packages aus dem GitHub-Repo lädt |
+| `pv-dashboard.yaml` | Gerät: Gerätename, die Verweise auf `secrets.yaml` als `substitutions`, das Einbinden von `.pv-dashboard_anlage.yaml`, die Packages aus dem GitHub-Repo; am Ende auskommentiert der Rückfall auf die Dateien von der Platte |
+| `.pv-dashboard_anlage.yaml.example` | Vorlage für die eigene Anlage: alle Beschriftungen und die drei Tarife mit Demo-Werten und Breiten. Die eigene Fassung `.pv-dashboard_anlage.yaml` steht in `.gitignore` |
 | `secrets.yaml.example` | Dokumentiert, welche Schlüssel `secrets.yaml` enthalten muss — die echte Datei legt der Device Builder an |
 | `.pv-dashboard_core.yaml` | Nur Gerät: SoC, PSRAM, LDO, Funkstrecke zum C6, WLAN, API, Logger, OTA, Bluetooth, Zeit und Diagnose, serielle Schnittstellen |
 | `.pv-dashboard_utility.yaml` | Gemeinsam mit dem Simulator: Schriften (IBM Plex Sans/Mono) und die Bilder aus `images/`, dazu die Design-Tokens für Farben, Maße und Abstände — einzige Quelle dafür |
-| `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die sieben Seiten ein |
-| `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, erzeugter Flussanimations-Block |
-| `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose — Platzhalter |
-| `.pv-dashboard_page_battery.yaml` | Seite 3 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
-| `.pv-dashboard_page_wallbox.yaml` | Seite 4 Wallboxen — Platzhalter |
-| `.pv-dashboard_page_heatpump.yaml` | Seite 5 Wärmepumpe — Platzhalter |
-| `.pv-dashboard_page_house.yaml` | Seite 6 Haus — Platzhalter |
-| `.pv-dashboard_page_alerts.yaml` | Seite 7 Meldungen: Liste, Zähler, `alert_push` / `alert_ack` / `alert_refresh` |
+| `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die elf Seiten ein |
+| `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, `money_update`, erzeugter Flussanimations-Block |
+| `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose: Wechselrichter und Flächen je Kreis, Tagesverlauf mit Kennzahlen, `pv_status` / `pv_update` / `pv_redraw_curve` |
+| `.pv-dashboard_page_forecast.yaml` | Seite 3 Prognose: Solcast heute, Halbstunden, sieben Tage, `fc_*` |
+| `.pv-dashboard_page_weather.yaml` | Seite 4 Wetter: DWD jetzt, 24 Stunden, sieben Tage, Warnung, `wx_*` |
+| `.pv-dashboard_page_battery.yaml` | Seite 5 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
+| `.pv-dashboard_page_wallbox.yaml` | Seite 6 Wallboxen: Ladepunkt-Karten nach evcc, Monatskachel, `wallbox_update` / `wallbox_month` |
+| `.pv-dashboard_page_heatpump.yaml` | Seite 7 Wärmepumpe: Startseite nach dem Nilan-Touch-Bedienteil, Haus aus Flächen, Information, Strom, `heatpump_update` / `heatpump_extra` |
+| `.pv-dashboard_page_house.yaml` | Seite 8 Haus: Energiefluss nach evcc, Tabelle, Verbrauch jetzt und 24 Stunden, `house_*` |
+| `.pv-dashboard_page_grid.yaml` | Seite 9 Netz: Hausanschluss, Phasen, Zähler, Netzvorgaben, `grid_*` |
+| `.pv-dashboard_page_stats.yaml` | Seite 10 Statistik: Woche / Monat / Jahr, `stats_update` / `stats_show` |
+| `.pv-dashboard_page_alerts.yaml` | Seite 11 Meldungen: Liste, Zähler, `alert_push` / `alert_ack` / `alert_refresh` |
 | `.pv-dashboard_display.yaml` | Nur Gerät: I2C, Backlight, MIPI-DSI-Panel, GT911, Drehung |
 | `.pv-dashboard_audio.yaml` | Nur Gerät: ES8311/ES7210, Voice Assistant, I2S-Halbduplex |
 | `pv-dashboard-sim.yaml` | Simulator: `host:`-Plattform mit SDL-Fenster und SDL-Touchscreen |
@@ -166,7 +185,8 @@ API-Schlüssel im Klartext.
 | `pv-dashboard-demo-a.yaml` | Prototyp: Kettenreaktion auf dem echten Schema |
 | `pv-dashboard-demo-b.yaml` | Prototyp: zwei Kennlinien für die Kugelgeschwindigkeit im Vergleich |
 | `tools/flow_animation.py` | Generator der Flussanimation; erzeugt den markierten Block in der Übersichtsseite |
-| `images/` | `solar_panel.png` (Modulfeld) und `solar_module.png` (Einzelmodul) |
+| `images/` | `solar_panel.png` (Modulfeld) und `solar_module.png` (Einzelmodul); das Haus der Seite Wärmepumpe ist aus LVGL-Flächen gebaut |
+| `patches/` | `pace_bms-check_uart_settings.patch` für die externe PACE-BMS-Komponente, Anleitung in `docs/06` |
 | `docs/` | Projektwissen, siehe unten |
 | `CLAUDE.md` | Regeln für Assistenz-Sitzungen in diesem Repo |
 | `LICENSE` | MIT-Lizenz |
@@ -175,13 +195,14 @@ Gerät und Simulator binden `utility` und `ui` gemeinsam ein: Eine Änderung an
 der Oberfläche, an den Schriften oder an den Farben wirkt auf beiden Seiten.
 Nur am Gerät hängen `display`, `audio` und `core`.
 
-Die Oberfläche liegt in **acht** Dateien: dem Kern `.pv-dashboard_ui.yaml`
-(951 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
+Die Oberfläche liegt in **zwölf** Dateien: dem Kern `.pv-dashboard_ui.yaml`
+(1205 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
 eigenen `packages:`-Block ein — **diese Reihenfolge ist die Reihenfolge der
 Seiten**. Jedes Skript liegt bei der Seite, die es benutzt; im Kern bleiben nur
-`record_hour` und `update_clock`, die kein Seiten-Widget anfassen. Die größte
-Einzeldatei ist damit `.pv-dashboard_page_overview.yaml` mit **1185 Zeilen, rund
-83 kB** (Arbeitsstand 20.09.2026; die Zahl altert mit jeder Änderung), darin der
+`sys_refresh`, `record_hour` und `update_clock`, die kein Seiten-Widget anfassen,
+dazu die gemeinsamen Formatierer `fmt_num`, `fmt_watt` und `fmt_power`. Die größte
+Einzeldatei ist damit `.pv-dashboard_page_overview.yaml` mit **1281 Zeilen**
+(Arbeitsstand 25.09.2026; die Zahl altert mit jeder Änderung), darin der
 erzeugte Flussanimations-Block. Nicht am Stück lesen: `docs/03` hat unter
 „Einstieg" die Dateitabelle mit Zeilennummern und den passenden grep-Mustern.
 Diese Tabelle hier listet die Dateien des Repos; wie die Packages

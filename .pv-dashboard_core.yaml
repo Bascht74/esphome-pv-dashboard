@@ -13,9 +13,9 @@
 # Zugangsdaten stehen hier ABSICHTLICH nicht. pv-dashboard.yaml legt sie oben
 # als substitutions an und holt sie dort mit !secret aus der secrets.yaml;
 # hier steht nur ${wifi_ssid}, ${wifi_password}, ${ap_password}, ${api_key}
-# und ${ota_password}. Damit bleibt diese Datei frei von Geheimnissen -- sie
-# soll spaeter aus dem GitHub-Repo nachgeladen werden, waehrend
-# pv-dashboard.yaml und secrets.yaml auf dem Rechner bleiben.
+# und ${ota_password}. Damit bleibt diese Datei frei von Geheimnissen -- das
+# Geraet laedt sie aus dem GitHub-Repo nach (packages: in pv-dashboard.yaml),
+# waehrend pv-dashboard.yaml und secrets.yaml auf dem Rechner bleiben.
 #
 # ESPHome loest substitutions erst nach dem Zusammenfuehren aller Pakete auf,
 # deshalb wirken die Werte aus pv-dashboard.yaml auch hier drin.
@@ -433,8 +433,20 @@ usb_uart:
 # aktivieren, wenn das BMS angeschlossen ist -- sonst laufen nur Timeouts ins
 # Log. Die Protokollversion muss zum BMS passen.
 #
+# Nicht direkt von GitHub einbinden: Die Komponente ruft das seit 2026.9.0
+# abgekuendigte check_uart_settings() auf, ab 2027.3.0 bricht der Build. Der
+# Patch dagegen liegt in patches/pace_bms-check_uart_settings.patch; wie die
+# gepatchte Kopie nach .pace-bms/ kommt, steht in docs/06 ("BMS: serielle
+# Anbindung"). Der Pfad gilt relativ zu pv-dashboard.yaml, auch wenn dieses
+# Paket aus dem Repo nachgeladen wird (external_components nimmt
+# CORE.relative_config_path, nachgelesen in 2026.9.0, nicht am Geraet
+# erprobt).
+#
 # external_components:
-#   - source: github://nkinnan/esphome-pace-bms
+#   - source:
+#       type: local
+#       path: .pace-bms/components
+#     components: [pace_bms]
 #
 # pace_bms:
 #   id: bms

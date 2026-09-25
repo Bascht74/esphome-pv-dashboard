@@ -130,6 +130,27 @@ font:
   #   \U000F072A  washing-machine      sonstige Verbraucher
   #   \U000F0199  counter              Zaehler
   #   \U000F0D3E  transmission-tower   Hausanschluss / Netz
+  # Seit 24.09.2026 fuer die Seiten Wallboxen und Waermepumpe (Codepunkte
+  # aus @mdi/font 7.4.47 nachgesehen):
+  #   \U000F140B  lightning-bolt       Laden aktiv
+  #   \U000F05A8  white-balance-sunny  Aussentemperatur (Nilan)
+  #   \U000F050F  thermometer          Raumtemperatur (Nilan)
+  #   \U000F058C  water                Luftfeuchte (Nilan)
+  #   \U000F07E4  molecule-co2         CO2 (Nilan)
+  #   \U000F09A1  shower-head          Warmwasser (Nilan)
+  #   \U000F0210  fan                  Lueftungsstufe (Nilan)
+  #   \U000F0026  alert                Warnung / Alarm (Nilan)
+  #   \U000F0084  battery-charging     Speicher laden (Seite Haus)
+  # Seit 25.09.2026 fuer die Statusleiste (Systemzustand):
+  #   \U000F05A9  wifi                 WLAN verbunden
+  #   \U000F05AA  wifi-off             WLAN getrennt
+  #   \U000F07D0  home-assistant       Home Assistant
+  #   \U000F05E1  check-circle-outline Daten frisch
+  #   \U000F05CE  clock-alert-outline  Daten ueberfaellig
+  # Seit 25.09.2026 fuer die Seiten Prognose und Wetter (Wetterbilder in
+  # der Stundenleiste, Sonne auf/unter; Liste der Wetterbilder bei f_wx_l):
+  #   \U000F059C  weather-sunset-up    Sonnenaufgang
+  #   \U000F059B  weather-sunset-down  Sonnenuntergang
   - file:
       type: web
       url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
@@ -138,16 +159,36 @@ font:
     bpp: 4
     glyphs: ["\U000F0D9B", "\U000F1480", "\U000F12A3", "\U000F1903",
              "\U000F05F1", "\U000F1A43", "\U000F072A", "\U000F0199",
-             "\U000F0D3E"]
+             "\U000F0D3E", "\U000F140B", "\U000F05A8", "\U000F050F",
+             "\U000F058C", "\U000F07E4", "\U000F09A1", "\U000F0210",
+             "\U000F0026", "\U000F0084", "\U000F05A9", "\U000F05AA",
+             "\U000F07D0", "\U000F05E1", "\U000F05CE", "\U000F059C",
+             "\U000F059B",
+             "\U000F0599", "\U000F0594", "\U000F0595", "\U000F0590", "\U000F0591", "\U000F0597", "\U000F0596",
+             "\U000F0598", "\U000F067F", "\U000F0592", "\U000F0593", "\U000F067E", "\U000F059D", "\U000F059E", "\U000F0F2F"]
+
+  # --- Wetterbilder gross (Seiten Wetter und Prognose) -------------------
+  # Dieselben Material Design Icons, nur die Lagen, die wx_cond kennt
+  # (.pv-dashboard_page_weather.yaml; Codepunkte aus @mdi/font 7.4.47):
+  #   F0599 sunny  F0594 clear-night  F0595 partly-cloudy  F0590 cloudy
+  #   F0591 fog  F0597 rainy  F0596 pouring  F0598 snowy  F067F snowy-rainy
+  #   F0592 hail  F0593 lightning  F067E lightning-rainy  F059D windy
+  #   F059E windy-variant  F0F2F cloudy-alert (Unwetter)
+  # f_wx_xl fuer "jetzt", f_wx_l fuer die Tagesspalten.
   - file:
       type: web
       url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
-    id: f_icon_l
-    size: 30
+    id: f_wx_xl
+    size: 88
     bpp: 4
-    glyphs: ["\U000F0D9B", "\U000F1480", "\U000F12A3", "\U000F1903",
-             "\U000F05F1", "\U000F1A43", "\U000F072A", "\U000F0199",
-             "\U000F0D3E"]
+    glyphs: ["\U000F0599", "\U000F0594", "\U000F0595", "\U000F0590", "\U000F0591", "\U000F0597", "\U000F0596", "\U000F0598", "\U000F067F", "\U000F0592", "\U000F0593", "\U000F067E", "\U000F059D", "\U000F059E", "\U000F0F2F"]
+  - file:
+      type: web
+      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: f_wx_l
+    size: 44
+    bpp: 4
+    glyphs: ["\U000F0599", "\U000F0594", "\U000F0595", "\U000F0590", "\U000F0591", "\U000F0597", "\U000F0596", "\U000F0598", "\U000F067F", "\U000F0592", "\U000F0593", "\U000F067E", "\U000F059D", "\U000F059E", "\U000F0F2F"]
 
 
 
@@ -268,6 +309,37 @@ substitutions:
   # warm sein (einzeln +R, +G oder -B). G nur wenig ueber col_bg, B nicht
   # darunter -- sonst faellt B schon bei kleinster Deckkraft (gruenlich).
   col_lit_tail: "0xE83020"
+
+  # --- Fremde Oberflaechen ----------------------------------------------
+  # Zwei Detailseiten lehnen sich an die Oberflaeche des jeweiligen Geraets
+  # an (Wunsch des Nutzers, 24.09.2026). Nur dort verwenden.
+  # evcc: Akzentgruen im Dunkelmodus (--evcc-dark-green in
+  # assets/css/app.css von evcc 0.316.0).
+  col_evcc: "0x0FDE41"
+  # Energiefluss (Seite Haus), ebenda: Speicher --evcc-darker-green,
+  # Einspeisung --evcc-yellow, Netz im Dunkelmodus --bs-gray-medium.
+  col_evcc_battery: "0x0BA631"
+  col_evcc_export: "0xFAF000"
+  col_evcc_grid: "0x93949E"
+  # Nilan CTS700 Touch (Compact P): Toene der Startseite, aus dem Bild in
+  # der Nilan-Bedienungsanleitung Compact P (Version 1.10, 2017-04)
+  # abgelesen -- keine offiziellen Farbwerte. Auf Wunsch des Nutzers
+  # (24.09.2026) steht die Seite auf dem Dashboard-Grund statt auf dem
+  # Nilan-Blaugrau; Haus und Warmwasserkachel sind dafuer abgedunkelt,
+  # damit weisse Schrift traegt (WCAG, gerechnet): Haus 6,5:1, Kachel
+  # 8,2:1. Die Kachel hebt sich vom Haus nur 1,3:1 ab, deshalb der Rand
+  # im hellen Nilan-Graublau. Sonne gelb, runde Taste hellgrau wie im
+  # Bedienteil.
+  col_nilan_house: "0x2E6B1E"
+  col_nilan_tank: "0x34526A"
+  col_nilan_tank_edge: "0x6C92A5"
+  col_nilan_sun: "0xF6E70D"
+  col_nilan_button: "0xBFC4CA"
+
+  # --- Systemzustand -----------------------------------------------------
+  # Nach so vielen Sekunden ohne neue Werte gilt eine Quelle als
+  # ueberfaellig (Symbol gelb, eine Meldung). 300 = 5 min.
+  data_stale_s: "300"
 
   # --- Abstaende und Radien --------------------------------------------
   # Aussenrand 4 px. Das Panel hat einen physischen Rahmen, ein zusaetzlicher

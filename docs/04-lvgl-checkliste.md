@@ -30,7 +30,7 @@ Verfügbare Seitenhöhe: **668 px** (y 76 bis y 744) -- zwischen Statusleiste,
 der dauerhaft eingeblendeten Meldungszeile und der Reiterleiste. Seiteninhalt
 beginnt bei y 84 (Dokument 03).
 
-**Die zwölf Schriften des Projekts.** `size:` steht in
+**Die vierzehn Schriften des Projekts.** `size:` steht in
 `.pv-dashboard_utility.yaml` -- das ist die Stellschraube. `line_height` ist der
 **vierte** Parameter von `font::Font(...)` im erzeugten Schriftcode
 `.esphome/build/pv-dashboard-sim/src/main.cpp` -- damit wird gerechnet. Beide
@@ -50,8 +50,9 @@ gelten auch am Gerät. Abgelesen am 20.09.2026:
 | `f_bar` | 22 | 29 | direkt am Widget -- Statusleiste (`lbl_status_left`, `lbl_date`, `lbl_clock`) |
 | `f_val_l` | 23 | 30 | direkt am Widget |
 | `f_icon` | 24 | 24 | direkt am Widget |
-| `f_icon_l` | 30 | 30 | angelegt, im Repo **nirgends** verwendet |
 | `f_val_xl` | 30 | 39 | direkt am Widget |
+| `f_wx_l` | 44 | 44 | direkt am Widget -- Wetterbilder der Tagesspalten (Prognose, Wetter); abgelesen am 25.09.2026 im shots-Bau |
+| `f_wx_xl` | 88 | 88 | direkt am Widget -- Wetterbild „jetzt“; abgelesen am 25.09.2026 im shots-Bau |
 
 Die Modulbilder sind 24 px hoch. Bei einer neuen Schrift den Wert ebenso
 nachsehen, nicht schätzen. Zum Auffrischen
@@ -63,7 +64,7 @@ mehr:** neu ablesen, nicht hochrechnen.
 **Und die Änderung bleibt nie lokal.** Die Schriften stehen genau einmal in
 `.pv-dashboard_utility.yaml`, einem gemeinsamen Package von Gerät und Simulator.
 Über Theme und `style_definitions` (Spalte „Weg zum Widget") hängen sie an
-**allen sieben Seiten**, nicht nur an der, wegen der geändert wurde. Ein
+**allen elf Seiten**, nicht nur an der, wegen der geändert wurde. Ein
 geändertes `size:` verschiebt jede Zeile, die diese Schrift benutzt. Danach
 Pflicht, in dieser Reihenfolge: neu kompilieren, `line_height` neu ablesen,
 **jede** betroffene Kastenhöhe mit der Formel oben neu rechnen und alles neu
@@ -74,7 +75,7 @@ Theme `f_text`, über die Stile `st_label` (`f_label`) und `st_unit`/`st_sub`
 (`f_unit`), direkt am Widget `f_val_xl`, `f_val_l`, `f_val_m`, `f_val_s`,
 `f_icon` und einmal `f_text_s`. `f_bar` und `f_alert` gehören zu den Leisten im
 `top_layer` und liegen damit über **jeder** Seite. Vor dem Ändern klären, welche
-davon gemeint ist -- `f_text` und `f_unit` treffen alle sieben Seiten.
+davon gemeint ist -- `f_text` und `f_unit` treffen alle elf Seiten.
 
 Die Rechnung hat schon zweimal einen Fehler abgefangen, den sonst erst der
 Screenshot gezeigt hätte. Beispiel (Hausnetz-Kasten im Schema): `24 + 20 + 39 + 17 = 100`, plus `3 x pad_row 4 =
@@ -112,12 +113,15 @@ Deshalb trägt jede Zeile der Meldungsliste ein verstecktes Kind 5 mit
 seinen Text von außen bekommen, ohne dass das Layout es merkt. Zwei Pflichten
 folgen daraus:
 
-- Wer einen Standard im Paket **oder** einen Wert in `pv-dashboard.yaml` ändert,
-  misst die neue Breite und rendert neu. Hinter jeder Substitution steht die
+- Wer einen Standard im Paket **oder** einen Wert in `.pv-dashboard_anlage.yaml`
+  ändert, misst die neue Breite und rendert neu. Hinter jeder Substitution steht die
   gemessene Breite des Werts und die verfügbare Breite des Labels.
 - Wer die **Breite eines Kastens** ändert, zieht diese Zahlen in
-  `pv-dashboard.yaml` und im Standardblock des Pakets nach. Sie sind sonst
-  stillschweigend falsch und die nächste Änderung rechnet mit dem alten Wert.
+  `.pv-dashboard_anlage.yaml.example` und im Standardblock des Pakets nach. Sie
+  sind sonst stillschweigend falsch und die nächste Änderung rechnet mit dem
+  alten Wert. Flächen- und Wechselrichternamen stehen zusätzlich auf der Seite
+  PV & Prognose (135 bzw. 284 px); die Zahlen gelten für die engere Stelle,
+  das Schema der Übersicht.
 
 Nachgemessen wird in der Schrift des Labels (`f_unit` 13, `f_text_s` 15,
 `f_label` 13 mit `text_letter_space: 1`): Summe der Glyph-Vorschübe, je Glyph auf

@@ -7,12 +7,36 @@ Was noch aussteht, jeweils mit Entscheidungsstand. Nichts davon wird ungefragt g
 Kurzfassung aller offenen Punkte; die Einzelheiten stehen jeweils im Abschnitt
 darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefragt bauen.
 
-**Offen**
+**Erledigt am 23.09.2026**
 
-- [ ] **Prüfen, wie `pv-dashboard.yaml` die eigenen Werte hält.** Die Datei ist
-      versioniert und steht mit Demo-Werten auf `main`; die eigenen Werte bleiben nur
-      so lange auf dem Rechner, wie sie nicht mitcommittet werden. Siehe „Was das Repo
-      über die Anlage verrät".
+- [x] **Eigene Werte aus `pv-dashboard.yaml` herausgelöst.** Beschriftungen und Tarife
+      stehen in `.pv-dashboard_anlage.yaml`, die in `.gitignore` steht; im Repo liegt
+      nur die Vorlage. Siehe „Was das Repo über die Anlage verrät".
+- [x] **Detailseite PV & Prognose gebaut.** Siehe „Detailseiten".
+
+**Erledigt am 24.09.2026**
+
+- [x] **Detailseiten Wallboxen, Wärmepumpe und Haus gebaut**, auf Zuruf des Nutzers.
+      Siehe „Detailseiten".
+- [x] **Wallboxen nach evcc, Wärmepumpe nach dem Nilan-Bedienteil umgebaut**, auf
+      Wunsch des Nutzers; seine Wärmepumpe ist eine Nilan Compact P.
+
+**Erledigt am 25.09.2026** (nach dem Projekt-Review, auf Zuruf des Nutzers)
+
+- [x] **Seite Netz und Zähler** (Shelly Pro 3EM, Einspeisegrenze, Zählerstände,
+      Netzvorgaben) und **Seite Statistik** (Woche, Monat, Jahr). Siehe „Netz,
+      Zähler und Netzvorgaben“ und Dokument 03.
+- [x] **Systemstatus und Alter der Daten**: Symbole oben rechts, Systemfenster,
+      Meldung bei veralteten Werten. Siehe „Systemstatus“.
+- [x] **Wechselrichter-Status mit Fehlertext** (`pv_status`).
+- [x] **Geldrechnung Tagesertrag** (`money_update`), Werte als globals und
+      Sensoren für Home Assistant. Siehe „Geldwerte“.
+- [x] **Haus der Wärmepumpenseite aus Flächen** statt aus `images/house.png`;
+      Bild und Schrift `f_icon_l` entfernt, Kommentare zu `!secret` berichtigt.
+- [x] **Nilan: klassisches Bedienteil** (zwei Textzeilen) bestätigt, Registersatz
+      entsprechend umgestellt; die Seite bleibt grafisch.
+- [x] **Seiten Prognose (Solcast) und Wetter (DWD)**, auf Zuruf des Nutzers. Siehe
+      „Prognose und Wetter“. Menüleiste mit elf Reitern, der PV-Reiter heißt „PV“.
 
 **Entschieden, nicht zu tun**
 
@@ -27,15 +51,15 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
       Eine Strecke kann drei Packs führen (Master/Slave), aber nur bei 0x25; die
       Topologie nicht raten.
 - [ ] **`check_uart_settings` in `nkinnan/esphome-pace-bms`** — der abgekündigte Aufruf
-      steht noch drin, das Repo ruht seit 11.12.2025. Auf ein Update zu warten ist
-      vermutlich keine Strategie; ab ESPHome 2027.3.0 bricht der Build.
+      steht noch drin, das Repo ruht seit 11.12.2025; ab ESPHome 2027.3.0 bricht der
+      Build. Ein Patch liegt seit 23.09.2026 in `patches/`, eingesetzt wird er mit
+      dem BMS (Anleitung unter „BMS: serielle Anbindung").
 
 **Vertagt (Entscheidung liegt vor, Zeitpunkt offen)**
 
-- [ ] **Echte Daten anbinden** — vier Anbindungspunkte plus `WATT[37]`. Am 20.09.2026
+- [ ] **Echte Daten anbinden** — über die Skript-Schnittstellen der Seiten (Dokument 03)
+      plus `WATT[37]`. Am 20.09.2026
       vertagt: die neuen Geräte laufen beim Nutzer noch nicht.
-- [ ] **Vier Detailseiten bauen** — PV, Wallboxen, Wärmepumpe, Haus. Am 20.09.2026
-      erneut vertagt.
 - [ ] **Kamera** — blockiert durch esphome/esphome#16944. Am 20.09.2026 vertagt, der
       PR-Stand ist seit 11.09.2026 nicht nachgeprüft.
 
@@ -55,19 +79,89 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 
 ## Detailseiten
 
-Vier Seiten sind nur Platzhalter: `page_pv`, `page_wallbox`, `page_heatpump`,
-`page_house` tragen je ein einzelnes zentriertes Label. Jede liegt in ihrer
-eigenen Datei `.pv-dashboard_page_*.yaml`, eingebunden vom `packages:`-Block in
-`.pv-dashboard_ui.yaml`.
+Alle vier Detailseiten sind gebaut. Jede liegt in ihrer eigenen Datei
+`.pv-dashboard_page_*.yaml`, eingebunden vom `packages:`-Block in
+`.pv-dashboard_ui.yaml`. **PV & Prognose ist seit dem 23.09.2026 gebaut**, auf
+Zuruf des Nutzers („mit der ersten anfangen"): Wechselrichter und Flächen je
+Energiekreis, darunter der Tagesverlauf Ist gegen Prognose mit vier Kennzahlen
+(Aufbau in Dokument 03). Die Schnittstelle ist `pv_update(inv, pv, power, energy)`,
+bis Sensoren daran hängen stehen Striche. Angezeigt werden alle acht Plätze, also
+die sechs Dachflächen und die zwei Einzelmodule am Mini-WR — die Festlegung
+unten nennt nur „sechs Strings"; das ist eine Annahme, die der Nutzer bestätigen
+oder ändern kann.
+
+**Wallboxen, Wärmepumpe und Haus sind seit dem 24.09.2026 gebaut**, auf Zuruf
+des Nutzers („die weiteren Detailseiten bauen“). Aufbau in Dokument 03, die
+Schnittstellen (`wallbox_*`, `heatpump_*`, `house_*`) ebenda;
+bis Sensoren daran hängen, stehen Striche. Annahmen, die der Nutzer bestätigen
+oder ändern kann:
+
+- **Wallboxen:** Inhalt nach der Ladepunkt-Karte von evcc 0.316.0 (Modus,
+  Leistung mit Phasen, Geladen, Sonnenanteil, Ladedauer, Fahrzeug, Status,
+  Ladestand mit Reichweite, Ladeplan, Ladelimit) plus Monatswerte wie unter
+  „Ladevorgänge“. Angenommen ist, dass evcc die Werte liefert (über Home
+  Assistant oder MQTT); welche Felder die Anbindung wirklich bekommt, steht
+  erst dann fest. Kosten und Durchschnittspreis setzen Tarife in evcc voraus.
+- **Wärmepumpe:** Nilan Compact P mit dem **klassischen Bedienteil CTS700**
+  (zwei Textzeilen, Angabe des Nutzers vom 25.09.2026). Die Seite bleibt auf
+  seinen Wunsch grafisch, im Aufbau der Startseite des Touch-Bedienteils; die
+  Farben sind aus dem Bild der Nilan-Anleitung abgelesen, keine offiziellen
+  Werte. Das Haus ist seit dem 25.09.2026 aus LVGL-Flächen gebaut (ein um 45°
+  gedrehtes Quadrat, gestaucht, darunter die Wand), nicht mehr aus einem Bild. Die
+  Compact P heizt Luft und Warmwasser und hat keinen Heizwasserkreis:
+  **Vorlauf, Rücklauf und COP der Festlegung vom 30.07.2026 entfallen**, dafür
+  Raumtemperatur, Feuchte, CO2, Lüftungsstufe, Zu- und Fortluft, Bypass,
+  Sommer/Winter und Kompressorbetrieb. Leistungsaufnahme und Tagesverbrauch
+  sind elektrisch und kommen nicht aus der Nilan-Steuerung selbst, sondern
+  vermutlich von einem Zähler (offen). Auf Wunsch des Nutzers steht die Seite
+  auf dem Dashboard-Grund; Haus und Warmwasserkachel sind dafür abgedunkelt
+  (weiße Schrift 6,5 bzw. 8,2 : 1, gerechnet).
+- **Nilan-Modbus (Recherche 24./25.09.2026, nicht am Gerät geprüft).** Mit dem
+  klassischen Bedienteil gilt der **ältere CTS700-Satz (Rev. 2.01)**, Adressen
+  1xxx/2xxx/4xxx/5xxx. In `src/cts700Data.ts` von github.com/matej/homebridge-nilan
+  (am 25.09.2026 nachgelesen) stehen: Betriebsart der Anlage 1047 (0 Idle,
+  1 Auto, 2 Verlängert, 3 Manuell, 4 LON, 5 Service), Pause 4727, gewünschte
+  Lüftungsstufe 4747, Raum-Sollwert 4746 (°C × 10), Außen 5152, Feuchte 4716,
+  Zuluftventilator 4699 (Abluft 4700 laut `docs/cts700-diagnostics.md` dort),
+  Filter-Intervall Zu-/Abluft 1326/1327 und verstrichene Tage 1328/1329,
+  Warmwasser oben/unten 5162/5163, Warmwasser-Sollwert 5548, Lüftungsmodus
+  2402, Regelmodus 5432, Softwarestand 5065. **Nicht in dieser Quelle belegt**
+  und deshalb offen, bis jemand am Gerät liest: Zuluft-, Abluft- und
+  Fortlufttemperatur (in der Recherche vom 24.09.2026 als 5153 bis 5155
+  notiert), Enteisung (5450), Legionellenschutz (4748) und die
+  Sommer/Winter-Umschalttemperatur (2406); Bypass, Kompressor und
+  Zusatzheizung sind gar nicht gefunden. **CO2, eine Jahreszeit und ein
+  Alarmregister gibt es in diesem Satz nicht**: Die CO2-Gruppe bleibt ohne Wert
+  ausgeblendet, Jahreszeit und Warnsymbol bleiben leer, solange keine andere
+  Quelle sie liefert (Home Assistant kann die Jahreszeit aus Außentemperatur
+  und Umschaltwert ableiten).
+  Die zwei anderen Sätze gelten damit **nicht**: der neuere Satz des
+  Touch-Bedienteils („CTS700 Modbus User Guide“, 2018, Adressen 2xxxx) und der
+  CTS602-Satz (github.com/veista/nilan, laut dessen README nicht für CTS700).
+  Eine Leistungs- oder Energieangabe hat keiner der drei Sätze.
+  Der Wärmepumpen-Kasten im Schema zeigt deshalb statt COP die
+  Warmwassertemperatur („kW · WW 51°C“, gesetzt von `heatpump_update`).
+- **Haus:** Umgebaut nach dem Energiefluss von evcc (Wunsch des Nutzers,
+  24.09.2026). Annahmen: Alle Leistungen gelten für den Hausnetz-Kreis, die
+  Volleinspeisung bleibt außen vor. „Verbrauch“ ist wie in evcc alles außer
+  Ladepunkten und Speicher, also mit Wärmepumpe; „Verbrauch jetzt“ zählt die
+  Ladepunkte dazu. Die Herkunft rechnet die Seite wie evcc (erst PV, dann
+  Speicher, Rest Netz). Preise kommen als Werte herein (Mischpreis des
+  Verbrauchs wie in evcc). Die Grundlast kommt als eigener Wert, die Seite
+  rechnet sie nicht aus. **Offen:** Die 24-Stunden-Reihe wird nicht
+  gespeichert und ist nach einem Neustart leer, bis die Quelle sie neu
+  liefert; soll sie wie `day_curve` im NVS stehen, braucht sie eine eigene
+  `text`-Entität.
 
 Geplanter Inhalt (Festlegung 30.07.2026):
 
-- **PV & Prognose** — sechs Strings einzeln, Volleinspeise-Kreis getrennt, Prognose gegen Ist-Verlauf
-- **Wallboxen** — beide: Modus, Ladeleistung, geladene Energie, Fahrzeug-SoC
-- **Wärmepumpe** — Betriebsmodus, Vorlauf/Rücklauf, COP, Leistungsaufnahme, Tagesverbrauch
-- **Haus** — Backofen, Waschmaschine, Spülmaschine, Trockner einzeln, plus Grundlast
+- **PV & Prognose** — sechs Strings einzeln, Volleinspeise-Kreis getrennt, Prognose gegen Ist-Verlauf (gebaut 23.09.2026)
+- **Wallboxen** — beide: Modus, Ladeleistung, geladene Energie, Fahrzeug-SoC (gebaut 24.09.2026, nach evcc erweitert)
+- **Wärmepumpe** — Betriebsmodus, Vorlauf/Rücklauf, COP, Leistungsaufnahme, Tagesverbrauch (gebaut 24.09.2026; für die Compact P ohne Vorlauf/Rücklauf/COP, siehe oben)
+- **Haus** — Backofen, Waschmaschine, Spülmaschine, Trockner einzeln, plus Grundlast (gebaut 24.09.2026, nach evcc um Energiefluss, Verbrauch jetzt und 24 Stunden erweitert)
 
-**Entscheidungsstand:** bewusst vertagt. Der Nutzer hat am 30.07.2026 ausdrücklich gesagt, die
+**Entscheidungsstand:** erledigt, alle vier gebaut (23. und 24.09.2026). Vorher
+bewusst vertagt: Der Nutzer hatte am 30.07.2026 ausdrücklich gesagt, die
 Detailseiten kommen später und sollen nicht ungefragt gebaut werden. Am 12.09.2026 für die
 Verläufe wiederholt: Ringe, Tagesbalken und Akzente zuerst nur in der Übersicht, die
 Detailseiten PV, Haus, Wallbox und WP bleiben für später.
@@ -75,9 +169,10 @@ Detailseiten PV, Haus, Wallbox und WP bleiben für später.
 **Schnittstelle je Seite.** Wird eine gebaut, bekommt sie ihre **eigene**
 Skript-Schnittstelle nach dem Muster von `storage_update(...)`: ein Skript mit benannten
 Parametern, das nur Widgets füllt. Bis Sensoren daran hängen, steht in den Widgets das
-Strichmuster aus Dokument 01 (Regel „Fehlender Wert") — keine erfundenen Zahlen. Für die
-Wallbox-Seite hieße das Parameter für Modus, Ladeleistung, geladene Energie und
-Fahrzeug-SoC; der Aufruf kommt erst mit den Sensoren. Was beim Anlegen einer Seite sonst
+Strichmuster aus Dokument 01 (Regel „Fehlender Wert") — keine erfundenen Zahlen. So
+gebaut sind `pv_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`,
+`heatpump_extra` und die fünf `house_*`-Skripte; die
+Aufrufe kommen erst mit den Sensoren. Was beim Anlegen einer Seite sonst
 dazugehört (Kachelkonvention, `scrollable`, nav-Knopf, Screenshots, Flussanimation), steht
 in Dokument 03 unter „Neue Detailseite".
 
@@ -92,8 +187,8 @@ Definitionen in Dokument 01, Abschnitt „Autarkie".
 ## Was das Repo über die Anlage verrät
 
 Seit dem 20.09.2026 sind alle anlagenabhängigen Beschriftungen und die drei Tarife
-`substitutions` mit neutralen Demo-Werten; die eigenen Werte stehen in
-`pv-dashboard.yaml` (Dokument 01). Am selben Tag sind auf Wunsch des Nutzers auch die
+`substitutions` mit neutralen Demo-Werten; die eigenen Werte stehen seit dem
+23.09.2026 in `.pv-dashboard_anlage.yaml` außerhalb des Repos (Dokument 01). Am selben Tag sind auf Wunsch des Nutzers auch die
 Namen nachgezogen worden, die eine Beschriftungsänderung überdauern — **erledigt**:
 
 - **Die Widget-IDs der Übersichtsseite** nannten Fabrikat und echte Dachflächen.
@@ -106,7 +201,7 @@ Namen nachgezogen worden, die eine Beschriftungsänderung überdauern — **erle
   und über `tools/flow_animation.py`). Die neun Screenshots sind nach dem
   Umbenennen unverändert — IDs werden nicht gezeichnet.
 - **Der Tarifschlüssel des Volleinspeise-Kreises** nannte das Fabrikat und heißt
-  jetzt `tarif_volleinspeisung_ct` — in `pv-dashboard.yaml`, im Standard in
+  jetzt `tarif_volleinspeisung_ct` — in der Anlagen-Datei, im Standard in
   `.pv-dashboard_page_overview.yaml` und in Dokument 01.
 - **Die Dokumente beschrieben die echte Anlage** — Fabrikate, Typenbezeichnungen,
   echte Dachflächennamen, Speichergröße, Förderdauer, das BMS-Kit. Dokument 01, die
@@ -114,11 +209,16 @@ Namen nachgezogen worden, die eine Beschriftungsänderung überdauern — **erle
   Aufbau. Was zur Anlage des Nutzers gehört, steht in seinen privaten Notizen
   außerhalb des Repos.
 
-**Achtung, `pv-dashboard.yaml` ist versioniert.** Die Datei steht auf `main`, dort mit
-den Demo-Werten (`name_pv_1: "Dach Süd"`, `tarif_bezug_ct: "30.0"` und so fort). Die
-eigenen Werte bleiben also nur so lange auf dem Rechner, wie die Datei nicht
-mitcommittet wird; ein `git add -A` schiebt sie mit. Wie das dauerhaft abgesichert
-werden soll, ist offen.
+**Erledigt: die eigenen Werte liegen nicht mehr in einer versionierten Datei.** Bis
+zum 23.09.2026 standen sie im Block „HIER BESCHREIBEN SIE IHRE ANLAGE“ von
+`pv-dashboard.yaml`, die versioniert ist; ein `git add -A` hätte sie mitgeschoben.
+Seitdem stehen sie in `.pv-dashboard_anlage.yaml`, die `.gitignore` ausschließt;
+`pv-dashboard.yaml` fügt sie mit `<<: !include` in ihre `substitutions` ein, der
+Vorrang vor den Standards bleibt derselbe (Dokument 01). Im Repo liegt nur die
+Vorlage `.pv-dashboard_anlage.yaml.example` mit den Demo-Werten. Fehlt die eigene
+Datei, bricht `esphome config` mit „Could not find file“ ab — wie bei einer
+fehlenden `secrets.yaml`. `pv-dashboard.yaml` selbst bleibt versioniert, damit
+Änderungen an Paketliste und `min_version` weiter beim Nutzer ankommen.
 
 **Die Commit-Historie bleibt, wie sie ist.** Ältere Commits tragen den Stand vor
 dieser Generalisierung. Am 20.09.2026 hat der Nutzer nach Vorlage der Einzelheiten
@@ -139,17 +239,122 @@ Seit dem 20.09.2026 lädt `pv-dashboard.yaml` die Packages aus dem GitHub-Repo
 (`ref: main`, `refresh: 1d`); die lokale Variante steht auskommentiert als
 Rückfall daneben (Dokument 03).
 
-Offen bleibt die Entscheidung, ob das die Mühe wert ist: Danach baut das
-Gerät aus dem geschobenen Stand, jede Änderung braucht erst einen `push`, und
-`esphome config` zeigt die Werte aus `secrets.yaml` nicht mehr als
-`!secret '<name>'`. Beides ist in Dokument 03 belegt. Solange der Block aus ist,
-ändert sich für den Nutzer nichts — die `!include`-Zeilen bleiben in Kraft.
+Folgen, beide in Dokument 03 belegt: Das Gerät baut aus dem geschobenen Stand,
+jede Änderung braucht erst einen `push`; und `esphome config` zeigt die Werte aus
+`secrets.yaml` aufgelöst statt als `!secret '<name>'` — die Ausgabe deshalb nie in
+eine Datei umleiten und nie weitergeben.
+
+## Netz, Zähler und Netzvorgaben
+
+Seite `page_grid`, gebaut am 25.09.2026 auf Zuruf des Nutzers („Fehlende Infos
+können wir vom Shelly Pro 3EM nehmen“). Aufbau in Dokument 03.
+
+**Shelly Pro 3EM (Hausanschluss).** Die Phasenwerte sind nach `EM.GetStatus`
+benannt (Shelly-API-Dokumentation Gen2, Komponente EM): `a_voltage`,
+`a_current`, `a_act_power`, `a_aprt_power`, `a_pf` (b, c ebenso), `n_current`,
+`total_act_power`; die Zählerstände nach `EMData.GetStatus`
+(`total_act`, `total_act_ret`). Vorzeichen: positiv = Bezug. Die Frequenz
+liefert je nach Firmware `a_freq` usw.; nicht am Gerät geprüft. Angebunden
+wird am einfachsten über die Home-Assistant-Integration des Shelly; Modbus TCP
+kann der Shelly auch, dort ist die Adresszählung (ab 0 oder 1) in den Quellen
+nicht eindeutig.
+
+**Rechtslage (Recherche 25.09.2026, keine Rechtsberatung; was gilt, sagt der
+Netzbetreiber).** Quellen: EEG 2023 §§ 9, 51, 51a und EnWG § 14a auf
+gesetze-im-internet.de, Stand der Änderungen durch das „Solarspitzengesetz“
+vom Februar 2025.
+
+- **60 % ist für Inbetriebnahme 2026 richtig.** § 9 Abs. 2 EEG: Anlagen unter
+  100 kW mit Einspeisevergütung, die ohne intelligentes Messsystem und
+  Steuerbox in Betrieb gehen, dürfen höchstens 60 % der installierten Leistung
+  einspeisen, **bis** Messsystem und Steuerung eingebaut und getestet sind.
+  Danach fällt die Grenze. `feed_limit_pct` steht deshalb auf 60.
+- **Negative Preise:** Neue Anlagen bekommen für Viertelstunden mit negativem
+  Börsenpreis keine Vergütung (§ 51); die ausgefallenen Zeiten werden nach
+  § 51a am Ende des Förderzeitraums angehängt. Kleine Anlagen ohne
+  intelligentes Messsystem sind davon ausgenommen **bis zum Ende des Jahres,
+  in dem es eingebaut wird** (Übergang, deshalb `neg_paid`).
+- **§ 14a EnWG:** Steuerbar sind Wallboxen, Wärmepumpen und netzladende
+  Speicher über 4,2 kW; im Signal darf der Netzbetreiber auf mindestens 4,2 kW
+  je Gerät drosseln (bei einem Energiemanagement für mehrere Geräte nach
+  Formel mehr, für zwei Wallboxen rund 7,6 kW). Die **Wallboxen fallen
+  darunter**, die Nilan Compact P mit ihrer kleinen Leistungsaufnahme
+  vermutlich nicht (Einschätzung, nicht geprüft).
+
+**Beide Kreise zusammen oder nur einer?** Am 25.09.2026 im Gesetzestext
+nachgelesen (§ 9 EEG auf gesetze-im-internet.de): Begrenzt wird „am
+Verknüpfungspunkt“ mit dem Netz auf 60 % der installierten Leistung, und nach
+§ 9 Abs. 3 gelten mehrere Solaranlagen auf demselben Grundstück oder Gebäude,
+die innerhalb von zwölf aufeinanderfolgenden Kalendermonaten in Betrieb gehen,
+für die installierte Leistung als **eine** Anlage. Hängen beide Kreise am selben
+Hausanschluss und gehen beide 2026 in Betrieb, ist die Summe richtig: `pv_kwp` =
+Modulleistung beider Kreise, gemessen wird die Einspeisung am Hausanschluss (so
+rechnet die Seite). Anders nur, wenn ein Kreis mehr als zwölf Monate früher in
+Betrieb ging (dann zählt er nicht mit) oder einen eigenen Netzanschluss hat.
+Ab zusammen 25 kW verlangt § 9 Abs. 2 Nr. 2 zusätzlich eine Einrichtung, mit
+der der Netzbetreiber die Einspeisung fernsteuern kann. Keine Rechtsberatung.
+
+**Offen:** Was der Wechselrichter als „abgeregelt heute“ liefert, hängt am Fabrikat.
+
+## Prognose und Wetter
+
+Seiten `page_forecast` und `page_weather`, gebaut am 25.09.2026 auf Zuruf des
+Nutzers. Aufbau und Skripte in Dokument 03.
+
+**Prognose (Solcast).** Welche Werte, hat der Nutzer vorgegeben: die, die sein
+Blueprint `ha-pv-optimizer` (github.com/Bascht74/ha-pv-optimizer, am 25.09.2026
+gelesen) benutzt. Das sind aus der Solcast-Integration (HACS) der Sensor „heute“
+mit dem Attribut `detailedForecast` (Halbstunden mit `pv_estimate`,
+`pv_estimate10`, `pv_estimate90` in kW), „verbleibend heute“, „aktuelle Leistung“,
+„nächste Stunde“ (mit `estimate10`) und die Folgetage morgen, Tag 3, Tag 4 (mit
+`estimate10`, optional `detailedForecast`). Die Seite zeigt die Rohwerte P10, P50,
+P90; die Mischung aus P50 und P10, mit der der Blueprint plant, rechnet sie nicht
+nach. Spitze mit Uhrzeit, Tage 5 bis 7 und die API-Zähler benutzt der Blueprint
+nicht; sie stehen hier, weil die Integration sie anbietet (Annahme: Sensoren
+„Peak forecast“, „Peak time“, „API used“, „API limit“; Namen am Gerät prüfen).
+
+**Wetter (DWD).** Quelle ist die HACS-Integration „DWD Weather“ des Nutzers. Die
+Skripte sind nach den Feldern der Home-Assistant-Wettervorhersage benannt
+(`condition`, `temperature`, `templow`, `precipitation`,
+`precipitation_probability`, `wind_speed`, `wind_bearing`, `wind_gust_speed`,
+`cloud_coverage`, `humidity`, `pressure`), geholt über `weather.get_forecasts`
+(stündlich und täglich). **Nicht geprüft:** unter welchem Namen die Integration
+die Sonnenscheindauer liefert und ob stündlich oder nur täglich; Warnungen kommen
+aus der eigenen Integration „DWD Weather Warnings“ (Warnstufe und Text). Der
+Blueprint benutzt das Wetter nur für die Temperatur; Wetterbilder, Regen und Wind
+sind für die Anzeige dazugekommen.
+
+## Systemstatus
+
+Seit dem 25.09.2026. Oben rechts in der Statusleiste drei Symbole: WLAN,
+Verbindung zu Home Assistant (API), Daten aktuell. Ein Tipp öffnet das
+Systemfenster (`sys_panel`): WLAN, Home Assistant, Laufzeit, ESPHome-Version,
+Grenze für veraltete Werte und das Alter der letzten Werte je Seite (PV,
+Speicher, Wallboxen, Wärmepumpe, Haus, Netz, Prognose, Wetter). Jedes Update-Skript stempelt
+`data_seen[n]`; `sys_refresh` läuft alle 10 s. Älter als `data_stale_s`
+(300 s, `.pv-dashboard_utility.yaml`) färbt das Symbol gelb und legt **einmal**
+je Quelle eine Warnung in die Meldungsliste. Solange eine Quelle noch nie
+geliefert hat, gilt sie nicht als veraltet (sonst stünden vor der Anbindung
+sechs Warnungen da).
+
+## Geldwerte
+
+Seit dem 25.09.2026 rechnet `money_update(full_feed, surplus, self_use,
+grid_in)` in der Übersicht aus den drei Tarifen (Dokument 01): Förderung =
+Volleinspeisung × Tarif + Überschuss × Tarif, Gespart = Eigenverbrauch ×
+Bezugstarif, Bezug = Netzbezug × Bezugstarif, Ertrag = Förderung + Gespart −
+Bezug. Auf Wunsch des Nutzers stehen die Werte als **globals**
+(`money_subsidy`, `money_saved`, `money_import`, `money_total`) für andere
+Lambdas bereit und als **Sensoren** („Ertrag heute“, „Förderung heute“,
+„Ersparnis heute“, „Bezugskosten heute“, Einheit €) in Home Assistant. Die
+Energien kommen von außen; die Seite Statistik nimmt den Ertrag eines
+Zeitraums als fertigen Wert (`stats_update`).
 
 ## Echte Daten anbinden
 
-Übersicht, Speicher und Meldungen sind gebaut, die Datenquellen fehlen. Für diese drei
-Flächen gibt es genau vier Anbindungspunkte. Sie decken die **Detailseiten nicht** ab —
-jede neue bringt ihre eigene Schnittstelle mit (siehe oben).
+Alle Seiten sind gebaut, die Datenquellen fehlen. Für Übersicht, Speicher und
+Meldungen gibt es die vier Anbindungspunkte unten; jede Detailseite bringt ihre eigene
+Schnittstelle mit (Dokument 03, „Skripte und ihre Schnittstellen“).
 
 **Tagesreihe.** In `record_hour` steht eine einzige auskommentierte Quellzeile für die
 Erzeugung der abgelaufenen Stunde in kWh: `// kwh = id(<Erzeugungssensor>).state;`. Solange
@@ -168,6 +373,13 @@ nie den Strom samt Vorzeichen.
 
 **Meldungen.** `alert_push(severity, device, text)` — Aufruf später aus BMS-, Modbus- und
 HA-Fehlerzuständen. Die Liste liegt nur im RAM und ist nach einem Neustart leer.
+`pv_status` und `sys_refresh` rufen es schon selbst (Störung eines Wechselrichters,
+veraltete Werte).
+
+**Gerätewerte vom Nutzer.** Die Beschriftungen und Leistungen der eigenen Anlage
+(`name_*`, `pv_kwp`, Tarife) trägt der Nutzer in `.pv-dashboard_anlage.yaml` ein und
+misst sie dort gegen die Breiten aus Dokument 01; die Demo-Werte im Repo sind rund
+und erfunden.
 
 **Flussanimation.** Die Leistungen je Teilstrecke stehen in `WATT[]` — „hier binden später die
 Sensoren an". Das Feld hat **37 Einträge**, einen je Teilstrecke; die Reihenfolge erzeugt
@@ -211,6 +423,37 @@ ein Patch der Weg ist.
 
 `external_components`, `pace_bms` und `modbus` liegen auskommentiert bereit — erst aktivieren,
 wenn das BMS angeschlossen ist, sonst laufen nur Timeouts ins Log.
+
+**Patch für `check_uart_settings` (vorbereitet 23.09.2026).** Die Komponente wird nicht
+direkt von GitHub eingebunden, sondern als gepatchte lokale Kopie; ein Fork auf GitHub
+ist bewusst nicht angelegt. Der Patch `patches/pace_bms-check_uart_settings.patch`
+streicht den Aufruf in `PaceBmsMaster::dump_config()` und ersetzt ihn durch einen
+Kommentar. Mehr braucht es nicht: `__init__.py` der Komponente prüft RX und TX schon
+über `uart.final_validate_device_schema()`, Baudrate, Parität, Daten- und Stoppbits
+setzt der Autor dort absichtlich nicht durch. Der gestrichene Aufruf verlangte 9600
+Baud und hätte bei den 115200 von Port D nur einen falschen Fehler ins Log geschrieben.
+Bewusst **nicht** in den Python-Teil übernommen: Stoppbits vergleicht
+`final_validate_device_schema` als Zahl (`1`), `usb_uart` führt sie aber als Text
+(`"1"`) — mit `stop_bits=1` lehnt `esphome config` die FT4232-Konfiguration ab
+(„requires 1 stop bits“, erprobt mit 2026.9.0, 23.09.2026).
+
+Einsetzen, aus dem Projektordner (`.pace-bms/` steht in `.gitignore`):
+
+```
+git clone https://github.com/nkinnan/esphome-pace-bms .pace-bms
+git -C .pace-bms checkout 49985c4
+git -C .pace-bms apply ../patches/pace_bms-check_uart_settings.patch
+```
+
+`49985c4` ist der jüngste Commit vom 11.12.2025, gegen den der Patch geschrieben ist;
+danach in `.pv-dashboard_core.yaml` den `external_components`-Block mit `type: local`
+einkommentieren. Geprüft am 23.09.2026 in einer Cloud-Sitzung: Der Patch lässt sich
+auf `49985c4` anwenden, und `esphome config` (2026.9.0) nimmt eine Testkonfiguration
+mit ESP32-P4, FT4232 und `pace_bms` auf `uart_bms_rs232` (115200) an. **Nicht geprüft:**
+das Kompilieren — die Umgebung durfte das ESP-IDF nicht laden. Die Änderung ist eine
+reine Streichung eines Aufrufs; ob die Komponente sonst unter 2026.9.0 baut, zeigt erst
+der Device Builder. Rührt sich das Repo des Autors, zuerst dort nachsehen, ob der
+Aufruf upstream verschwunden ist.
 
 **Offen: Anzahl der BMS und Zuordnung zu `bat` 0…2.** `storage_update` erwartet `bat` 0…2,
 also **drei** getrennte Datenquellen für Speicher 1…3 (Dokument 03). Die dokumentierte
@@ -318,9 +561,21 @@ Vom 9.0-Umstieg sind noch **zwei** Punkte offen, beide in Dokument 05 beschriebe
 
 Der LVGL-`list`-Bug ist mit 2026.9.0 erledigt.
 
+**Nicht gebaut, bewusst (25.09.2026):** Meldungen über einen Neustart hinweg speichern
+(NVS-Platz, Quittung nach HA offen) und Steuern vom Panel aus (Wallbox-Modus,
+Nilan-Stufe) — die Knöpfe der Wallbox-Seite zeigen nur an. Jeweils auf Zuruf.
+Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
+
 ---
 
-Stand: 20.09.2026 (Streckenzahlen aus einem Vorschaulauf von
+Stand: 25.09.2026 (Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
+Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
+recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc
+und dem Nilan-Bedienteil umgebaut, Nilan-Register recherchiert); davor
+23.09.2026 (eigene Werte nach `.pv-dashboard_anlage.yaml` verlegt, Seite
+PV & Prognose gebaut, Patch für `check_uart_settings` vorbereitet; davor 20.09.2026:
+Streckenzahlen aus einem Vorschaulauf von
 `tools/flow_animation.py`, Kontrastwerte nachgerechnet; LVGL-`list`-Bug mit 2026.9.0
 erledigt, OTA-Schritt 2 und der Audio-Hardware-Test noch offen; neu aufgenommen: die
 BMS-Zuordnung zu `bat` 0…2; am selben Tag auf die fertige Paketstruktur nachgezogen
