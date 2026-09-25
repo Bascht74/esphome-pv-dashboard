@@ -150,17 +150,17 @@ benutzen sie), die Skripte `sys_refresh` 177, `record_hour` 252 und
 `pages:`-Schlüssel hat der Kern **nicht** — die Seiten bringen ihn mit.
 
 **Jedes Skript liegt bei der Seite, die es benutzt:** `money_update` 163 und
-`redraw_curve` 192 in der Übersicht, `pv_status` 59, `pv_update` 104 und
-`pv_redraw_curve` 151 auf der Seite PV & Prognose, `fc_today` 74, `fc_slots` 109,
+`redraw_curve` 192 in der Übersicht, `pv_status` 65, `pv_update` 119 und
+`pv_redraw_curve` 166 auf der Seite PV & Prognose, `fc_today` 74, `fc_slots` 109,
 `fc_day` 144 und `fc_redraw` 170 in der Prognose, `wx_now` 110, `wx_hour` 160,
-`wx_day` 198, `wx_warning` 241 und `wx_redraw` 262 im Wetter (dazu dort das global
+`wx_day` 198, `wx_warning` 243 und `wx_redraw` 268 im Wetter (dazu dort das global
 `wx_cond` 52, das auch die Prognose benutzt), `storage_update` 49 im Speicher,
 `wallbox_update` 73 und `wallbox_month` 170 bei den Wallboxen, `heatpump_update` 72
 und `heatpump_extra` 145 bei der Wärmepumpe, `house_flow` 85, `house_battery` 279,
 `house_loadpoint` 314, `house_update` 358 und `house_history` 405 im Haus,
 `grid_update` 65, `grid_phase` 113, `grid_meter` 147 und `grid_rules` 176 im Netz,
 `stats_update` 58, `stats_show` 89 und `stats_redraw` 115 in der Statistik,
-`alert_push` 56, `alert_ack` 170 und `alert_refresh` 202 in den Meldungen. Im Kern
+`alert_push` 83, `alert_ack` 259, `alert_clear` 290 und `alert_refresh` 330 in den Meldungen. Im Kern
 bleiben nur `sys_refresh`, `record_hour` und `update_clock`: Sie fassen kein
 Seiten-Widget an, sondern die Tagesreihen beziehungsweise die Leisten und
 Fenster im `top_layer`, und sie werden aus Packages gerufen, die keine Seite
@@ -196,7 +196,7 @@ grep -n '!include'          .pv-dashboard_ui.yaml        # die Seitenreihenfolge
 
 Elf Seiten, Fläche **1280 x 800** (quer). Drei Leisten liegen im `top_layer`, überdecken jede Seite und werden **nie** versteckt: `bar_status` (y 0 bis 44), die Meldungszeile `bar_alert` mit `lbl_alert` (y 44 bis 76) und die Reiterleiste `bar_nav` mit `nav_matrix` (y 744 bis 800).
 
-Die Meldungszeile steht auch ohne Meldung da — `lbl_alert` zeigt dann „Keine Meldungen" bzw. „Keine offenen Meldungen", ein Tipp öffnet die Meldungsseite. Für Seiteninhalt bleiben deshalb **1280 x 668**, y 76 bis y 744: die Höhe, gegen die Regel 1 aus Dokument 04 rechnet.
+Die Meldungszeile steht auch ohne Meldung da — `lbl_alert` zeigt dann „Keine Meldungen" bzw. „Keine offenen Meldungen", ein Tipp öffnet die Meldungsseite. Mit offenen Meldungen zeigt sie die Zahl je Schweregrad, schwerster zuerst, und die jüngste Meldung des höchsten Schweregrads, etwa „2 Störungen · 1 Warnung · Gerät: Text". Der Grund von `bar_alert` ist dann rot (Störung), gelb (Warnung) oder türkis (nur Info) getönt. Für Seiteninhalt bleiben deshalb **1280 x 668**, y 76 bis y 744: die Höhe, gegen die Regel 1 aus Dokument 04 rechnet.
 
 Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — je 8 px Luft zur Meldungszeile und zur Menüleiste. `schema_area` nutzt die Fläche dagegen voll (x 4, y 76, 904 x 668).
 
@@ -207,7 +207,7 @@ Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — j
 In der Statusleiste stehen seit dem 25.09.2026 rechts neben der Mitte drei Symbole (`sys_icons`, x 700, 110 × 30): WLAN, Home Assistant, Daten aktuell. Ein Tipp öffnet das Fenster `sys_panel` im `top_layer` (600 × 520 bei x 340, y 150), ein Tipp darauf schließt es. Inhalt und Regeln in Dokument 06, „Systemstatus“.
 
 - `page_pv` – seit 23.09.2026. Oben zwei Kacheln wie die zwei Energiekreise: links Volleinspeisung (x 4, 322 breit), rechts Hausnetz (x 334, 942 breit); je Wechselrichter eine Gruppe aus Wechselrichterkasten und seinen zwei Flächen, Leistung in W und Tageswert in kWh. Unten dieselbe Teilung: links vier Kennzahlen (Ist heute, Prognose heute, Restprognose, Ist zu Prognose der abgeschlossenen Stunden), rechts der Tagesverlauf mit 16 Balken und Prognoselinie im großen Maßstab. Seit 25.09.2026 zeigt jeder Wechselrichterkasten einen Statuspunkt (grün / rot) und die Temperatur in der Unterzeile; bei Störung wird der Rahmen rot und die Unterzeile zeigt den Fehlertext (`pv_status`). Geometrie und Höhenrechnung im Kopf der Datei.
-- `page_alerts` – Liste `alert_list`, Kopfkachel mit Zähler, Knöpfe „Alle quittieren“ und „Liste leeren“.
+- `page_alerts` – Liste `alert_list`, Kopfkachel mit drei Zählern je Schweregrad (`btn_af_2`/`_1`/`_0`, zugleich Filter: Tippen zeigt nur diesen Schweregrad, erneutes Tippen alle), Knöpfe „Alle quittieren“ und „Liste leeren“. Es stehen nur Meldungen da, deren Ursache noch besteht; gleiche Meldungen (gleiches Gerät, gleicher Text) stehen als eine Zeile mit „×3 seit 08:12“ im Hinweis.
 - `page_wallbox` – seit 24.09.2026, am selben Tag nach dem Vorbild von evcc (0.316.0) umgebaut. Zwei Ladepunkt-Karten je 632 × 512: Kopf mit Name und Modus-Schalter Aus / Smart / Schnell, Sitzungswerte Leistung (mit Blitz und drei Phasenstrichen), Geladen, Sonne, Ladedauer; nach der Trennlinie Fahrzeug und Statuszeile, Ladestandsbalken mit dunklerem Rest bis zum Limit und Limit-Marke, darunter Ladestand (mit Reichweite), Ladeplan, Ladelimit. Unten die Monatskachel „Ladevorgänge im Monat“ (Geladen, Sonnenanteil, Kosten, Ø Preis). Akzent `col_evcc`, Flächen und Einheitenregel bleiben die des Dashboards. Höhenrechnung im Kopf der Datei.
 - `page_heatpump` – seit 24.09.2026, am selben Tag auf die **Nilan Compact P** umgebaut, im Aufbau der Startseite des Touch-Bedienteils CTS700 (der Nutzer hat das klassische CTS700 mit Textzeilen, will die Seite aber grafisch), auf Wunsch des Nutzers auf dem Dashboard-Grund (Kachel `st_tile`). Links die Nilan-Kachel (760 × 652): Außentemperatur mit Sonne, grünes Haus aus Flächen (`col_nilan_house`; Dach = Quadrat 311 × 311, um 45° gedreht, in einem Behälter mit `transform_scale_y` 0,682 gestaucht, darüber die Wand, damit die Kante am Dachfuß verdeckt ist; Rechnung im Kommentar der Datei), im Dach die Raumtemperatur mit Sollwert, in der Wand Feuchte, CO2 (nur mit Wert sichtbar) und die Warmwasserkachel (`col_nilan_tank`, Rand `col_nilan_tank_edge`) mit rotem Punkt für die Zusatzheizung und Sollwert darunter, rechts die runde Lüftertaste mit Stufe und Zu-/Abluftventilator in %. Unter dem Haus ein gelber Hinweis, solange Enteisung oder Legionellenschutz laufen. Rechts „Information“ wie hinter der Info-Taste (Betriebsart Lüftung, Jahreszeit, Bypass, Kompressor, Zu- und Fortluft, Ventilatoren, Tage bis zum Filterwechsel, ab 7 Tagen gelb) und „Strom“ (Leistungsaufnahme, Verbrauch heute). Das Nilan-Logo ist bewusst nicht nachgebaut.
 - `page_grid` – seit 25.09.2026, Netz und Zähler. Vier Kacheln je 632 breit: Hausanschluss (Leistung, grün bei Einspeisung und rot bei Bezug, Frequenz, Balken der Einspeisung gegen die Einspeisegrenze `feed_limit_pct` von `pv_kwp` mit gelber Marke, Grenze in kW, Auslastung, abgeregelte Energie heute), Phasen L1 bis L3 (Spannung, außerhalb 207 bis 253 V gelb, Strom, Wirk- und Scheinleistung, Leistungsfaktor, Neutralleiterstrom), Zählerstände (fünf Zählwerke mit Stand und heute) und Netzvorgaben (Einspeisegrenze, Börsenpreis, rot wenn negativ, negative Viertelstunden, Vergütung bei negativem Preis, Steuersignal § 14a, Smart Meter). Werte nach dem Shelly Pro 3EM, Rechtliches in Dokument 06.
@@ -251,11 +251,13 @@ Welcher Verlaufstyp wo erlaubt ist und wie die Töne dazu gewählt werden, steht
 
 Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in Dokument 06.
 
-**`alert_push(severity, device, text)`** – 0 = Info, 1 = Warnung, 2 = Störung; fügt oben in `alert_list` ein, `mode: queued`, `max_runs: $alert_max`. Zeilenaufbau (Reihenfolge nicht umstellen, Zugriff per Index): 0 Schweregrad, 1 Zeit, 2 Gerät, 3 Meldung, 4 Hinweis, 5 Quelle „Gerät: Meldung“, versteckt mit `long_mode: CLIP`. Kind 5 ist nötig, weil `DOT` den Textpuffer verändert (Dokument 04, Punkt 3). Der Zeitstempel steckt im `user_data`. Über `$alert_max` (50) hinaus fällt die älteste **quittierte** Zeile heraus, sonst die älteste überhaupt.
+**`alert_push(severity, device, text)`** – 0 = Info, 1 = Warnung, 2 = Störung; fügt oben in `alert_list` ein, `mode: queued`, `max_runs: $alert_max`. Zeilenaufbau (Reihenfolge nicht umstellen, Zugriff per Index): 0 Schweregrad, 1 Zeit, 2 Gerät, 3 Meldung, 4 Hinweis, 5 Quelle „Gerät: Meldung“, versteckt mit `long_mode: CLIP`, 6 Zählung „Anzahl erstes_Auftreten behoben_um“, versteckt. Kind 5 ist nötig, weil `DOT` den Textpuffer verändert (Dokument 04, Punkt 3), und dient zugleich als Schlüssel: Steht dieselbe Meldung schon in der Liste, legt `alert_push` keine neue Zeile an, sondern zählt die vorhandene hoch, setzt ihre Zeit auf jetzt, hebt die Quittung auf und schiebt sie nach oben; war sie länger als einen Tag behoben, zählt sie neu ab 1. Der Zeitstempel steckt im `user_data`, der Schweregrad in den Merkern `LV_OBJ_FLAG_USER_2` (Warnung) und `USER_3` (Störung), „behoben“ in `USER_4`. Über `$alert_max` (50) hinaus fällt die älteste **behobene** Zeile heraus, dann die älteste quittierte, sonst die älteste überhaupt.
 
 **`alert_ack(row)`** – `row` = Zeilenindex, `-1` = alle offenen. Quittiert heißt gedämpft, nicht gelöscht: Die Zeile bleibt in der Chronologie. Wohin die Quittung später läuft, ist offen (Dokument 06).
 
-**`alert_refresh`** – zählt offene Meldungen, setzt Zeitangaben (heute nur Uhrzeit, sonst mit Datum), Kopfzeile, Meldungszeile und Knöpfe. Läuft aus `on_add`/`on_remove`, nach dem Quittieren, beim Tageswechsel und beim ersten gültigen Zeitpunkt nach dem Start – von Hand ruft es niemand.
+**`alert_clear(device, text)`** – die Ursache ist behoben: Die Zeile verschwindet aus der Anzeige, bleibt aber versteckt in der Liste, damit ein Wiederauftreten mitzählt. `text` leer = alle Meldungen dieses Geräts. Rufen heute `pv_status` (Wechselrichter wieder in Ordnung oder anderer Fehlertext), `sys_refresh` (Quelle liefert wieder; der Text heißt fest „Keine Daten von …“) und `wx_warning` (Warnung aufgehoben oder ersetzt).
+
+**`alert_refresh`** – zählt die Meldungen, setzt Zeitangaben (heute nur Uhrzeit, sonst mit Datum), die Hinweise („×3 seit 08:12“ bzw. „seit 23.09.“), die drei Zähler, die Meldungszeile samt Farbe und die Knöpfe, und blendet behobene sowie vom Filter (`alert_filter`, −1 = alle) ausgeschlossene Zeilen aus. Läuft aus `on_add`/`on_remove`, nach Auffrischen, Beheben, Filtern und dem Quittieren, beim Tageswechsel und beim ersten gültigen Zeitpunkt nach dem Start – von Hand ruft es niemand.
 
 **`storage_update(bat, soc, current, cell_min, cell_max, temp_min, temp_max, cycles)`** – `bat` 0…2 = Speicher 1…3, `current` positiv = Laden, `NAN` bzw. `cycles < 0` ergibt „--“. Füllt Spalte `bat + 1` der Tabelle, den Ring und den Mittelwert (nur bei allen drei Werten), die Batteriekästen der Übersicht noch nicht.
 
@@ -344,7 +346,7 @@ Projektordner, mit vollem Pfad in die Arbeitsumgebung (ESPHome 2026.9.0):
 
 `pv-dashboard-sim.yaml` öffnet ein SDL-Fenster und **blockiert**, bis das Fenster geschlossen wird; **F12** speichert ein Bild nach `.esphome/snapshots/pv-dashboard-sim/`, `ESPHOME_SNAPSHOT_DIR` lenkt es um.
 
-`pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle elf Seiten, die Statistik zusätzlich als Monat, plus die drei Fenster als BMP (`01_overview.bmp` … `12_system.bmp`, dazu `13_forecast.bmp` und `14_weather.bmp`, angehängt statt umnummeriert) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
+`pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle elf Seiten, die Statistik zusätzlich als Monat, plus die drei Fenster als BMP (`01_overview.bmp` … `12_system.bmp`, dazu `13_forecast.bmp` und `14_weather.bmp`, angehängt statt umnummeriert, und `09_alerts_filter.bmp` mit dem Filter „Störungen“) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
 
 Beispieldaten für Meldungen, Speicher, PV-Werte, Wallboxen, Wärmepumpe, Haus, Tagesreihen und Ringe stehen in `shots_run`, also **nur** im Screenshot-Lauf. Die Demo-Leistungen der Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen host-Plattform, im Simulator ebenso. Im Gerät steht beides nicht.
 
@@ -382,7 +384,7 @@ im YAML:
 
 ---
 
-Stand: 24.09.2026 (Seiten Wallboxen, Wärmepumpe und Haus samt ihren
+Stand: 25.09.2026 (Meldungen: Lagebild, Zähler mit Filter, Zusammenfassen, `alert_clear`; Zeilennummern von PV, Wetter und Meldungen nachgezogen); davor 24.09.2026 (Seiten Wallboxen, Wärmepumpe und Haus samt ihren
 Skripten, Tabelle neu abgezählt); davor 23.09.2026 (eigene Anlage in `.pv-dashboard_anlage.yaml`, Seite PV &
 Prognose samt `pv_update` und `pv_redraw_curve`, Tabelle und Zeilennummern neu
 abgezählt; davor 20.09.2026: Streckenzahlen aus einem Vorschaulauf; Zeilennummern gegen

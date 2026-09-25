@@ -39,14 +39,14 @@ Uhr und Systemsymbolen (WLAN, Home Assistant, Daten aktuell) und eine Meldungsze
 | Haus | im Stil von evcc: Energiefluss-Balken, Tabelle In / Out / Verbraucher, Verbrauch jetzt mit Herkunft, Verbrauch der letzten 24 Stunden |
 | Netz | Hausanschluss mit Einspeisegrenze, Phasen L1 bis L3 (Shelly Pro 3EM), Zählerstände, Netzvorgaben (Börsenpreis, negative Preise, § 14a) |
 | Statistik | Woche, Monat, Jahr: Erzeugung gegen Verbrauch, Autarkie, Eigenverbrauch, Ertrag |
-| Meldungen | Liste aller Meldungen, neueste oben, Quittieren per Antippen |
+| Meldungen | Bestehende Meldungen, neueste oben; gleiche zusammengefasst („×3 seit 08:12“), Zähler je Schweregrad als Filter, Quittieren per Antippen; oben die schwerste in ihrer Farbe |
 
 Dazu drei Fenster über der Oberfläche: Sprachassistent (`voice_panel`),
 Firmware-Update mit Fortschrittsbalken (`ota_panel`) und System (`sys_panel`,
 Tipp auf die Symbole oben rechts) mit dem Alter der Werte je Quelle.
 
 **Es sind noch keine echten Daten angebunden.** Die Oberfläche wird über feste
-Skript-Schnittstellen gefüttert (`alert_push`, `storage_update`, `pv_update`,
+Skript-Schnittstellen gefüttert (`alert_push`, `alert_clear`, `storage_update`, `pv_update`,
 `pv_status`, `money_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`, `wx_hour`,
 `wx_day`, `wx_warning`, `grid_update`, `grid_phase`, `grid_meter`, `grid_rules`,
 `stats_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`,
@@ -176,7 +176,7 @@ API-Schlüssel im Klartext.
 | `.pv-dashboard_page_house.yaml` | Seite 8 Haus: Energiefluss nach evcc, Tabelle, Verbrauch jetzt und 24 Stunden, `house_*` |
 | `.pv-dashboard_page_grid.yaml` | Seite 9 Netz: Hausanschluss, Phasen, Zähler, Netzvorgaben, `grid_*` |
 | `.pv-dashboard_page_stats.yaml` | Seite 10 Statistik: Woche / Monat / Jahr, `stats_update` / `stats_show` |
-| `.pv-dashboard_page_alerts.yaml` | Seite 11 Meldungen: Liste, Zähler, `alert_push` / `alert_ack` / `alert_refresh` |
+| `.pv-dashboard_page_alerts.yaml` | Seite 11 Meldungen: Liste, Zähler mit Filter, `alert_push` / `alert_ack` / `alert_clear` / `alert_refresh` |
 | `.pv-dashboard_display.yaml` | Nur Gerät: I2C, Backlight, MIPI-DSI-Panel, GT911, Drehung |
 | `.pv-dashboard_audio.yaml` | Nur Gerät: ES8311/ES7210, Voice Assistant, I2S-Halbduplex |
 | `pv-dashboard-sim.yaml` | Simulator: `host:`-Plattform mit SDL-Fenster und SDL-Touchscreen |

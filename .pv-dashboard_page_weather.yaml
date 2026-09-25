@@ -234,9 +234,11 @@ script:
   # DWD-Warnung (Integration "DWD Weather Warnings" in Home Assistant):
   #   level  0 = keine, 1 = Wetterwarnung, 2 = markant, 3 = Unwetter,
   #          4 = extremes Unwetter (Stufen des DWD)
-  #   text   Kurztext, z. B. "Sturmböen bis Fr 18:00"
+  #   text   Kurztext, z. B. "Sturmboeen bis Fr 18:00"
   # Ab Stufe 1 steht der Text oben rechts in der Kachel Tage; eine neue
   # Warnung geht einmal in die Meldungen (Stufe 1..2 Warnung, ab 3 Stoerung).
+  # Aufgehoben (Stufe 0) oder durch eine neue ersetzt, verschwindet sie dort
+  # wieder (alert_clear).
   # ---------------------------------------------------------------------
   - id: wx_warning
     parameters:
@@ -248,12 +250,16 @@ script:
             lv_label_set_text(id(wx_warn), "Keine Warnung des DWD");
             lv_obj_set_style_text_color(id(wx_warn), lv_color_hex($col_ink3), 0);
             id(wx_warning_last).clear();
+            id(alert_clear).execute(std::string("Wetter"), std::string(""));
             return;
           }
           const std::string t = "DWD-Warnung: " + (text.empty() ? std::string("ohne Text") : text);
           lv_label_set_text(id(wx_warn), t.c_str());
           lv_obj_set_style_text_color(id(wx_warn), level >= 3 ? lv_color_hex($col_crit) : lv_color_hex($col_warn), 0);
           if (t != id(wx_warning_last)) {
+            // Eine neue Warnung ersetzt die alte in den Meldungen
+            if (!id(wx_warning_last).empty())
+              id(alert_clear).execute(std::string("Wetter"), std::string(""));
             id(wx_warning_last) = t;
             id(alert_push).execute(level >= 3 ? 2 : 1, std::string("Wetter"), text.empty() ? std::string("DWD-Warnung") : text);
           }

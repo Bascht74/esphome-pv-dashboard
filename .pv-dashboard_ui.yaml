@@ -172,7 +172,8 @@ script:
   # drei Symbole in der Statusleiste und das Systemfenster (Tipp auf die
   # Symbole). Laeuft alle 10 s (interval unten). Bleibt eine Quelle, die
   # schon einmal geliefert hat, laenger als data_stale_s aus, kommt einmal
-  # eine Warnung in die Meldungen; liefert sie wieder, darf sie erneut.
+  # eine Warnung in die Meldungen; liefert sie wieder, verschwindet die
+  # Warnung (alert_clear) und darf erneut kommen.
   # Im Simulator gibt es weder WLAN noch API -- dort steht "Simulator".
   - id: sys_refresh
     then:
@@ -203,11 +204,13 @@ script:
               stale++;
               if (!(id(data_stale_reported) & (1 << k))) {
                 id(data_stale_reported) |= (1 << k);
-                id(alert_push).execute(1, std::string("System"),
-                                       std::string("Keine Daten von ") + SRC[k] + " seit " + std::to_string(a / 60) + " min");
+                // Fester Text ohne Minuten: So erkennt alert_push ein
+                // Wiederauftreten, und alert_clear findet die Meldung.
+                id(alert_push).execute(1, std::string("System"), std::string("Keine Daten von ") + SRC[k]);
               }
-            } else {
+            } else if (id(data_stale_reported) & (1 << k)) {
               id(data_stale_reported) &= ~(1 << k);
+              id(alert_clear).execute(std::string("System"), std::string("Keine Daten von ") + SRC[k]);
             }
           }
           // Symbol Datenalter: grau = noch nichts, weiss = alles frisch,
@@ -852,8 +855,9 @@ lvgl:
                 text_font: f_bar
                 text_color: $col_ink
 
-      # Meldungszeile: Zahl der offenen Meldungen und die juengste davon,
-      # oeffnet auf Tipp die Liste. Den Text setzt alert_refresh.
+      # Meldungszeile: offene Meldungen je Schweregrad und die schwerste
+      # davon, oeffnet auf Tipp die Liste. Text und Farbe des Grundes setzt
+      # alert_refresh (rot bei Stoerung, gelb bei Warnung, sonst ruhig).
       - obj:
           id: bar_alert
           x: 0

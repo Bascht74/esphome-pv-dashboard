@@ -256,7 +256,7 @@ Prüfliste in Dokument 04 (LVGL-Checkliste).
   im Simulator von der Systemuhr.
 
 Angebunden ist bisher nichts davon. Die Oberfläche hat dafür feste Schnittstellen
-(`alert_push`, `storage_update`, `pv_update`, `pv_status`, `money_update`, `wallbox_update`,
+(`alert_push`, `alert_clear`, `storage_update`, `pv_update`, `pv_status`, `money_update`, `wallbox_update`,
 `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`, `house_battery`,
 `house_loadpoint`, `house_update`, `house_history`, `grid_update`, `grid_phase`,
 `grid_meter`, `grid_rules`, `stats_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`,

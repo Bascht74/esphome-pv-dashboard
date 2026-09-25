@@ -35,6 +35,11 @@ globals:
     type: int
     restore_value: false
     initial_value: '0'
+  # Text der gemeldeten Stoerung je Wechselrichter: alert_clear braucht ihn,
+  # wenn der Wechselrichter wieder in Ordnung ist.
+  - id: pv_fault_text
+    type: std::array<std::string, 4>
+    restore_value: false
   # Tageswert und Temperatur je Wechselrichter, damit pv_update und
   # pv_status dieselbe Zweitzeile schreiben
   - id: pv_inv_energy
@@ -51,7 +56,8 @@ script:
   # Zustand eines Wechselrichters (Review 25.09.2026):
   #   inv   0..3 = Wechselrichter 1..4 (name_inv_1..4)
   #   ok    false = Stoerung: Rahmen und Punkt rot, die Zweitzeile zeigt
-  #         text; beim Uebergang in die Stoerung kommt eine Meldung
+  #         text; beim Uebergang in die Stoerung kommt eine Meldung, bei
+  #         true verschwindet sie wieder (alert_clear)
   #   text  Fehlertext bzw. Fehlercode des Wechselrichters
   #   temp  Temperatur in °C, NAN = keine; steht sonst in der Zweitzeile
   #         hinter dem Tageswert
@@ -80,9 +86,18 @@ script:
             lv_obj_set_style_bg_color(dot[inv], lv_color_hex($col_crit), 0);
             lv_label_set_text(sb[inv], text.empty() ? "Störung" : text.c_str());
             lv_obj_set_style_text_color(sb[inv], lv_color_hex($col_crit), 0);
-            if (!was)
-              id(alert_push).execute(2, std::string(NAME[inv]), text.empty() ? std::string("Störung") : text);
+            // Neue Stoerung oder anderer Fehlertext: melden, ein anderer
+            // Text ersetzt den alten in den Meldungen.
+            const std::string msg = text.empty() ? std::string("Störung") : text;
+            if (!was || msg != id(pv_fault_text)[inv]) {
+              if (was)
+                id(alert_clear).execute(std::string(NAME[inv]), id(pv_fault_text)[inv]);
+              id(pv_fault_text)[inv] = msg;
+              id(alert_push).execute(2, std::string(NAME[inv]), msg);
+            }
           } else {
+            if (was)
+              id(alert_clear).execute(std::string(NAME[inv]), id(pv_fault_text)[inv]);
             id(pv_fault) &= ~(1 << inv);
             lv_obj_set_style_border_color(box[inv], lv_color_hex(norm[inv]), 0);
             lv_obj_set_style_bg_color(dot[inv], lv_color_hex($col_feed), 0);

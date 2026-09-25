@@ -131,6 +131,20 @@ script:
       - script.wait: alert_push
       # Die Speicher-Warnung (Zeile 3 von 0..4) gilt als quittiert
       - script.execute: { id: alert_ack, row: 3 }
+      # Zusammenfassen: dieselbe Stoerung noch zweimal -> eine Zeile "x3".
+      # Das erste Auftreten um 150 min zurueckdatieren, damit "seit" eine
+      # andere Zeit zeigt als die Zeile.
+      - lambda: |-
+          lv_obj_t *row = lv_obj_get_child(id(alert_list), 0);
+          uint32_t ts = (uint32_t) (uintptr_t) lv_obj_get_user_data(row);
+          if (ts >= 1000000000u)
+            lv_obj_set_user_data(row, (void *) (uintptr_t) (ts - 150 * 60));
+      - script.execute: { id: alert_push, severity: 2, device: "${name_wb_1}", text: "Fehlerstrom erkannt (RCD 6 mA DC) – Ladevorgang abgebrochen" }
+      - script.execute: { id: alert_push, severity: 2, device: "${name_wb_1}", text: "Fehlerstrom erkannt (RCD 6 mA DC) – Ladevorgang abgebrochen" }
+      # Behoben: kommt und geht wieder, steht also nicht in der Liste
+      - script.execute: { id: alert_push, severity: 1, device: "System", text: "Keine Daten von Netz" }
+      - script.wait: alert_push
+      - script.execute: { id: alert_clear, device: "System", text: "Keine Daten von Netz" }
       - script.execute: { id: storage_update, bat: 0, soc: 72, current: 12.4, cell_min: 3.281, cell_max: 3.302, temp_min: 18, temp_max: 21, cycles: 412 }
       - script.execute: { id: storage_update, bat: 1, soc: 38, current: -8.9, cell_min: 3.195, cell_max: 3.377, temp_min: 19, temp_max: 24, cycles: 398 }
       - script.execute: { id: storage_update, bat: 2, soc: 100, current: 0.0, cell_min: 3.402, cell_max: 3.411, temp_min: 17, temp_max: 19, cycles: 1287 }
@@ -474,6 +488,13 @@ script:
       - lvgl.matrix.button.update: { id: btn_nav_alerts, control: { checked: true } }
       - script.execute: { id: shots_take, name: 09_alerts.bmp }
       - script.wait: shots_take
+      # Filter: nur Stoerungen, danach wieder alle
+      - lambda: 'id(alert_filter) = 2;'
+      - script.execute: alert_refresh
+      - script.execute: { id: shots_take, name: 09_alerts_filter.bmp }
+      - script.wait: shots_take
+      - lambda: 'id(alert_filter) = -1;'
+      - script.execute: alert_refresh
 
       # Overlays im top_layer, wie im Betrieb ueber der Uebersicht. Die Texte
       # sind Beispiele, damit Umbruch und Ueberlauf mit auf dem Bild sind.

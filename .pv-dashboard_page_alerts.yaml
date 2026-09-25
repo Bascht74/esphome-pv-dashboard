@@ -15,7 +15,28 @@
 # fuellen die Innenbreite (Schirm 15..1265, buendig mit Titel und
 # Knoepfen der Kopfkachel); der Rollbalken laeuft im Rand rechts.
 # Befuellt wird die Liste von alert_push, siehe dort.
+#
+# Angezeigt werden nur Meldungen, deren Ursache noch besteht (Wunsch
+# 25.09.2026): Meldet eine Quelle ueber alert_clear, dass die Ursache weg ist,
+# verschwindet die Zeile. Sie bleibt dabei versteckt in der Liste, damit ein
+# Wiederauftreten mitzaehlt ("x3 seit 08:12") statt eine neue Zeile
+# anzulegen. Gleiche Meldung = gleiches Geraet und gleicher Text.
 ##############################################################################
+
+globals:
+  # alert_push: true = die Meldung stand schon in der Liste und wurde nur
+  # aufgefrischt, es kommt keine neue Zeile dazu. Die Laeufe von alert_push
+  # folgen einander (mode queued), der Wert gehoert also immer dem laufenden.
+  - id: alert_hit
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  # Filter der Liste: -1 = alle, sonst nur der Schweregrad 0, 1 oder 2.
+  # Setzen die drei Zaehlerknoepfe der Kopfkachel.
+  - id: alert_filter
+    type: int
+    restore_value: false
+    initial_value: '-1'
 
 script:
   # ---------------------------------------------------------------------
@@ -24,7 +45,13 @@ script:
   # Aufbau einer Zeile -- die Skripte greifen per Index auf die Kinder zu,
   # die Reihenfolge in alert_push also nicht umstellen:
   #   0 Schweregrad   1 Zeit   2 Geraet   3 Meldung   4 Hinweis
-  #   5 Quelle "Geraet: Meldung", versteckt und ungekuerzt
+  #   5 Quelle "Geraet: Meldung", versteckt und ungekuerzt; zugleich der
+  #     Schluessel, an dem alert_push und alert_clear die Meldung erkennen
+  #   6 Zaehlung, versteckt: "Anzahl erstes_Auftreten behoben_um" (Epoche
+  #     bzw. vorlaeufige Laufzeit wie unten, 0 = keine). Startet mit "1 0 0".
+  # Merker der Zeile (LVGL-Flags): USER_1 = wird gerade entfernt (on_remove),
+  # USER_2 = Warnung, USER_3 = Stoerung (keins = Info), USER_4 = behoben.
+  # HIDDEN setzt allein alert_refresh: behoben oder vom Filter ausgeblendet.
   # Die Meldungszeile oben liest nur Kind 5, nie die Labels 2 und 3: Die
   # kuerzen mit long_mode DOT, und LVGL schreibt das "..." in den
   # Textpuffer. Auf einer nie gezeigten Seite haben sie keine Breite, der
@@ -63,107 +90,169 @@ script:
       device: string
       text: string
     then:
-      - lvgl.list.add:
-          id: alert_list
-          index: 0
-          button:
-            styles: st_alert_row
-            width: 100%
-            height: 56
-            scrollable: false
-            scroll_dir: NONE
-            border_color: !lambda 'return lv_color_hex(severity >= 2 ? $col_crit : severity == 1 ? $col_warn : $col_batt);'
-            pressed:
-              bg_color: $col_line
-              bg_opa: 30%
-            # Quittiert: gedaempft statt geloescht, bleibt in der Chronologie
-            checked:
-              bg_opa: TRANSP
-              border_color: $col_line
-              text_color: $col_ink3
-            # Zeile 1250 breit: Rahmen links 3, Inhalt 1247. Rand je 16 zur
-            # Aussenkante (13 + Rahmen links, 16 rechts), Abstaende je 12:
-            # 13..97 | 109..233 | 245..425 | 437..1039 | 1051..1231.
-            # DOT kuerzt nur bei fester Hoehe -- ohne height bricht LVGL um
-            # und die Zeile laeuft ueber. Hoehe je Zeile = Zeilenhoehe der
-            # Schrift (f_label/f_unit 17, f_text_s 20, f_val_s 21, f_text 22).
-            widgets:
-              - label:
-                  align: LEFT_MID
-                  x: 13
-                  width: 84
-                  height: 17
-                  long_mode: DOT
-                  styles: st_label
-                  text: !lambda 'return std::string(severity >= 2 ? "STÖRUNG" : severity == 1 ? "WARNUNG" : "INFO");'
-                  text_color: !lambda 'return lv_color_hex(severity >= 2 ? $col_crit : severity == 1 ? $col_warn : $col_batt);'
-                  checked:
-                    text_color: $col_ink3
-              # Zeit: 12 Zeichen "TT.MM. hh:mm" in f_val_s = 120 px
-              - label:
-                  align: LEFT_MID
-                  x: 109
-                  width: 124
-                  height: 21
-                  long_mode: DOT
-                  text: "--:--"
-                  text_font: f_val_s
-              - label:
-                  align: LEFT_MID
-                  x: 245
-                  width: 180
-                  height: 20
-                  long_mode: DOT
-                  text: !lambda 'return device;'
-                  text_font: f_text_s
-              - label:
-                  align: LEFT_MID
-                  x: 437
-                  width: 602
-                  height: 22
-                  long_mode: DOT
-                  text: !lambda 'return text;'
-                  text_font: f_text
-              - label:
-                  align: RIGHT_MID
-                  x: -16
-                  width: 180
-                  height: 17
-                  long_mode: DOT
-                  text_align: RIGHT
-                  styles: st_unit
-                  text: "Antippen zum Quittieren"
-              # Quelle der Meldungszeile (siehe Kopf der Meldungs-Skripte)
-              - label:
-                  hidden: true
-                  long_mode: CLIP
-                  text: !lambda 'return device + ": " + text;'
-            # -1 = Zeile nicht gefunden. alert_ack liest -1 als "alle offenen",
-            # deshalb nur mit gueltigem Index quittieren.
-            on_click:
-              - if:
-                  condition:
-                    lambda: 'return lvgl::lv_list_get_row_index(id(alert_list), static_cast<lv_obj_t *>(lv_event_get_target(event))) >= 0;'
-                  then:
-                    - script.execute:
-                        id: alert_ack
-                        row: !lambda 'return lvgl::lv_list_get_row_index(id(alert_list), static_cast<lv_obj_t *>(lv_event_get_target(event)));'
-      # Hoechstens alert_max Zeilen. Heraus faellt die aelteste QUITTIERTE
-      # Zeile; nur wenn keine quittiert ist, die aelteste ueberhaupt -- dann
-      # kann auch eine offene Meldung verloren gehen.
+      # Steht dieselbe Meldung schon in der Liste (auch behoben und
+      # versteckt), wird sie aufgefrischt statt neu angelegt: Anzahl + 1, die
+      # Zeit wird die von jetzt, die Zeile rueckt nach oben und gilt wieder als
+      # offen. War sie laenger als einen Tag behoben, zaehlt sie neu ab 1.
+      - lambda: |-
+          id(alert_hit) = false;
+          lv_obj_t *list = id(alert_list);
+          const std::string key = device + ": " + text;
+          const uint32_t n = lv_obj_get_child_count(list);
+          for (uint32_t i = 0; i < n; i++) {
+            lv_obj_t *entry = lv_obj_get_child(list, i);
+            if (lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_1) ||
+                strcmp(lv_label_get_text(lv_obj_get_child(entry, 5)), key.c_str()) != 0)
+              continue;
+            unsigned cnt = 1, first = 0, gone = 0;
+            sscanf(lv_label_get_text(lv_obj_get_child(entry, 6)), "%u %u %u", &cnt, &first, &gone);
+            const uint32_t last = (uint32_t) (uintptr_t) lv_obj_get_user_data(entry);
+            auto now = id(dash_time).now();
+            const uint32_t ts = now.is_valid() ? (uint32_t) now.timestamp : millis() / 1000 + 1;
+            const bool stale = gone >= 1000000000u && ts >= 1000000000u && ts - gone > 86400u;
+            if (stale) {
+              cnt = 1;
+              first = 0;
+            } else {
+              if (first == 0)
+                first = last;
+              cnt++;
+            }
+            lv_label_set_text_fmt(lv_obj_get_child(entry, 6), "%u %u 0", cnt, first);
+            lv_obj_set_user_data(entry, (void *) (uintptr_t) ts);
+            lv_obj_remove_flag(entry, LV_OBJ_FLAG_USER_4);
+            lv_obj_remove_state(entry, LV_STATE_CHECKED);
+            for (uint32_t k = 0; k < lv_obj_get_child_count(entry); k++)
+              lv_obj_remove_state(lv_obj_get_child(entry, k), LV_STATE_CHECKED);
+            lv_obj_move_to_index(entry, 0);
+            id(alert_hit) = true;
+            break;
+          }
+          if (id(alert_hit))
+            id(alert_refresh).execute();
       - if:
           condition:
-            lambda: 'return lv_obj_get_child_count(id(alert_list)) > ${alert_max};'
+            lambda: 'return !id(alert_hit);'
           then:
-            - lvgl.list.remove:
+            - lvgl.list.add:
                 id: alert_list
-                index: !lambda |-
-                  lv_obj_t *list = id(alert_list);
-                  const int32_t n = (int32_t) lv_obj_get_child_count(list);
-                  for (int32_t i = n - 1; i >= 0; i--)
-                    if (lv_obj_has_state(lv_obj_get_child(list, i), LV_STATE_CHECKED))
-                      return i;
-                  return n - 1;
+                index: 0
+                button:
+                  styles: st_alert_row
+                  width: 100%
+                  height: 56
+                  scrollable: false
+                  scroll_dir: NONE
+                  border_color: !lambda 'return lv_color_hex(severity >= 2 ? $col_crit : severity == 1 ? $col_warn : $col_batt);'
+                  pressed:
+                    bg_color: $col_line
+                    bg_opa: 30%
+                  # Quittiert: gedaempft statt geloescht, bleibt in der Chronologie
+                  checked:
+                    bg_opa: TRANSP
+                    border_color: $col_line
+                    text_color: $col_ink3
+                  # Zeile 1250 breit: Rahmen links 3, Inhalt 1247. Rand je 16 zur
+                  # Aussenkante (13 + Rahmen links, 16 rechts), Abstaende je 12:
+                  # 13..97 | 109..233 | 245..425 | 437..1039 | 1051..1231.
+                  # DOT kuerzt nur bei fester Hoehe -- ohne height bricht LVGL um
+                  # und die Zeile laeuft ueber. Hoehe je Zeile = Zeilenhoehe der
+                  # Schrift (f_label/f_unit 17, f_text_s 20, f_val_s 21, f_text 22).
+                  widgets:
+                    - label:
+                        align: LEFT_MID
+                        x: 13
+                        width: 84
+                        height: 17
+                        long_mode: DOT
+                        styles: st_label
+                        text: !lambda 'return std::string(severity >= 2 ? "STÖRUNG" : severity == 1 ? "WARNUNG" : "INFO");'
+                        text_color: !lambda 'return lv_color_hex(severity >= 2 ? $col_crit : severity == 1 ? $col_warn : $col_batt);'
+                        checked:
+                          text_color: $col_ink3
+                    # Zeit: 12 Zeichen "TT.MM. hh:mm" in f_val_s = 120 px
+                    - label:
+                        align: LEFT_MID
+                        x: 109
+                        width: 124
+                        height: 21
+                        long_mode: DOT
+                        text: "--:--"
+                        text_font: f_val_s
+                    - label:
+                        align: LEFT_MID
+                        x: 245
+                        width: 180
+                        height: 20
+                        long_mode: DOT
+                        text: !lambda 'return device;'
+                        text_font: f_text_s
+                    - label:
+                        align: LEFT_MID
+                        x: 437
+                        width: 602
+                        height: 22
+                        long_mode: DOT
+                        text: !lambda 'return text;'
+                        text_font: f_text
+                    - label:
+                        align: RIGHT_MID
+                        x: -16
+                        width: 180
+                        height: 17
+                        long_mode: DOT
+                        text_align: RIGHT
+                        styles: st_unit
+                        text: "Antippen zum Quittieren"
+                    # Quelle der Meldungszeile (siehe Kopf der Meldungs-Skripte)
+                    - label:
+                        hidden: true
+                        long_mode: CLIP
+                        text: !lambda 'return device + ": " + text;'
+                    # Zaehlung (siehe Kopf der Meldungs-Skripte)
+                    - label:
+                        hidden: true
+                        long_mode: CLIP
+                        text: "1 0 0"
+                  # -1 = Zeile nicht gefunden. alert_ack liest -1 als "alle offenen",
+                  # deshalb nur mit gueltigem Index quittieren.
+                  on_click:
+                    - if:
+                        condition:
+                          lambda: 'return lvgl::lv_list_get_row_index(id(alert_list), static_cast<lv_obj_t *>(lv_event_get_target(event))) >= 0;'
+                        then:
+                          - script.execute:
+                              id: alert_ack
+                              row: !lambda 'return lvgl::lv_list_get_row_index(id(alert_list), static_cast<lv_obj_t *>(lv_event_get_target(event)));'
+            # Schweregrad als Merker der neuen Zeile (Filter, Lagebild). on_add
+            # hat schon gezaehlt, deshalb danach noch einmal.
+            - lambda: |-
+                lv_obj_t *entry = lv_obj_get_child(id(alert_list), 0);
+                if (severity >= 2)
+                  lv_obj_add_flag(entry, LV_OBJ_FLAG_USER_3);
+                else if (severity == 1)
+                  lv_obj_add_flag(entry, LV_OBJ_FLAG_USER_2);
+            - script.execute: alert_refresh
+            # Hoechstens alert_max Zeilen. Heraus faellt die aelteste BEHOBENE
+            # Zeile, sonst die aelteste quittierte; nur wenn beides fehlt, die
+            # aelteste ueberhaupt -- dann kann auch eine offene Meldung verloren
+            # gehen.
+            - if:
+                condition:
+                  lambda: 'return lv_obj_get_child_count(id(alert_list)) > ${alert_max};'
+                then:
+                  - lvgl.list.remove:
+                      id: alert_list
+                      index: !lambda |-
+                        lv_obj_t *list = id(alert_list);
+                        const int32_t n = (int32_t) lv_obj_get_child_count(list);
+                        for (int32_t i = n - 1; i >= 0; i--)
+                          if (lv_obj_has_flag(lv_obj_get_child(list, i), LV_OBJ_FLAG_USER_4))
+                            return i;
+                        for (int32_t i = n - 1; i >= 0; i--)
+                          if (lv_obj_has_state(lv_obj_get_child(list, i), LV_STATE_CHECKED))
+                            return i;
+                        return n - 1;
 
   # Quittieren: row = Zeilenindex, -1 = alle offenen. Hier spaeter auch die
   # Quittung an das Geraet bzw. an Home Assistant.
@@ -192,11 +281,50 @@ script:
           }
       - script.execute: alert_refresh
 
-  # Zaehlt offene Meldungen, setzt Zeitangaben (heute nur die Uhrzeit, sonst
-  # mit Datum), die Kopfzeile der Seite, die Meldungszeile oben und die
-  # Knoepfe. Laeuft nach jedem Hinzufuegen und Entfernen (on_add/on_remove
-  # der Liste), nach dem Quittieren, beim Tageswechsel und beim ersten
-  # gueltigen Zeitpunkt nach dem Start (update_clock).
+  # Ursache behoben: Die Zeile verschwindet aus der Anzeige, bleibt aber
+  # versteckt in der Liste (Merker USER_4), damit ein Wiederauftreten in
+  # alert_push mitzaehlt. text leer = alle Meldungen dieses Geraets.
+  # Aufrufer: pv_status (Wechselrichter wieder in Ordnung), sys_refresh
+  # (Quelle liefert wieder), wx_warning (Warnung aufgehoben oder ersetzt);
+  # spaeter auch Home Assistant.
+  - id: alert_clear
+    mode: queued
+    max_runs: ${alert_max}
+    parameters:
+      device: string
+      text: string
+    then:
+      - lambda: |-
+          lv_obj_t *list = id(alert_list);
+          const std::string key = device + ": " + text;
+          const std::string prefix = device + ": ";
+          auto now = id(dash_time).now();
+          const uint32_t ts = now.is_valid() ? (uint32_t) now.timestamp : millis() / 1000 + 1;
+          bool any = false;
+          const uint32_t n = lv_obj_get_child_count(list);
+          for (uint32_t i = 0; i < n; i++) {
+            lv_obj_t *entry = lv_obj_get_child(list, i);
+            if (lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_1) || lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_4))
+              continue;
+            const char *src = lv_label_get_text(lv_obj_get_child(entry, 5));
+            if (text.empty() ? strncmp(src, prefix.c_str(), prefix.size()) != 0 : strcmp(src, key.c_str()) != 0)
+              continue;
+            unsigned cnt = 1, first = 0, gone = 0;
+            sscanf(lv_label_get_text(lv_obj_get_child(entry, 6)), "%u %u %u", &cnt, &first, &gone);
+            lv_label_set_text_fmt(lv_obj_get_child(entry, 6), "%u %u %u", cnt, first, (unsigned) ts);
+            lv_obj_add_flag(entry, LV_OBJ_FLAG_USER_4);
+            any = true;
+          }
+          if (any)
+            id(alert_refresh).execute();
+
+  # Zaehlt die Meldungen, setzt Zeitangaben (heute nur die Uhrzeit, sonst
+  # mit Datum), die Hinweise ("x3 seit 08:12"), die drei Zaehler der
+  # Kopfkachel, die Meldungszeile oben und die Knoepfe, und blendet behobene
+  # und vom Filter ausgeschlossene Zeilen aus. Laeuft nach jedem Hinzufuegen
+  # und Entfernen (on_add/on_remove der Liste), nach Auffrischen, Quittieren,
+  # Beheben und Filtern, beim Tageswechsel und beim ersten gueltigen
+  # Zeitpunkt nach dem Start (update_clock).
   # Zeilen mit LV_OBJ_FLAG_USER_1 zaehlen nicht mehr: So markiert on_remove
   # die Zeile, die LVGL gleich danach loescht (siehe alert_list).
   - id: alert_refresh
@@ -205,19 +333,41 @@ script:
           lv_obj_t *list = id(alert_list);
           const uint32_t count = lv_obj_get_child_count(list);
           auto now = id(dash_time).now();
-          uint32_t n = 0;
-          int open = 0;
-          lv_obj_t *newest = nullptr;
+          const int filter = id(alert_filter);
+          // Vorlaeufige Laufzeit (vor der Zeitsynchronisation) in die Epoche
+          // umrechnen, sobald die Zeit gilt.
+          auto fix = [&](uint32_t ts) -> uint32_t {
+            if (ts != 0 && ts < 1000000000u && now.is_valid())
+              return (uint32_t) now.timestamp - (millis() / 1000 + 1 - ts);
+            return ts;
+          };
+          uint32_t n = 0, shown = 0;
+          int active[3] = {0, 0, 0}, open[3] = {0, 0, 0};
+          lv_obj_t *worst = nullptr;
+          int worst_sev = -1;
           for (uint32_t i = 0; i < count; i++) {
             lv_obj_t *entry = lv_obj_get_child(list, i);
             if (lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_1))
               continue;
+            const int sev = lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_3) ? 2
+                            : lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_2) ? 1 : 0;
+            const bool gone = lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_4);
+            const bool hide = gone || (filter >= 0 && sev != filter);
+            if (hide != lv_obj_has_flag(entry, LV_OBJ_FLAG_HIDDEN)) {
+              if (hide)
+                lv_obj_add_flag(entry, LV_OBJ_FLAG_HIDDEN);
+              else
+                lv_obj_remove_flag(entry, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (gone)
+              continue;
             n++;
+            active[sev]++;
+            if (!hide)
+              shown++;
             uint32_t ts = (uint32_t) (uintptr_t) lv_obj_get_user_data(entry);
-            // Vorlaeufige Laufzeit aus on_add: sobald die Zeit gilt, in die
-            // Uhrzeit der Meldung umrechnen und dauerhaft eintragen.
-            if (ts != 0 && ts < 1000000000u && now.is_valid()) {
-              ts = (uint32_t) now.timestamp - (millis() / 1000 + 1 - ts);
+            if (fix(ts) != ts) {
+              ts = fix(ts);
               lv_obj_set_user_data(entry, (void *) (uintptr_t) ts);
             }
             char buf[16] = "--:--";
@@ -232,38 +382,93 @@ script:
             lv_obj_t *lbl_time = lv_obj_get_child(entry, 1);
             if (strcmp(lv_label_get_text(lbl_time), buf) != 0)
               lv_label_set_text(lbl_time, buf);
-            if (!lv_obj_has_state(entry, LV_STATE_CHECKED)) {
-              open++;
-              if (newest == nullptr)
-                newest = entry;
+            if (lv_obj_has_state(entry, LV_STATE_CHECKED))
+              continue;  // Hinweis "Quittiert hh:mm" bleibt stehen
+            open[sev]++;
+            // Neueste zuerst in der Liste: die erste Zeile des hoechsten
+            // Schweregrads ist dessen juengste.
+            if (sev > worst_sev) {
+              worst_sev = sev;
+              worst = entry;
             }
+            // Hinweis: Anzahl und erstes Auftreten, sonst die Bedienung
+            unsigned cnt = 1, first = 0, gone_ts = 0;
+            lv_obj_t *meta = lv_obj_get_child(entry, 6);
+            sscanf(lv_label_get_text(meta), "%u %u %u", &cnt, &first, &gone_ts);
+            if (fix(first) != first) {
+              first = fix(first);
+              lv_label_set_text_fmt(meta, "%u %u %u", cnt, first, gone_ts);
+            }
+            char hint[32] = "Antippen zum Quittieren";
+            if (cnt > 1) {
+              if (first >= 1000000000u && now.is_valid()) {
+                ESPTime f = ESPTime::from_epoch_local((time_t) first);
+                if (f.year == now.year && f.day_of_year == now.day_of_year)
+                  snprintf(hint, sizeof(hint), "×%u seit %02d:%02d", cnt, f.hour, f.minute);
+                else
+                  snprintf(hint, sizeof(hint), "×%u seit %02d.%02d.", cnt, f.day_of_month, f.month);
+              } else {
+                snprintf(hint, sizeof(hint), "×%u", cnt);
+              }
+            }
+            lv_obj_t *lbl_hint = lv_obj_get_child(entry, 4);
+            if (strcmp(lv_label_get_text(lbl_hint), hint) != 0)
+              lv_label_set_text(lbl_hint, hint);
           }
-          lv_label_set_text_fmt(id(lbl_alerts_summary), "%d offen · %u %s", open,
-                                (unsigned) n, n == 1 ? "Eintrag" : "Einträge");
-          // Meldungszeile oben: Anzahl zuerst, damit sie beim Kuerzen bleibt.
-          // Geraet und Text aus Kind 5, nie aus den gekuerzten Labels.
+          // Drei Zaehler der Kopfkachel: bestehende Meldungen je Schweregrad
+          // (auch quittierte). Farbig nur, wenn es welche gibt.
+          static const uint32_t COL[3] = {$col_batt, $col_warn, $col_crit};
+          lv_obj_t *const chip[3] = {id(btn_af_0), id(btn_af_1), id(btn_af_2)};
+          lv_obj_t *const chip_lbl[3] = {id(lbl_af_0), id(lbl_af_1), id(lbl_af_2)};
+          static const char *const ONE[3] = {"Info", "Warnung", "Störung"};
+          static const char *const MANY[3] = {"Infos", "Warnungen", "Störungen"};
+          for (int s = 0; s < 3; s++) {
+            lv_label_set_text_fmt(chip_lbl[s], "%d %s", active[s], active[s] == 1 ? ONE[s] : MANY[s]);
+            lv_obj_set_style_text_color(chip_lbl[s], lv_color_hex(active[s] > 0 ? COL[s] : $col_ink3), 0);
+            if (filter == s)
+              lv_obj_add_state(chip[s], LV_STATE_CHECKED);
+            else
+              lv_obj_remove_state(chip[s], LV_STATE_CHECKED);
+          }
+          // Meldungszeile oben: offene Meldungen je Schweregrad, schwerste
+          // zuerst, dann die juengste der schwersten. Geraet und Text aus
+          // Kind 5, nie aus den gekuerzten Labels. Der Grund der Zeile nimmt
+          // die Farbe des hoechsten offenen Schweregrads an.
+          std::string top;
+          for (int s = 2; s >= 0; s--) {
+            if (open[s] == 0)
+              continue;
+            if (!top.empty())
+              top += " · ";
+            top += std::to_string(open[s]) + " " + (open[s] == 1 ? ONE[s] : MANY[s]);
+          }
           if (n == 0)
-            lv_label_set_text(id(lbl_alert), "Keine Meldungen");
-          else if (open == 0)
-            lv_label_set_text(id(lbl_alert), "Keine offenen Meldungen");
+            top = "Keine Meldungen";
+          else if (worst == nullptr)
+            top = "Keine offenen Meldungen";
           else
-            lv_label_set_text_fmt(id(lbl_alert), "%d %s · %s", open,
-                                  open == 1 ? "offene Meldung" : "offene Meldungen",
-                                  lv_label_get_text(lv_obj_get_child(newest, 5)));
-          if (n == 0)
+            top += std::string(" · ") + lv_label_get_text(lv_obj_get_child(worst, 5));
+          lv_label_set_text(id(lbl_alert), top.c_str());
+          lv_obj_set_style_bg_color(id(bar_alert), lv_color_hex(worst_sev >= 0 ? COL[worst_sev] : $col_line), 0);
+          lv_obj_set_style_bg_opa(id(bar_alert), worst_sev == 2 ? 56 : worst_sev >= 0 ? 24 : 12, 0);
+          lv_obj_set_style_text_color(id(lbl_alert), lv_color_hex(worst ? $col_ink : $col_ink2), 0);
+          if (shown == 0) {
+            lv_label_set_text(id(lbl_alerts_empty), n == 0 ? "Keine Meldungen" : "Keine Meldungen dieser Art");
             lv_obj_remove_flag(id(lbl_alerts_empty), LV_OBJ_FLAG_HIDDEN);
-          else
+          } else {
             lv_obj_add_flag(id(lbl_alerts_empty), LV_OBJ_FLAG_HIDDEN);
+          }
           // Leeren erst, wenn alles quittiert ist -- sonst gingen offene
           // Stoerungen ungelesen verloren.
+          const int open_all = open[0] + open[1] + open[2];
           auto set_disabled = [](lv_obj_t *obj, bool off) {
             if (off)
               lv_obj_add_state(obj, LV_STATE_DISABLED);
             else
               lv_obj_remove_state(obj, LV_STATE_DISABLED);
           };
-          set_disabled(id(btn_alerts_ack), open == 0);
-          set_disabled(id(btn_alerts_clear), n == 0 || open > 0);
+          set_disabled(id(btn_alerts_ack), open_all == 0);
+          set_disabled(id(btn_alerts_clear), n == 0 || open_all > 0);
 
 lvgl:
   pages:
@@ -289,16 +494,101 @@ lvgl:
                   height: 17
                   long_mode: DOT
                   text: "MELDUNGEN · NEUESTE OBEN"
-              - label:
-                  id: lbl_alerts_summary
+              # Drei Zaehler = Filter: Stoerungen, Warnungen, Info, je 150 x 36
+              # ab x 280, Abstand 10 (bis 750; die Knoepfe rechts beginnen bei
+              # 902). Tippen zeigt nur diesen Schweregrad, erneutes Tippen
+              # wieder alle. Text, Farbe und den Zustand checked setzt
+              # alert_refresh.
+              - button:
+                  id: btn_af_2
+                  styles: st_btn
                   align: LEFT_MID
                   x: 280
-                  width: 400
-                  height: 21
-                  long_mode: DOT
-                  text: "0 offen · 0 Einträge"
-                  text_font: f_val_s
-                  text_color: $col_ink
+                  width: 150
+                  height: 36
+                  pressed:
+                    bg_color: $col_crit
+                    bg_opa: 20%
+                  checked:
+                    bg_color: $col_crit
+                    bg_opa: 20%
+                    border_color: $col_crit
+                    border_width: 2
+                  widgets:
+                    - label:
+                        id: lbl_af_2
+                        align: CENTER
+                        width: 138
+                        height: 20
+                        long_mode: DOT
+                        text_align: CENTER
+                        text_font: f_text_s
+                        text_color: $col_ink3
+                        text: "--"
+                  on_click:
+                    - lambda: |-
+                        id(alert_filter) = id(alert_filter) == 2 ? -1 : 2;
+                    - script.execute: alert_refresh
+              - button:
+                  id: btn_af_1
+                  styles: st_btn
+                  align: LEFT_MID
+                  x: 440
+                  width: 150
+                  height: 36
+                  pressed:
+                    bg_color: $col_warn
+                    bg_opa: 20%
+                  checked:
+                    bg_color: $col_warn
+                    bg_opa: 20%
+                    border_color: $col_warn
+                    border_width: 2
+                  widgets:
+                    - label:
+                        id: lbl_af_1
+                        align: CENTER
+                        width: 138
+                        height: 20
+                        long_mode: DOT
+                        text_align: CENTER
+                        text_font: f_text_s
+                        text_color: $col_ink3
+                        text: "--"
+                  on_click:
+                    - lambda: |-
+                        id(alert_filter) = id(alert_filter) == 1 ? -1 : 1;
+                    - script.execute: alert_refresh
+              - button:
+                  id: btn_af_0
+                  styles: st_btn
+                  align: LEFT_MID
+                  x: 600
+                  width: 150
+                  height: 36
+                  pressed:
+                    bg_color: $col_batt
+                    bg_opa: 20%
+                  checked:
+                    bg_color: $col_batt
+                    bg_opa: 20%
+                    border_color: $col_batt
+                    border_width: 2
+                  widgets:
+                    - label:
+                        id: lbl_af_0
+                        align: CENTER
+                        width: 138
+                        height: 20
+                        long_mode: DOT
+                        text_align: CENTER
+                        text_font: f_text_s
+                        text_color: $col_ink3
+                        text: "--"
+                  on_click:
+                    - lambda: |-
+                        id(alert_filter) = id(alert_filter) == 0 ? -1 : 0;
+                    - script.execute: alert_refresh
               # Knoepfe 170 x 36 (innen 38, Reserve 2), Abstand gap_tile.
               # Beide starten gesperrt; alert_refresh gibt sie frei. Die
               # Beschriftung ist ein eigenes Label mit align CENTER -- das

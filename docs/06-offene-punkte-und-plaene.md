@@ -373,8 +373,13 @@ nie den Strom samt Vorzeichen.
 
 **Meldungen.** `alert_push(severity, device, text)` — Aufruf später aus BMS-, Modbus- und
 HA-Fehlerzuständen. Die Liste liegt nur im RAM und ist nach einem Neustart leer.
-`pv_status` und `sys_refresh` rufen es schon selbst (Störung eines Wechselrichters,
-veraltete Werte).
+`pv_status`, `sys_refresh` und `wx_warning` rufen es schon selbst (Störung eines
+Wechselrichters, veraltete Werte, DWD-Warnung) und melden über `alert_clear(device, text)`
+auch, wenn die Ursache weg ist. Seit dem 25.09.2026 zeigt die Seite nur Meldungen, deren
+Ursache noch besteht (Wunsch Sebastian); gleiche Meldungen zählen in einer Zeile mit, die
+Meldungszeile oben zeigt die schwerste. Eine künftige Quelle braucht also beides: `alert_push`
+beim Eintreten und `alert_clear` mit demselben Text beim Ende. Meldungen ohne Ende, etwa die
+neue Firmware des Co-Prozessors, bleiben bis zum Quittieren und Leeren stehen.
 
 **Gerätewerte vom Nutzer.** Die Beschriftungen und Leistungen der eigenen Anlage
 (`name_*`, `pv_kwp`, Tarife) trägt der Nutzer in `.pv-dashboard_anlage.yaml` ein und
@@ -568,7 +573,7 @@ Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 25.09.2026 (Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Stand: 25.09.2026 (Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
 Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc
