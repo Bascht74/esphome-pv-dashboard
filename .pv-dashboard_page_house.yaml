@@ -105,11 +105,11 @@ script:
           auto &num = id(fmt_num);
           // Zeile unter 10 W grau wie in evcc
           auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
-            const bool on = !std::isnan(v) && v > 10.0f;
+            const bool on = std::isfinite(v) && v > 10.0f;
             lv_obj_set_style_text_color(name, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
             lv_obj_set_style_text_color(val, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
           };
-          auto z = [](float v) -> float { return std::isnan(v) ? 0.0f : std::max(v, 0.0f); };
+          auto z = [](float v) -> float { return !std::isfinite(v) ? 0.0f : std::max(v, 0.0f); };
           const float p = z(pv), bo = z(bat_out), gi = z(grid_in), h = z(home), lp = z(loadpoints),
                       bi = z(bat_in), go = z(grid_out);
           // Aufteilung wie evcc (Visualization.vue)
@@ -197,10 +197,13 @@ script:
           lv_obj_set_style_bg_color(id(hf_leg_sq_2), importing ? lv_color_hex($col_evcc_grid) : lv_color_hex($col_evcc_export), 0);
 
           // --- Tabelle In / Out
-          const bool any_in = !std::isnan(pv) || !std::isnan(bat_out) || !std::isnan(grid_in);
-          const bool any_out = !std::isnan(home) || !std::isnan(loadpoints) || !std::isnan(bat_in) || !std::isnan(grid_out);
-          lv_label_set_text(id(ht_in_total), any_in ? pw(p + bo + gi).c_str() : "--");
-          lv_label_set_text(id(ht_out_total), any_out ? pw(h + lp + bi + go).c_str() : "--");
+          const bool any_in = std::isfinite(pv) || std::isfinite(bat_out) || std::isfinite(grid_in);
+          const bool any_out = std::isfinite(home) || std::isfinite(loadpoints) || std::isfinite(bat_in) || std::isfinite(grid_out);
+          // Ein leerer Summand (val_leer, -inf) macht die Summe leer
+          const bool leer_in = std::isinf(pv) || std::isinf(bat_out) || std::isinf(grid_in);
+          const bool leer_out = std::isinf(home) || std::isinf(loadpoints) || std::isinf(bat_in) || std::isinf(grid_out);
+          lv_label_set_text(id(ht_in_total), leer_in ? "" : (any_in ? pw(p + bo + gi).c_str() : "--"));
+          lv_label_set_text(id(ht_out_total), leer_out ? "" : (any_out ? pw(h + lp + bi + go).c_str() : "--"));
           lv_label_set_text(id(ht_pv), pw(pv).c_str());
           lv_label_set_text(id(ht_bat_out), pw(bat_out).c_str());
           lv_label_set_text(id(ht_grid_in), pw(grid_in).c_str());
@@ -224,13 +227,13 @@ script:
 
           // --- Verbrauch jetzt: Haus und Ladepunkte, Herkunft wie evcc
           // (erst PV, dann Speicher, Rest Netz); Speicherladen zaehlt nicht
-          const bool known = !std::isnan(home);
+          const bool known = std::isfinite(home);
           const float c = h + lp;
           const float c_pv = std::min(p, c);
           const float c_bat = std::min(bo, c - c_pv);
           const float c_grid = std::max(c - c_pv - c_bat, 0.0f);
           if (!known) {
-            lv_label_set_text(id(hn_value), "--");
+            lv_label_set_text(id(hn_value), std::isinf(home) ? "" : "--");
             lv_label_set_text(id(hn_unit), "kW");
           } else if (c < 999.5f) {
             lv_label_set_text(id(hn_value), num(c, "%.0f", "--").c_str());
@@ -247,7 +250,7 @@ script:
           const int sh[3] = {s0, s1, (known && c > 0.0f) ? s2 : 0};
           for (int i = 0; i < 3; i++) {
             if (!known)
-              lv_label_set_text(pct[i], "-- %");
+              lv_label_set_text(pct[i], std::isinf(home) ? "" : "-- %");
             else
               lv_label_set_text_fmt(pct[i], "%d %%", c > 0.0f ? sh[i] : 0);
           }
@@ -291,19 +294,19 @@ script:
           auto &num = id(fmt_num);
           // Zeile unter 10 W grau wie in evcc
           auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
-            const bool on = !std::isnan(v) && v > 10.0f;
+            const bool on = std::isfinite(v) && v > 10.0f;
             lv_obj_set_style_text_color(name, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
             lv_obj_set_style_text_color(val, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
           };
           lv_obj_t *const val[3] = {id(ht_b1), id(ht_b2), id(ht_b3)};
           lv_obj_t *const nam[3] = {id(ht_b1_n), id(ht_b2_n), id(ht_b3_n)};
           lv_obj_t *const det[3] = {id(ht_b1_d), id(ht_b2_d), id(ht_b3_d)};
-          lv_label_set_text(val[bat], pw(std::isnan(power) ? NAN : fabsf(power)).c_str());
+          lv_label_set_text(val[bat], pw(!std::isfinite(power) ? power : fabsf(power)).c_str());
           std::string d = num(soc, "%.0f", "--") + " %";
-          if (!std::isnan(power) && fabsf(power) > 10.0f)
+          if (std::isfinite(power) && fabsf(power) > 10.0f)
             d += power > 0.0f ? " · entlädt" : " · lädt";
           lv_label_set_text(det[bat], d.c_str());
-          shade(nam[bat], val[bat], std::isnan(power) ? NAN : fabsf(power));
+          shade(nam[bat], val[bat], !std::isfinite(power) ? NAN : fabsf(power));
 
   # ---------------------------------------------------------------------
   # Unterzeile je Ladepunkt unter "Ladepunkte":
@@ -326,7 +329,7 @@ script:
           auto &num = id(fmt_num);
           // Zeile unter 10 W grau wie in evcc
           auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
-            const bool on = !std::isnan(v) && v > 10.0f;
+            const bool on = std::isfinite(v) && v > 10.0f;
             lv_obj_set_style_text_color(name, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
             lv_obj_set_style_text_color(val, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
           };
@@ -341,7 +344,7 @@ script:
           lpw[wb] = power;
           int active = 0;
           for (float v : lpw)
-            if (!std::isnan(v) && v > 10.0f)
+            if (std::isfinite(v) && v > 10.0f)
               active++;
           lv_label_set_text_fmt(id(ht_lp_d), "%d aktiv", active);
 
@@ -353,7 +356,8 @@ script:
   #   power    momentane Leistung in W
   #   energy   Verbrauch heute in kWh
   #   NAN = kein Wert (Striche)
-  # Die Kopfzeile zeigt die Summe, sobald alle sechs Werte da sind.
+  # Die Kopfzeile zeigt die Summe, sobald alle sechs Werte da sind (ohne
+  # Waermepumpe laut dev_present: die uebrigen fuenf).
   # ---------------------------------------------------------------------
   - id: house_update
     parameters:
@@ -370,7 +374,7 @@ script:
           auto &num = id(fmt_num);
           // Zeile unter 10 W grau wie in evcc
           auto shade = [](lv_obj_t *name, lv_obj_t *val, float v) {
-            const bool on = !std::isnan(v) && v > 10.0f;
+            const bool on = std::isfinite(v) && v > 10.0f;
             lv_obj_set_style_text_color(name, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
             lv_obj_set_style_text_color(val, on ? lv_color_hex($col_ink) : lv_color_hex($col_ink3), 0);
           };
@@ -382,15 +386,22 @@ script:
           shade(nam[dev], val[dev], power);
           static float now[6] = {NAN, NAN, NAN, NAN, NAN, NAN};
           now[dev] = power;
+          // Summe: fehlt ein Wert noch (NAN), Striche; ist einer leer
+          // (val_leer, -inf: Entitaet fehlt), bleibt auch die Summe leer
           float sum = 0.0f;
-          bool all = true;
-          for (float v : now) {
-            if (std::isnan(v))
+          bool all = true, leer = false;
+          for (int k = 0; k < 6; k++) {
+            // Ohne Waermepumpe (dev_present, Bit 17) zaehlt ihre Zeile nicht
+            if (k == 0 && !(id(dev_present) & (1u << 17)))
+              continue;
+            if (std::isinf(now[k]))
+              leer = true;
+            else if (std::isnan(now[k]))
               all = false;
             else
-              sum += v;
+              sum += now[k];
           }
-          lv_label_set_text(id(ht_c_total), all ? pw(sum).c_str() : "--");
+          lv_label_set_text(id(ht_c_total), leer ? "" : (all ? pw(sum).c_str() : "--"));
 
   # ---------------------------------------------------------------------
   # Verbrauch der letzten 24 Stunden, je Stunde in kWh:
@@ -414,7 +425,7 @@ script:
             for (int i = 0; i < 24; i++) {
               char *end = nullptr;
               const float v = strtof(q, &end);
-              out[i] = (end == q || std::isnan(v)) ? 0.0f : std::max(v, 0.0f);
+              out[i] = (end == q || !std::isfinite(v)) ? 0.0f : std::max(v, 0.0f);
               q = end;
               while (*q == ',' || *q == ' ')
                 q++;

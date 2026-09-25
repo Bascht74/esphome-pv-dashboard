@@ -1,0 +1,2171 @@
+##############################################################################
+# Home-Assistant-Paket: Ersatz-Entitaeten fuer das PV-Dashboard
+#
+# ERZEUGT von tools/ha_bindings.py -- nicht von Hand aendern.
+#
+# Legt jede Entitaet an, die .pv-dashboard_ha.yaml als Standard erwartet,
+# damit das Panel ohne Wechselrichter, evcc, Solcast, DWD und Shelly Werte
+# bekommt. Einbinden in configuration.yaml:
+#
+#   homeassistant:
+#     packages:
+#       pv_dashboard_dummy: !include packages/pv_dashboard_dummy.yaml
+#
+# (Datei nach <config>/packages/ kopieren, Home Assistant neu starten.)
+#
+#   - Zahlen: je ein input_number.pvd_<name>, der Sensor mit der Standard-ID
+#     zeigt dessen Wert (Einstellungen > Helfer, von Hand verstellbar).
+#   - Zaehlerstaende (fuer recorder.get_statistics) laufen gleichmaessig
+#     hoch; die Statistik fuellt sich erst mit der Zeit.
+#   - Texte und Zeitpunkte fest, Wetter als Template-Wetter mit Vorhersagen,
+#     detailedForecast als Attribut der Solcast-Tagesprognose.
+#   - Ein Geraet verschwindet am Panel, wenn seine Referenz-Entitaet (Liste
+#     in .pv-dashboard_ha.yaml unter substitutions) keinen gueltigen Wert hat,
+#     etwa input_number.pvd_bat3_soc hier ausser Betrieb -- oder dauerhaft mit
+#     ha_<referenz>: none in .pv-dashboard_anlage.yaml.
+#   - sun.sun kommt aus der Integration sun (default_config), nicht von hier.
+#
+# Umstellen auf die echten Entitaeten: dieses Paket entfernen, dann die
+# echten IDs in .pv-dashboard_anlage.yaml als ha_<name>: <entity_id>
+# eintragen -- nur die, die vom Standard abweichen. Was es nicht gibt:
+# ha_<name>: none (Geraet ohne Referenz faellt ganz weg, sonst nur der Wert).
+#
+# Die Wetter-Entitaet heisst hier weather.dwd_station, die Warnzelle
+# sensor.dwd_warnzelle_aktuelle_warnstufe -- beides Platzhalter fuer Station und Warnzelle.
+##############################################################################
+
+input_boolean:
+  # Ersatz fuer an/aus-Werte
+  pvd_inv1_fault:
+    name: "PVD inv1_fault"
+    initial: false
+  pvd_inv2_fault:
+    name: "PVD inv2_fault"
+    initial: false
+  pvd_inv3_fault:
+    name: "PVD inv3_fault"
+    initial: false
+  pvd_inv4_fault:
+    name: "PVD inv4_fault"
+    initial: false
+  pvd_wb1_charging:
+    name: "PVD wb1_charging"
+    initial: true
+  pvd_wb1_connected:
+    name: "PVD wb1_connected"
+    initial: true
+  pvd_wb2_charging:
+    name: "PVD wb2_charging"
+    initial: false
+  pvd_wb2_connected:
+    name: "PVD wb2_connected"
+    initial: false
+  pvd_hp_eheat:
+    name: "PVD hp_eheat"
+    initial: false
+  pvd_hp_defrost:
+    name: "PVD hp_defrost"
+    initial: false
+  pvd_hp_legionella:
+    name: "PVD hp_legionella"
+    initial: false
+  pvd_p14a_active:
+    name: "PVD p14a_active"
+    initial: false
+  einspeisegrenze_aktiv:
+    name: "einspeisegrenze_aktiv"
+    initial: true
+  neg_preis_verguetet:
+    name: "neg_preis_verguetet"
+    initial: true
+  smart_meter_eingebaut:
+    name: "smart_meter_eingebaut"
+    initial: false
+
+input_number:
+  pvd_pv1_power:
+    name: "PVD pv1_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 3412
+    mode: box
+  pvd_pv1_energy:
+    name: "PVD pv1_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 20.1
+    mode: box
+  pvd_pv2_power:
+    name: "PVD pv2_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 2980
+    mode: box
+  pvd_pv2_energy:
+    name: "PVD pv2_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 19.2
+    mode: box
+  pvd_pv3_power:
+    name: "PVD pv3_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 312
+    mode: box
+  pvd_pv3_energy:
+    name: "PVD pv3_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 2.0
+    mode: box
+  pvd_pv4_power:
+    name: "PVD pv4_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 298
+    mode: box
+  pvd_pv4_energy:
+    name: "PVD pv4_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 2.0
+    mode: box
+  pvd_pv5_power:
+    name: "PVD pv5_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 4120
+    mode: box
+  pvd_pv5_energy:
+    name: "PVD pv5_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 30.4
+    mode: box
+  pvd_pv6_power:
+    name: "PVD pv6_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 3890
+    mode: box
+  pvd_pv6_energy:
+    name: "PVD pv6_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 29.1
+    mode: box
+  pvd_pv7_power:
+    name: "PVD pv7_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 3650
+    mode: box
+  pvd_pv7_energy:
+    name: "PVD pv7_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 31.2
+    mode: box
+  pvd_pv8_power:
+    name: "PVD pv8_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 0
+    mode: box
+  pvd_pv8_energy:
+    name: "PVD pv8_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 0.0
+    mode: box
+  pvd_inv1_power:
+    name: "PVD inv1_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 6214
+    mode: box
+  pvd_inv1_energy:
+    name: "PVD inv1_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 38.5
+    mode: box
+  pvd_inv1_temp:
+    name: "PVD inv1_temp"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 41.5
+    mode: box
+  pvd_inv2_power:
+    name: "PVD inv2_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 588
+    mode: box
+  pvd_inv2_energy:
+    name: "PVD inv2_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 3.9
+    mode: box
+  pvd_inv2_temp:
+    name: "PVD inv2_temp"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 38.0
+    mode: box
+  pvd_inv3_power:
+    name: "PVD inv3_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 7835
+    mode: box
+  pvd_inv3_energy:
+    name: "PVD inv3_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 58.2
+    mode: box
+  pvd_inv3_temp:
+    name: "PVD inv3_temp"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 39.2
+    mode: box
+  pvd_inv4_power:
+    name: "PVD inv4_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 5231
+    mode: box
+  pvd_inv4_energy:
+    name: "PVD inv4_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 46.4
+    mode: box
+  pvd_inv4_temp:
+    name: "PVD inv4_temp"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 40.1
+    mode: box
+  pvd_bat1_soc:
+    name: "PVD bat1_soc"
+    min: 0
+    max: 100
+    step: 1
+    initial: 72
+    mode: box
+  pvd_bat1_current:
+    name: "PVD bat1_current"
+    min: -200
+    max: 200
+    step: 0.1
+    initial: 12.4
+    mode: box
+  pvd_bat1_voltage:
+    name: "PVD bat1_voltage"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 53.2
+    mode: box
+  pvd_bat1_cell_min:
+    name: "PVD bat1_cell_min"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 3.281
+    mode: box
+  pvd_bat1_cell_max:
+    name: "PVD bat1_cell_max"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 3.302
+    mode: box
+  pvd_bat1_temp_min:
+    name: "PVD bat1_temp_min"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 18
+    mode: box
+  pvd_bat1_temp_max:
+    name: "PVD bat1_temp_max"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 21
+    mode: box
+  pvd_bat1_cycles:
+    name: "PVD bat1_cycles"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 412
+    mode: box
+  pvd_bat1_power:
+    name: "PVD bat1_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: -660
+    mode: box
+  pvd_bat2_soc:
+    name: "PVD bat2_soc"
+    min: 0
+    max: 100
+    step: 1
+    initial: 38
+    mode: box
+  pvd_bat2_current:
+    name: "PVD bat2_current"
+    min: -200
+    max: 200
+    step: 0.1
+    initial: -8.9
+    mode: box
+  pvd_bat2_voltage:
+    name: "PVD bat2_voltage"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 52.1
+    mode: box
+  pvd_bat2_cell_min:
+    name: "PVD bat2_cell_min"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 3.195
+    mode: box
+  pvd_bat2_cell_max:
+    name: "PVD bat2_cell_max"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 3.377
+    mode: box
+  pvd_bat2_temp_min:
+    name: "PVD bat2_temp_min"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 19
+    mode: box
+  pvd_bat2_temp_max:
+    name: "PVD bat2_temp_max"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 24
+    mode: box
+  pvd_bat2_cycles:
+    name: "PVD bat2_cycles"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 398
+    mode: box
+  pvd_bat2_power:
+    name: "PVD bat2_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 464
+    mode: box
+  pvd_bat3_soc:
+    name: "PVD bat3_soc"
+    min: 0
+    max: 100
+    step: 1
+    initial: 100
+    mode: box
+  pvd_bat3_current:
+    name: "PVD bat3_current"
+    min: -200
+    max: 200
+    step: 0.1
+    initial: 0.0
+    mode: box
+  pvd_bat3_voltage:
+    name: "PVD bat3_voltage"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 54.4
+    mode: box
+  pvd_bat3_cell_min:
+    name: "PVD bat3_cell_min"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 3.402
+    mode: box
+  pvd_bat3_cell_max:
+    name: "PVD bat3_cell_max"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 3.411
+    mode: box
+  pvd_bat3_temp_min:
+    name: "PVD bat3_temp_min"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 17
+    mode: box
+  pvd_bat3_temp_max:
+    name: "PVD bat3_temp_max"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 19
+    mode: box
+  pvd_bat3_cycles:
+    name: "PVD bat3_cycles"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 1287
+    mode: box
+  pvd_bat3_power:
+    name: "PVD bat3_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 0
+    mode: box
+  pvd_bat_charged_today:
+    name: "PVD bat_charged_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 12.3
+    mode: box
+  pvd_bat_discharged_today:
+    name: "PVD bat_discharged_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 18.5
+    mode: box
+  pvd_site_pv_power:
+    name: "PVD site_pv_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 13654
+    mode: box
+  pvd_site_battery_power:
+    name: "PVD site_battery_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: -196
+    mode: box
+  pvd_site_grid_power:
+    name: "PVD site_grid_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: -11340
+    mode: box
+  pvd_home_power:
+    name: "PVD home_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 932
+    mode: box
+  pvd_site_battery_soc:
+    name: "PVD site_battery_soc"
+    min: 0
+    max: 100
+    step: 1
+    initial: 70
+    mode: box
+  pvd_tariff_grid:
+    name: "PVD tariff_grid"
+    min: -1
+    max: 2
+    step: 0.001
+    initial: 0.3
+    mode: box
+  pvd_tariff_home:
+    name: "PVD tariff_home"
+    min: -1
+    max: 2
+    step: 0.001
+    initial: 0.12
+    mode: box
+  pvd_tariff_feedin:
+    name: "PVD tariff_feedin"
+    min: -1
+    max: 2
+    step: 0.001
+    initial: 0.1
+    mode: box
+  pvd_wb1_power:
+    name: "PVD wb1_power"
+    min: -30
+    max: 30
+    step: 0.01
+    initial: 7.4
+    mode: box
+  pvd_wb1_phases:
+    name: "PVD wb1_phases"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 3
+    mode: box
+  pvd_wb1_energy:
+    name: "PVD wb1_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 12.8
+    mode: box
+  pvd_wb1_solar:
+    name: "PVD wb1_solar"
+    min: 0
+    max: 100
+    step: 1
+    initial: 64
+    mode: box
+  pvd_wb1_minutes:
+    name: "PVD wb1_minutes"
+    min: 0
+    max: 1440
+    step: 1
+    initial: 104
+    mode: box
+  pvd_wb1_soc:
+    name: "PVD wb1_soc"
+    min: 0
+    max: 100
+    step: 1
+    initial: 58
+    mode: box
+  pvd_wb1_range:
+    name: "PVD wb1_range"
+    min: 0
+    max: 1000
+    step: 1
+    initial: 212
+    mode: box
+  pvd_wb1_limit:
+    name: "PVD wb1_limit"
+    min: 0
+    max: 100
+    step: 1
+    initial: 80
+    mode: box
+  pvd_wb2_power:
+    name: "PVD wb2_power"
+    min: -30
+    max: 30
+    step: 0.01
+    initial: 0.0
+    mode: box
+  pvd_wb2_phases:
+    name: "PVD wb2_phases"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 0
+    mode: box
+  pvd_wb2_energy:
+    name: "PVD wb2_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 0.0
+    mode: box
+  pvd_wb2_solar:
+    name: "PVD wb2_solar"
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    mode: box
+  pvd_wb2_minutes:
+    name: "PVD wb2_minutes"
+    min: 0
+    max: 1440
+    step: 1
+    initial: 0
+    mode: box
+  pvd_wb2_soc:
+    name: "PVD wb2_soc"
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    mode: box
+  pvd_wb2_range:
+    name: "PVD wb2_range"
+    min: 0
+    max: 1000
+    step: 1
+    initial: 0
+    mode: box
+  pvd_wb2_limit:
+    name: "PVD wb2_limit"
+    min: 0
+    max: 100
+    step: 1
+    initial: 100
+    mode: box
+  pvd_wb_month_energy:
+    name: "PVD wb_month_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 182.4
+    mode: box
+  pvd_wb_month_solar:
+    name: "PVD wb_month_solar"
+    min: 0
+    max: 100
+    step: 1
+    initial: 71
+    mode: box
+  pvd_wb_month_price:
+    name: "PVD wb_month_price"
+    min: -1
+    max: 2
+    step: 0.001
+    initial: 0.214
+    mode: box
+  pvd_hp_outdoor:
+    name: "PVD hp_outdoor"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 12.4
+    mode: box
+  pvd_hp_room:
+    name: "PVD hp_room"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 21.6
+    mode: box
+  pvd_hp_humidity:
+    name: "PVD hp_humidity"
+    min: 0
+    max: 100
+    step: 1
+    initial: 48
+    mode: box
+  pvd_hp_dhw:
+    name: "PVD hp_dhw"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 51
+    mode: box
+  pvd_hp_fan:
+    name: "PVD hp_fan"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 2
+    mode: box
+  pvd_hp_supply:
+    name: "PVD hp_supply"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 19.8
+    mode: box
+  pvd_hp_exhaust:
+    name: "PVD hp_exhaust"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 13.1
+    mode: box
+  pvd_hp_power:
+    name: "PVD hp_power"
+    min: -30
+    max: 30
+    step: 0.01
+    initial: 0.62
+    mode: box
+  pvd_hp_energy:
+    name: "PVD hp_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 5.4
+    mode: box
+  pvd_hp_alarm:
+    name: "PVD hp_alarm"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 0
+    mode: box
+  pvd_hp_room_set:
+    name: "PVD hp_room_set"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 21
+    mode: box
+  pvd_hp_dhw_set:
+    name: "PVD hp_dhw_set"
+    min: -40
+    max: 100
+    step: 0.1
+    initial: 50
+    mode: box
+  pvd_hp_fan_supply:
+    name: "PVD hp_fan_supply"
+    min: 0
+    max: 100
+    step: 1
+    initial: 45
+    mode: box
+  pvd_hp_fan_extract:
+    name: "PVD hp_fan_extract"
+    min: 0
+    max: 100
+    step: 1
+    initial: 47
+    mode: box
+  pvd_hp_filter_days:
+    name: "PVD hp_filter_days"
+    min: 0
+    max: 400
+    step: 1
+    initial: 63
+    mode: box
+  pvd_dev1_power:
+    name: "PVD dev1_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 0
+    mode: box
+  pvd_dev1_energy:
+    name: "PVD dev1_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 1.2
+    mode: box
+  pvd_dev2_power:
+    name: "PVD dev2_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 0
+    mode: box
+  pvd_dev2_energy:
+    name: "PVD dev2_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 0.8
+    mode: box
+  pvd_dev3_power:
+    name: "PVD dev3_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 0
+    mode: box
+  pvd_dev3_energy:
+    name: "PVD dev3_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 1.1
+    mode: box
+  pvd_dev4_power:
+    name: "PVD dev4_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 0
+    mode: box
+  pvd_dev4_energy:
+    name: "PVD dev4_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 0.0
+    mode: box
+  pvd_dev5_power:
+    name: "PVD dev5_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 312
+    mode: box
+  pvd_dev5_energy:
+    name: "PVD dev5_energy"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 7.5
+    mode: box
+  pvd_grid_power:
+    name: "PVD grid_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: -11340
+    mode: box
+  pvd_grid_freq:
+    name: "PVD grid_freq"
+    min: 45
+    max: 55
+    step: 0.01
+    initial: 50.01
+    mode: box
+  pvd_curtailed_today:
+    name: "PVD curtailed_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 0.0
+    mode: box
+  pvd_grid_n_current:
+    name: "PVD grid_n_current"
+    min: -200
+    max: 200
+    step: 0.1
+    initial: 0.8
+    mode: box
+  pvd_grid_l1_voltage:
+    name: "PVD grid_l1_voltage"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 231.2
+    mode: box
+  pvd_grid_l1_current:
+    name: "PVD grid_l1_current"
+    min: -200
+    max: 200
+    step: 0.1
+    initial: 16.4
+    mode: box
+  pvd_grid_l1_power:
+    name: "PVD grid_l1_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: -3780
+    mode: box
+  pvd_grid_l1_apparent:
+    name: "PVD grid_l1_apparent"
+    min: 0
+    max: 30000
+    step: 1
+    initial: 3790
+    mode: box
+  pvd_grid_l1_pf:
+    name: "PVD grid_l1_pf"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: -0.99
+    mode: box
+  pvd_grid_l2_voltage:
+    name: "PVD grid_l2_voltage"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 230.8
+    mode: box
+  pvd_grid_l2_current:
+    name: "PVD grid_l2_current"
+    min: -200
+    max: 200
+    step: 0.1
+    initial: 16.1
+    mode: box
+  pvd_grid_l2_power:
+    name: "PVD grid_l2_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: -3710
+    mode: box
+  pvd_grid_l2_apparent:
+    name: "PVD grid_l2_apparent"
+    min: 0
+    max: 30000
+    step: 1
+    initial: 3720
+    mode: box
+  pvd_grid_l2_pf:
+    name: "PVD grid_l2_pf"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: -0.99
+    mode: box
+  pvd_grid_l3_voltage:
+    name: "PVD grid_l3_voltage"
+    min: 0
+    max: 500
+    step: 0.001
+    initial: 232.0
+    mode: box
+  pvd_grid_l3_current:
+    name: "PVD grid_l3_current"
+    min: -200
+    max: 200
+    step: 0.1
+    initial: 16.9
+    mode: box
+  pvd_grid_l3_power:
+    name: "PVD grid_l3_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: -3850
+    mode: box
+  pvd_grid_l3_apparent:
+    name: "PVD grid_l3_apparent"
+    min: 0
+    max: 30000
+    step: 1
+    initial: 3860
+    mode: box
+  pvd_grid_l3_pf:
+    name: "PVD grid_l3_pf"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: -0.99
+    mode: box
+  pvd_meter0_today:
+    name: "PVD meter0_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 3.4
+    mode: box
+  pvd_meter1_today:
+    name: "PVD meter1_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 119.3
+    mode: box
+  pvd_meter2_today:
+    name: "PVD meter2_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 88.7
+    mode: box
+  pvd_meter3_today:
+    name: "PVD meter3_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 3.3
+    mode: box
+  pvd_meter4_today:
+    name: "PVD meter4_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 30.6
+    mode: box
+  pvd_meter_pv_power:
+    name: "PVD meter_pv_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 6214
+    mode: box
+  pvd_meter_house_power:
+    name: "PVD meter_house_power"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 5126
+    mode: box
+  pvd_spot_price:
+    name: "PVD spot_price"
+    min: -1
+    max: 2
+    step: 0.001
+    initial: 0.087
+    mode: box
+  pvd_neg_quarters:
+    name: "PVD neg_quarters"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 0
+    mode: box
+  pvd_pv_energy_today:
+    name: "PVD pv_energy_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 147.0
+    mode: box
+  pvd_home_energy_today:
+    name: "PVD home_energy_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 21.3
+    mode: box
+  pvd_selfuse_energy_today:
+    name: "PVD selfuse_energy_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 19.9
+    mode: box
+  pvd_solcast_today:
+    name: "PVD solcast_today"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 155.0
+    mode: box
+  pvd_solcast_remaining:
+    name: "PVD solcast_remaining"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 12.6
+    mode: box
+  pvd_solcast_power_now:
+    name: "PVD solcast_power_now"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 9600
+    mode: box
+  pvd_solcast_next_hour:
+    name: "PVD solcast_next_hour"
+    min: 0
+    max: 100000
+    step: 1
+    initial: 7100
+    mode: box
+  pvd_solcast_peak:
+    name: "PVD solcast_peak"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 22000
+    mode: box
+  pvd_solcast_api_used:
+    name: "PVD solcast_api_used"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 6
+    mode: box
+  pvd_solcast_api_limit:
+    name: "PVD solcast_api_limit"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 10
+    mode: box
+  pvd_solcast_d2:
+    name: "PVD solcast_d2"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 171.2
+    mode: box
+  pvd_solcast_d3:
+    name: "PVD solcast_d3"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 48.6
+    mode: box
+  pvd_solcast_d4:
+    name: "PVD solcast_d4"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 72.3
+    mode: box
+  pvd_solcast_d5:
+    name: "PVD solcast_d5"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 121.8
+    mode: box
+  pvd_solcast_d6:
+    name: "PVD solcast_d6"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 66.0
+    mode: box
+  pvd_solcast_d7:
+    name: "PVD solcast_d7"
+    min: 0
+    max: 100000
+    step: 0.1
+    initial: 158.4
+    mode: box
+  pvd_wx_sun:
+    name: "PVD wx_sun"
+    min: 0
+    max: 86400
+    step: 1
+    initial: 22320
+    mode: box
+  pvd_warn_level:
+    name: "PVD warn_level"
+    min: -100000
+    max: 100000
+    step: 0.01
+    initial: 1
+    mode: box
+  p14a_grenze_kw:
+    name: "p14a_grenze_kw"
+    min: -30
+    max: 30
+    step: 0.01
+    initial: 4.2
+    mode: box
+    unit_of_measurement: "kW"
+
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.wr1_stoerung
+        unique_id: pvd_inv1_fault
+        name: "wr1_stoerung"
+        state: "{{ is_state('input_boolean.pvd_inv1_fault', 'on') }}"
+      - default_entity_id: binary_sensor.wr2_stoerung
+        unique_id: pvd_inv2_fault
+        name: "wr2_stoerung"
+        state: "{{ is_state('input_boolean.pvd_inv2_fault', 'on') }}"
+      - default_entity_id: binary_sensor.wr3_stoerung
+        unique_id: pvd_inv3_fault
+        name: "wr3_stoerung"
+        state: "{{ is_state('input_boolean.pvd_inv3_fault', 'on') }}"
+      - default_entity_id: binary_sensor.wr4_stoerung
+        unique_id: pvd_inv4_fault
+        name: "wr4_stoerung"
+        state: "{{ is_state('input_boolean.pvd_inv4_fault', 'on') }}"
+      - default_entity_id: binary_sensor.evcc_wallbox_1_charging
+        unique_id: pvd_wb1_charging
+        name: "evcc_wallbox_1_charging"
+        state: "{{ is_state('input_boolean.pvd_wb1_charging', 'on') }}"
+      - default_entity_id: binary_sensor.evcc_wallbox_1_connected
+        unique_id: pvd_wb1_connected
+        name: "evcc_wallbox_1_connected"
+        state: "{{ is_state('input_boolean.pvd_wb1_connected', 'on') }}"
+      - default_entity_id: binary_sensor.evcc_wallbox_2_charging
+        unique_id: pvd_wb2_charging
+        name: "evcc_wallbox_2_charging"
+        state: "{{ is_state('input_boolean.pvd_wb2_charging', 'on') }}"
+      - default_entity_id: binary_sensor.evcc_wallbox_2_connected
+        unique_id: pvd_wb2_connected
+        name: "evcc_wallbox_2_connected"
+        state: "{{ is_state('input_boolean.pvd_wb2_connected', 'on') }}"
+      - default_entity_id: binary_sensor.nilan_zusatzheizung
+        unique_id: pvd_hp_eheat
+        name: "nilan_zusatzheizung"
+        state: "{{ is_state('input_boolean.pvd_hp_eheat', 'on') }}"
+      - default_entity_id: binary_sensor.nilan_enteisung
+        unique_id: pvd_hp_defrost
+        name: "nilan_enteisung"
+        state: "{{ is_state('input_boolean.pvd_hp_defrost', 'on') }}"
+      - default_entity_id: binary_sensor.nilan_legionellenschutz
+        unique_id: pvd_hp_legionella
+        name: "nilan_legionellenschutz"
+        state: "{{ is_state('input_boolean.pvd_hp_legionella', 'on') }}"
+      - default_entity_id: binary_sensor.p14a_signal
+        unique_id: pvd_p14a_active
+        name: "p14a_signal"
+        state: "{{ is_state('input_boolean.pvd_p14a_active', 'on') }}"
+  - sensor:
+      - default_entity_id: sensor.wr1_pv1_leistung
+        unique_id: pvd_pv1_power
+        name: "wr1_pv1_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_pv1_power') | float(0) }}"
+      - default_entity_id: sensor.wr1_pv1_ertrag_heute
+        unique_id: pvd_pv1_energy
+        name: "wr1_pv1_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_pv1_energy') | float(0) }}"
+      - default_entity_id: sensor.wr1_pv2_leistung
+        unique_id: pvd_pv2_power
+        name: "wr1_pv2_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_pv2_power') | float(0) }}"
+      - default_entity_id: sensor.wr1_pv2_ertrag_heute
+        unique_id: pvd_pv2_energy
+        name: "wr1_pv2_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_pv2_energy') | float(0) }}"
+      - default_entity_id: sensor.wr2_pv1_leistung
+        unique_id: pvd_pv3_power
+        name: "wr2_pv1_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_pv3_power') | float(0) }}"
+      - default_entity_id: sensor.wr2_pv1_ertrag_heute
+        unique_id: pvd_pv3_energy
+        name: "wr2_pv1_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_pv3_energy') | float(0) }}"
+      - default_entity_id: sensor.wr2_pv2_leistung
+        unique_id: pvd_pv4_power
+        name: "wr2_pv2_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_pv4_power') | float(0) }}"
+      - default_entity_id: sensor.wr2_pv2_ertrag_heute
+        unique_id: pvd_pv4_energy
+        name: "wr2_pv2_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_pv4_energy') | float(0) }}"
+      - default_entity_id: sensor.wr3_pv1_leistung
+        unique_id: pvd_pv5_power
+        name: "wr3_pv1_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_pv5_power') | float(0) }}"
+      - default_entity_id: sensor.wr3_pv1_ertrag_heute
+        unique_id: pvd_pv5_energy
+        name: "wr3_pv1_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_pv5_energy') | float(0) }}"
+      - default_entity_id: sensor.wr3_pv2_leistung
+        unique_id: pvd_pv6_power
+        name: "wr3_pv2_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_pv6_power') | float(0) }}"
+      - default_entity_id: sensor.wr3_pv2_ertrag_heute
+        unique_id: pvd_pv6_energy
+        name: "wr3_pv2_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_pv6_energy') | float(0) }}"
+      - default_entity_id: sensor.wr4_pv1_leistung
+        unique_id: pvd_pv7_power
+        name: "wr4_pv1_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_pv7_power') | float(0) }}"
+      - default_entity_id: sensor.wr4_pv1_ertrag_heute
+        unique_id: pvd_pv7_energy
+        name: "wr4_pv1_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_pv7_energy') | float(0) }}"
+      - default_entity_id: sensor.wr4_pv2_leistung
+        unique_id: pvd_pv8_power
+        name: "wr4_pv2_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_pv8_power') | float(0) }}"
+      - default_entity_id: sensor.wr4_pv2_ertrag_heute
+        unique_id: pvd_pv8_energy
+        name: "wr4_pv2_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_pv8_energy') | float(0) }}"
+      - default_entity_id: sensor.wr1_leistung
+        unique_id: pvd_inv1_power
+        name: "wr1_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_inv1_power') | float(0) }}"
+      - default_entity_id: sensor.wr1_ertrag_heute
+        unique_id: pvd_inv1_energy
+        name: "wr1_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_inv1_energy') | float(0) }}"
+      - default_entity_id: sensor.wr1_temperatur
+        unique_id: pvd_inv1_temp
+        name: "wr1_temperatur"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_inv1_temp') | float(0) }}"
+      - default_entity_id: sensor.wr2_leistung
+        unique_id: pvd_inv2_power
+        name: "wr2_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_inv2_power') | float(0) }}"
+      - default_entity_id: sensor.wr2_ertrag_heute
+        unique_id: pvd_inv2_energy
+        name: "wr2_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_inv2_energy') | float(0) }}"
+      - default_entity_id: sensor.wr2_temperatur
+        unique_id: pvd_inv2_temp
+        name: "wr2_temperatur"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_inv2_temp') | float(0) }}"
+      - default_entity_id: sensor.wr3_leistung
+        unique_id: pvd_inv3_power
+        name: "wr3_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_inv3_power') | float(0) }}"
+      - default_entity_id: sensor.wr3_ertrag_heute
+        unique_id: pvd_inv3_energy
+        name: "wr3_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_inv3_energy') | float(0) }}"
+      - default_entity_id: sensor.wr3_temperatur
+        unique_id: pvd_inv3_temp
+        name: "wr3_temperatur"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_inv3_temp') | float(0) }}"
+      - default_entity_id: sensor.wr4_leistung
+        unique_id: pvd_inv4_power
+        name: "wr4_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_inv4_power') | float(0) }}"
+      - default_entity_id: sensor.wr4_ertrag_heute
+        unique_id: pvd_inv4_energy
+        name: "wr4_ertrag_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_inv4_energy') | float(0) }}"
+      - default_entity_id: sensor.wr4_temperatur
+        unique_id: pvd_inv4_temp
+        name: "wr4_temperatur"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_inv4_temp') | float(0) }}"
+      - default_entity_id: sensor.speicher1_soc
+        unique_id: pvd_bat1_soc
+        name: "speicher1_soc"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_bat1_soc') | float(0) }}"
+      - default_entity_id: sensor.speicher1_strom
+        unique_id: pvd_bat1_current
+        name: "speicher1_strom"
+        unit_of_measurement: "A"
+        state: "{{ states('input_number.pvd_bat1_current') | float(0) }}"
+      - default_entity_id: sensor.speicher1_spannung
+        unique_id: pvd_bat1_voltage
+        name: "speicher1_spannung"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_bat1_voltage') | float(0) }}"
+      - default_entity_id: sensor.speicher1_zelle_min
+        unique_id: pvd_bat1_cell_min
+        name: "speicher1_zelle_min"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_bat1_cell_min') | float(0) }}"
+      - default_entity_id: sensor.speicher1_zelle_max
+        unique_id: pvd_bat1_cell_max
+        name: "speicher1_zelle_max"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_bat1_cell_max') | float(0) }}"
+      - default_entity_id: sensor.speicher1_temp_min
+        unique_id: pvd_bat1_temp_min
+        name: "speicher1_temp_min"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_bat1_temp_min') | float(0) }}"
+      - default_entity_id: sensor.speicher1_temp_max
+        unique_id: pvd_bat1_temp_max
+        name: "speicher1_temp_max"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_bat1_temp_max') | float(0) }}"
+      - default_entity_id: sensor.speicher1_zyklen
+        unique_id: pvd_bat1_cycles
+        name: "speicher1_zyklen"
+        state: "{{ states('input_number.pvd_bat1_cycles') | float(0) }}"
+      - default_entity_id: sensor.speicher1_leistung
+        unique_id: pvd_bat1_power
+        name: "speicher1_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_bat1_power') | float(0) }}"
+      - default_entity_id: sensor.speicher2_soc
+        unique_id: pvd_bat2_soc
+        name: "speicher2_soc"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_bat2_soc') | float(0) }}"
+      - default_entity_id: sensor.speicher2_strom
+        unique_id: pvd_bat2_current
+        name: "speicher2_strom"
+        unit_of_measurement: "A"
+        state: "{{ states('input_number.pvd_bat2_current') | float(0) }}"
+      - default_entity_id: sensor.speicher2_spannung
+        unique_id: pvd_bat2_voltage
+        name: "speicher2_spannung"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_bat2_voltage') | float(0) }}"
+      - default_entity_id: sensor.speicher2_zelle_min
+        unique_id: pvd_bat2_cell_min
+        name: "speicher2_zelle_min"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_bat2_cell_min') | float(0) }}"
+      - default_entity_id: sensor.speicher2_zelle_max
+        unique_id: pvd_bat2_cell_max
+        name: "speicher2_zelle_max"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_bat2_cell_max') | float(0) }}"
+      - default_entity_id: sensor.speicher2_temp_min
+        unique_id: pvd_bat2_temp_min
+        name: "speicher2_temp_min"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_bat2_temp_min') | float(0) }}"
+      - default_entity_id: sensor.speicher2_temp_max
+        unique_id: pvd_bat2_temp_max
+        name: "speicher2_temp_max"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_bat2_temp_max') | float(0) }}"
+      - default_entity_id: sensor.speicher2_zyklen
+        unique_id: pvd_bat2_cycles
+        name: "speicher2_zyklen"
+        state: "{{ states('input_number.pvd_bat2_cycles') | float(0) }}"
+      - default_entity_id: sensor.speicher2_leistung
+        unique_id: pvd_bat2_power
+        name: "speicher2_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_bat2_power') | float(0) }}"
+      - default_entity_id: sensor.speicher3_soc
+        unique_id: pvd_bat3_soc
+        name: "speicher3_soc"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_bat3_soc') | float(0) }}"
+      - default_entity_id: sensor.speicher3_strom
+        unique_id: pvd_bat3_current
+        name: "speicher3_strom"
+        unit_of_measurement: "A"
+        state: "{{ states('input_number.pvd_bat3_current') | float(0) }}"
+      - default_entity_id: sensor.speicher3_spannung
+        unique_id: pvd_bat3_voltage
+        name: "speicher3_spannung"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_bat3_voltage') | float(0) }}"
+      - default_entity_id: sensor.speicher3_zelle_min
+        unique_id: pvd_bat3_cell_min
+        name: "speicher3_zelle_min"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_bat3_cell_min') | float(0) }}"
+      - default_entity_id: sensor.speicher3_zelle_max
+        unique_id: pvd_bat3_cell_max
+        name: "speicher3_zelle_max"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_bat3_cell_max') | float(0) }}"
+      - default_entity_id: sensor.speicher3_temp_min
+        unique_id: pvd_bat3_temp_min
+        name: "speicher3_temp_min"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_bat3_temp_min') | float(0) }}"
+      - default_entity_id: sensor.speicher3_temp_max
+        unique_id: pvd_bat3_temp_max
+        name: "speicher3_temp_max"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_bat3_temp_max') | float(0) }}"
+      - default_entity_id: sensor.speicher3_zyklen
+        unique_id: pvd_bat3_cycles
+        name: "speicher3_zyklen"
+        state: "{{ states('input_number.pvd_bat3_cycles') | float(0) }}"
+      - default_entity_id: sensor.speicher3_leistung
+        unique_id: pvd_bat3_power
+        name: "speicher3_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_bat3_power') | float(0) }}"
+      - default_entity_id: sensor.speicher_geladen_heute
+        unique_id: pvd_bat_charged_today
+        name: "speicher_geladen_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_bat_charged_today') | float(0) }}"
+      - default_entity_id: sensor.speicher_entladen_heute
+        unique_id: pvd_bat_discharged_today
+        name: "speicher_entladen_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_bat_discharged_today') | float(0) }}"
+      - default_entity_id: sensor.evcc_pv_power
+        unique_id: pvd_site_pv_power
+        name: "evcc_pv_power"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_site_pv_power') | float(0) }}"
+      - default_entity_id: sensor.evcc_battery_power
+        unique_id: pvd_site_battery_power
+        name: "evcc_battery_power"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_site_battery_power') | float(0) }}"
+      - default_entity_id: sensor.evcc_grid_power
+        unique_id: pvd_site_grid_power
+        name: "evcc_grid_power"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_site_grid_power') | float(0) }}"
+      - default_entity_id: sensor.evcc_home_power
+        unique_id: pvd_home_power
+        name: "evcc_home_power"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_home_power') | float(0) }}"
+      - default_entity_id: sensor.evcc_battery_soc
+        unique_id: pvd_site_battery_soc
+        name: "evcc_battery_soc"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_site_battery_soc') | float(0) }}"
+      - default_entity_id: sensor.evcc_tariff_grid
+        unique_id: pvd_tariff_grid
+        name: "evcc_tariff_grid"
+        unit_of_measurement: "€/kWh"
+        state: "{{ states('input_number.pvd_tariff_grid') | float(0) }}"
+      - default_entity_id: sensor.evcc_tariff_price_home
+        unique_id: pvd_tariff_home
+        name: "evcc_tariff_price_home"
+        unit_of_measurement: "€/kWh"
+        state: "{{ states('input_number.pvd_tariff_home') | float(0) }}"
+      - default_entity_id: sensor.evcc_tariff_feed_in
+        unique_id: pvd_tariff_feedin
+        name: "evcc_tariff_feed_in"
+        unit_of_measurement: "€/kWh"
+        state: "{{ states('input_number.pvd_tariff_feedin') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_1_charge_power
+        unique_id: pvd_wb1_power
+        name: "evcc_wallbox_1_charge_power"
+        unit_of_measurement: "kW"
+        state: "{{ states('input_number.pvd_wb1_power') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_1_phases_active
+        unique_id: pvd_wb1_phases
+        name: "evcc_wallbox_1_phases_active"
+        state: "{{ states('input_number.pvd_wb1_phases') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_1_session_energy
+        unique_id: pvd_wb1_energy
+        name: "evcc_wallbox_1_session_energy"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_wb1_energy') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_1_session_solar_percentage
+        unique_id: pvd_wb1_solar
+        name: "evcc_wallbox_1_session_solar_percentage"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_wb1_solar') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_1_charge_duration
+        unique_id: pvd_wb1_minutes
+        name: "evcc_wallbox_1_charge_duration"
+        unit_of_measurement: "min"
+        state: "{{ states('input_number.pvd_wb1_minutes') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_1_vehicle_soc
+        unique_id: pvd_wb1_soc
+        name: "evcc_wallbox_1_vehicle_soc"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_wb1_soc') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_1_vehicle_range
+        unique_id: pvd_wb1_range
+        name: "evcc_wallbox_1_vehicle_range"
+        unit_of_measurement: "km"
+        state: "{{ states('input_number.pvd_wb1_range') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_1_effective_limit_soc
+        unique_id: pvd_wb1_limit
+        name: "evcc_wallbox_1_effective_limit_soc"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_wb1_limit') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_2_charge_power
+        unique_id: pvd_wb2_power
+        name: "evcc_wallbox_2_charge_power"
+        unit_of_measurement: "kW"
+        state: "{{ states('input_number.pvd_wb2_power') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_2_phases_active
+        unique_id: pvd_wb2_phases
+        name: "evcc_wallbox_2_phases_active"
+        state: "{{ states('input_number.pvd_wb2_phases') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_2_session_energy
+        unique_id: pvd_wb2_energy
+        name: "evcc_wallbox_2_session_energy"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_wb2_energy') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_2_session_solar_percentage
+        unique_id: pvd_wb2_solar
+        name: "evcc_wallbox_2_session_solar_percentage"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_wb2_solar') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_2_charge_duration
+        unique_id: pvd_wb2_minutes
+        name: "evcc_wallbox_2_charge_duration"
+        unit_of_measurement: "min"
+        state: "{{ states('input_number.pvd_wb2_minutes') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_2_vehicle_soc
+        unique_id: pvd_wb2_soc
+        name: "evcc_wallbox_2_vehicle_soc"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_wb2_soc') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_2_vehicle_range
+        unique_id: pvd_wb2_range
+        name: "evcc_wallbox_2_vehicle_range"
+        unit_of_measurement: "km"
+        state: "{{ states('input_number.pvd_wb2_range') | float(0) }}"
+      - default_entity_id: sensor.evcc_wallbox_2_effective_limit_soc
+        unique_id: pvd_wb2_limit
+        name: "evcc_wallbox_2_effective_limit_soc"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_wb2_limit') | float(0) }}"
+      - default_entity_id: sensor.evcc_stat30_charged_kwh
+        unique_id: pvd_wb_month_energy
+        name: "evcc_stat30_charged_kwh"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_wb_month_energy') | float(0) }}"
+      - default_entity_id: sensor.evcc_stat30_solar_percentage
+        unique_id: pvd_wb_month_solar
+        name: "evcc_stat30_solar_percentage"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_wb_month_solar') | float(0) }}"
+      - default_entity_id: sensor.evcc_stat30_avg_price
+        unique_id: pvd_wb_month_price
+        name: "evcc_stat30_avg_price"
+        unit_of_measurement: "€/kWh"
+        state: "{{ states('input_number.pvd_wb_month_price') | float(0) }}"
+      - default_entity_id: sensor.nilan_aussentemperatur
+        unique_id: pvd_hp_outdoor
+        name: "nilan_aussentemperatur"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_hp_outdoor') | float(0) }}"
+      - default_entity_id: sensor.nilan_raumtemperatur
+        unique_id: pvd_hp_room
+        name: "nilan_raumtemperatur"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_hp_room') | float(0) }}"
+      - default_entity_id: sensor.nilan_luftfeuchte
+        unique_id: pvd_hp_humidity
+        name: "nilan_luftfeuchte"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_hp_humidity') | float(0) }}"
+      - default_entity_id: sensor.nilan_warmwasser_oben
+        unique_id: pvd_hp_dhw
+        name: "nilan_warmwasser_oben"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_hp_dhw') | float(0) }}"
+      - default_entity_id: sensor.nilan_lueftungsstufe
+        unique_id: pvd_hp_fan
+        name: "nilan_lueftungsstufe"
+        state: "{{ states('input_number.pvd_hp_fan') | float(0) }}"
+      - default_entity_id: sensor.nilan_zuluft
+        unique_id: pvd_hp_supply
+        name: "nilan_zuluft"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_hp_supply') | float(0) }}"
+      - default_entity_id: sensor.nilan_fortluft
+        unique_id: pvd_hp_exhaust
+        name: "nilan_fortluft"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_hp_exhaust') | float(0) }}"
+      - default_entity_id: sensor.waermepumpe_leistung
+        unique_id: pvd_hp_power
+        name: "waermepumpe_leistung"
+        unit_of_measurement: "kW"
+        state: "{{ states('input_number.pvd_hp_power') | float(0) }}"
+      - default_entity_id: sensor.waermepumpe_energie_heute
+        unique_id: pvd_hp_energy
+        name: "waermepumpe_energie_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_hp_energy') | float(0) }}"
+      - default_entity_id: sensor.nilan_alarm
+        unique_id: pvd_hp_alarm
+        name: "nilan_alarm"
+        state: "{{ states('input_number.pvd_hp_alarm') | float(0) }}"
+      - default_entity_id: sensor.nilan_raum_sollwert
+        unique_id: pvd_hp_room_set
+        name: "nilan_raum_sollwert"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_hp_room_set') | float(0) }}"
+      - default_entity_id: sensor.nilan_warmwasser_sollwert
+        unique_id: pvd_hp_dhw_set
+        name: "nilan_warmwasser_sollwert"
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.pvd_hp_dhw_set') | float(0) }}"
+      - default_entity_id: sensor.nilan_zuluftventilator
+        unique_id: pvd_hp_fan_supply
+        name: "nilan_zuluftventilator"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_hp_fan_supply') | float(0) }}"
+      - default_entity_id: sensor.nilan_abluftventilator
+        unique_id: pvd_hp_fan_extract
+        name: "nilan_abluftventilator"
+        unit_of_measurement: "%"
+        state: "{{ states('input_number.pvd_hp_fan_extract') | float(0) }}"
+      - default_entity_id: sensor.nilan_filter_tage
+        unique_id: pvd_hp_filter_days
+        name: "nilan_filter_tage"
+        unit_of_measurement: "d"
+        state: "{{ states('input_number.pvd_hp_filter_days') | float(0) }}"
+      - default_entity_id: sensor.backofen_leistung
+        unique_id: pvd_dev1_power
+        name: "backofen_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_dev1_power') | float(0) }}"
+      - default_entity_id: sensor.backofen_energie_heute
+        unique_id: pvd_dev1_energy
+        name: "backofen_energie_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_dev1_energy') | float(0) }}"
+      - default_entity_id: sensor.waschmaschine_leistung
+        unique_id: pvd_dev2_power
+        name: "waschmaschine_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_dev2_power') | float(0) }}"
+      - default_entity_id: sensor.waschmaschine_energie_heute
+        unique_id: pvd_dev2_energy
+        name: "waschmaschine_energie_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_dev2_energy') | float(0) }}"
+      - default_entity_id: sensor.spuelmaschine_leistung
+        unique_id: pvd_dev3_power
+        name: "spuelmaschine_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_dev3_power') | float(0) }}"
+      - default_entity_id: sensor.spuelmaschine_energie_heute
+        unique_id: pvd_dev3_energy
+        name: "spuelmaschine_energie_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_dev3_energy') | float(0) }}"
+      - default_entity_id: sensor.trockner_leistung
+        unique_id: pvd_dev4_power
+        name: "trockner_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_dev4_power') | float(0) }}"
+      - default_entity_id: sensor.trockner_energie_heute
+        unique_id: pvd_dev4_energy
+        name: "trockner_energie_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_dev4_energy') | float(0) }}"
+      - default_entity_id: sensor.grundlast_leistung
+        unique_id: pvd_dev5_power
+        name: "grundlast_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_dev5_power') | float(0) }}"
+      - default_entity_id: sensor.grundlast_energie_heute
+        unique_id: pvd_dev5_energy
+        name: "grundlast_energie_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_dev5_energy') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_leistung
+        unique_id: pvd_grid_power
+        name: "hausanschluss_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_grid_power') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_a_frequenz
+        unique_id: pvd_grid_freq
+        name: "hausanschluss_phase_a_frequenz"
+        unit_of_measurement: "Hz"
+        state: "{{ states('input_number.pvd_grid_freq') | float(0) }}"
+      - default_entity_id: sensor.pv_abgeregelt_heute
+        unique_id: pvd_curtailed_today
+        name: "pv_abgeregelt_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_curtailed_today') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_neutralleiterstrom
+        unique_id: pvd_grid_n_current
+        name: "hausanschluss_neutralleiterstrom"
+        unit_of_measurement: "A"
+        state: "{{ states('input_number.pvd_grid_n_current') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_a_spannung
+        unique_id: pvd_grid_l1_voltage
+        name: "hausanschluss_phase_a_spannung"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_grid_l1_voltage') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_a_strom
+        unique_id: pvd_grid_l1_current
+        name: "hausanschluss_phase_a_strom"
+        unit_of_measurement: "A"
+        state: "{{ states('input_number.pvd_grid_l1_current') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_a_leistung
+        unique_id: pvd_grid_l1_power
+        name: "hausanschluss_phase_a_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_grid_l1_power') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_a_scheinleistung
+        unique_id: pvd_grid_l1_apparent
+        name: "hausanschluss_phase_a_scheinleistung"
+        unit_of_measurement: "VA"
+        state: "{{ states('input_number.pvd_grid_l1_apparent') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_a_leistungsfaktor
+        unique_id: pvd_grid_l1_pf
+        name: "hausanschluss_phase_a_leistungsfaktor"
+        state: "{{ states('input_number.pvd_grid_l1_pf') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_b_spannung
+        unique_id: pvd_grid_l2_voltage
+        name: "hausanschluss_phase_b_spannung"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_grid_l2_voltage') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_b_strom
+        unique_id: pvd_grid_l2_current
+        name: "hausanschluss_phase_b_strom"
+        unit_of_measurement: "A"
+        state: "{{ states('input_number.pvd_grid_l2_current') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_b_leistung
+        unique_id: pvd_grid_l2_power
+        name: "hausanschluss_phase_b_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_grid_l2_power') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_b_scheinleistung
+        unique_id: pvd_grid_l2_apparent
+        name: "hausanschluss_phase_b_scheinleistung"
+        unit_of_measurement: "VA"
+        state: "{{ states('input_number.pvd_grid_l2_apparent') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_b_leistungsfaktor
+        unique_id: pvd_grid_l2_pf
+        name: "hausanschluss_phase_b_leistungsfaktor"
+        state: "{{ states('input_number.pvd_grid_l2_pf') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_c_spannung
+        unique_id: pvd_grid_l3_voltage
+        name: "hausanschluss_phase_c_spannung"
+        unit_of_measurement: "V"
+        state: "{{ states('input_number.pvd_grid_l3_voltage') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_c_strom
+        unique_id: pvd_grid_l3_current
+        name: "hausanschluss_phase_c_strom"
+        unit_of_measurement: "A"
+        state: "{{ states('input_number.pvd_grid_l3_current') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_c_leistung
+        unique_id: pvd_grid_l3_power
+        name: "hausanschluss_phase_c_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_grid_l3_power') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_c_scheinleistung
+        unique_id: pvd_grid_l3_apparent
+        name: "hausanschluss_phase_c_scheinleistung"
+        unit_of_measurement: "VA"
+        state: "{{ states('input_number.pvd_grid_l3_apparent') | float(0) }}"
+      - default_entity_id: sensor.hausanschluss_phase_c_leistungsfaktor
+        unique_id: pvd_grid_l3_pf
+        name: "hausanschluss_phase_c_leistungsfaktor"
+        state: "{{ states('input_number.pvd_grid_l3_pf') | float(0) }}"
+      - default_entity_id: sensor.netz_bezug_heute
+        unique_id: pvd_meter0_today
+        name: "netz_bezug_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_meter0_today') | float(0) }}"
+      - default_entity_id: sensor.netz_einspeisung_heute
+        unique_id: pvd_meter1_today
+        name: "netz_einspeisung_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_meter1_today') | float(0) }}"
+      - default_entity_id: sensor.pv_zaehler_einspeisung_heute
+        unique_id: pvd_meter2_today
+        name: "pv_zaehler_einspeisung_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_meter2_today') | float(0) }}"
+      - default_entity_id: sensor.hauszaehler_bezug_heute
+        unique_id: pvd_meter3_today
+        name: "hauszaehler_bezug_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_meter3_today') | float(0) }}"
+      - default_entity_id: sensor.hauszaehler_einspeisung_heute
+        unique_id: pvd_meter4_today
+        name: "hauszaehler_einspeisung_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_meter4_today') | float(0) }}"
+      - default_entity_id: sensor.pv_zaehler_leistung
+        unique_id: pvd_meter_pv_power
+        name: "pv_zaehler_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_meter_pv_power') | float(0) }}"
+      - default_entity_id: sensor.hauszaehler_leistung
+        unique_id: pvd_meter_house_power
+        name: "hauszaehler_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_meter_house_power') | float(0) }}"
+      - default_entity_id: sensor.boersenstrompreis
+        unique_id: pvd_spot_price
+        name: "boersenstrompreis"
+        unit_of_measurement: "€/kWh"
+        state: "{{ states('input_number.pvd_spot_price') | float(0) }}"
+      - default_entity_id: sensor.negative_viertelstunden_heute
+        unique_id: pvd_neg_quarters
+        name: "negative_viertelstunden_heute"
+        state: "{{ states('input_number.pvd_neg_quarters') | float(0) }}"
+      - default_entity_id: sensor.pv_erzeugung_heute
+        unique_id: pvd_pv_energy_today
+        name: "pv_erzeugung_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_pv_energy_today') | float(0) }}"
+      - default_entity_id: sensor.hausverbrauch_heute
+        unique_id: pvd_home_energy_today
+        name: "hausverbrauch_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_home_energy_today') | float(0) }}"
+      - default_entity_id: sensor.eigenverbrauch_heute
+        unique_id: pvd_selfuse_energy_today
+        name: "eigenverbrauch_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_selfuse_energy_today') | float(0) }}"
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_heute
+        unique_id: pvd_solcast_today
+        name: "solcast_pv_forecast_prognose_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_solcast_today') | float(0) }}"
+        attributes:
+          estimate10: 128.4
+          estimate90: 171.9
+          detailedForecast: >-
+            {%- set ns = namespace(l=[]) -%}
+            {%- for i in range(48) -%}
+            {%- set p = [0, 22 - ((i - 26) ** 2) * 0.12] | max -%}
+            {%- set ns.l = ns.l + [{'period_start': (today_at('00:00') + timedelta(minutes=30 * i)).isoformat(), 'pv_estimate': p | round(2), 'pv_estimate10': (p * 0.8) | round(2), 'pv_estimate90': (p * 1.12) | round(2)}] -%}
+            {%- endfor -%}
+            {{ ns.l }}
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute
+        unique_id: pvd_solcast_remaining
+        name: "solcast_pv_forecast_prognose_verbleibende_leistung_heute"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_solcast_remaining') | float(0) }}"
+      - default_entity_id: sensor.solcast_pv_forecast_aktuelle_leistung
+        unique_id: pvd_solcast_power_now
+        name: "solcast_pv_forecast_aktuelle_leistung"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_solcast_power_now') | float(0) }}"
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_nachste_stunde
+        unique_id: pvd_solcast_next_hour
+        name: "solcast_pv_forecast_prognose_nachste_stunde"
+        unit_of_measurement: "Wh"
+        state: "{{ states('input_number.pvd_solcast_next_hour') | float(0) }}"
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_spitzenleistung_heute
+        unique_id: pvd_solcast_peak
+        name: "solcast_pv_forecast_prognose_spitzenleistung_heute"
+        unit_of_measurement: "W"
+        state: "{{ states('input_number.pvd_solcast_peak') | float(0) }}"
+      - default_entity_id: sensor.solcast_pv_forecast_verwendete_api_abrufe
+        unique_id: pvd_solcast_api_used
+        name: "solcast_pv_forecast_verwendete_api_abrufe"
+        state: "{{ states('input_number.pvd_solcast_api_used') | float(0) }}"
+      - default_entity_id: sensor.solcast_pv_forecast_max_api_abrufe
+        unique_id: pvd_solcast_api_limit
+        name: "solcast_pv_forecast_max_api_abrufe"
+        state: "{{ states('input_number.pvd_solcast_api_limit') | float(0) }}"
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_morgen
+        unique_id: pvd_solcast_d2
+        name: "solcast_pv_forecast_prognose_morgen"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_solcast_d2') | float(0) }}"
+        attributes:
+          estimate10: 150.3
+          estimate90: 180.6
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_3
+        unique_id: pvd_solcast_d3
+        name: "solcast_pv_forecast_prognose_tag_3"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_solcast_d3') | float(0) }}"
+        attributes:
+          estimate10: 22.1
+          estimate90: 90.4
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_4
+        unique_id: pvd_solcast_d4
+        name: "solcast_pv_forecast_prognose_tag_4"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_solcast_d4') | float(0) }}"
+        attributes:
+          estimate10: 41.0
+          estimate90: 118.2
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_5
+        unique_id: pvd_solcast_d5
+        name: "solcast_pv_forecast_prognose_tag_5"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_solcast_d5') | float(0) }}"
+        attributes:
+          estimate10: 80.5
+          estimate90: 152.7
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_6
+        unique_id: pvd_solcast_d6
+        name: "solcast_pv_forecast_prognose_tag_6"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_solcast_d6') | float(0) }}"
+        attributes:
+          estimate10: 30.2
+          estimate90: 124.9
+      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_7
+        unique_id: pvd_solcast_d7
+        name: "solcast_pv_forecast_prognose_tag_7"
+        unit_of_measurement: "kWh"
+        state: "{{ states('input_number.pvd_solcast_d7') | float(0) }}"
+        attributes:
+          estimate10: 112.0
+          estimate90: 175.3
+      - default_entity_id: sensor.dwd_station_sonnenscheindauer_heute
+        unique_id: pvd_wx_sun
+        name: "dwd_station_sonnenscheindauer_heute"
+        unit_of_measurement: "s"
+        state: "{{ states('input_number.pvd_wx_sun') | float(0) }}"
+      - default_entity_id: sensor.dwd_warnzelle_aktuelle_warnstufe
+        unique_id: pvd_warn_level
+        name: "dwd_warnzelle_aktuelle_warnstufe"
+        state: "{{ states('input_number.pvd_warn_level') | float(0) }}"
+        attributes:
+          warning_1_headline: "Windboeen bis 18 Uhr"
+      - default_entity_id: sensor.hausanschluss_energie
+        unique_id: pvd_meter0_total
+        name: "hausanschluss_energie"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: "{{ ((as_timestamp(now()) - as_timestamp('2026-01-01T00:00:00+00:00')) / 3600 * 0.4) | round(2) }}"
+      - default_entity_id: sensor.hausanschluss_zurueckgelieferte_energie
+        unique_id: pvd_meter1_total
+        name: "hausanschluss_zurueckgelieferte_energie"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: "{{ ((as_timestamp(now()) - as_timestamp('2026-01-01T00:00:00+00:00')) / 3600 * 5.0) | round(2) }}"
+      - default_entity_id: sensor.pv_zaehler_einspeisung_gesamt
+        unique_id: pvd_meter2_total
+        name: "pv_zaehler_einspeisung_gesamt"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: "{{ ((as_timestamp(now()) - as_timestamp('2026-01-01T00:00:00+00:00')) / 3600 * 3.6) | round(2) }}"
+      - default_entity_id: sensor.hauszaehler_bezug_gesamt
+        unique_id: pvd_meter3_total
+        name: "hauszaehler_bezug_gesamt"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: "{{ ((as_timestamp(now()) - as_timestamp('2026-01-01T00:00:00+00:00')) / 3600 * 0.4) | round(2) }}"
+      - default_entity_id: sensor.hauszaehler_einspeisung_gesamt
+        unique_id: pvd_meter4_total
+        name: "hauszaehler_einspeisung_gesamt"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: "{{ ((as_timestamp(now()) - as_timestamp('2026-01-01T00:00:00+00:00')) / 3600 * 1.4) | round(2) }}"
+      - default_entity_id: sensor.pv_erzeugung_gesamt
+        unique_id: pvd_pv_energy_total
+        name: "pv_erzeugung_gesamt"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: "{{ ((as_timestamp(now()) - as_timestamp('2026-01-01T00:00:00+00:00')) / 3600 * 6.1) | round(2) }}"
+      - default_entity_id: sensor.hausverbrauch_gesamt
+        unique_id: pvd_home_energy_total
+        name: "hausverbrauch_gesamt"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: "{{ ((as_timestamp(now()) - as_timestamp('2026-01-01T00:00:00+00:00')) / 3600 * 0.9) | round(2) }}"
+      - default_entity_id: sensor.wr1_status
+        unique_id: pvd_inv1_status
+        name: "wr1_status"
+        state: "Normal"
+      - default_entity_id: sensor.wr2_status
+        unique_id: pvd_inv2_status
+        name: "wr2_status"
+        state: "Normal"
+      - default_entity_id: sensor.wr3_status
+        unique_id: pvd_inv3_status
+        name: "wr3_status"
+        state: "Normal"
+      - default_entity_id: sensor.wr4_status
+        unique_id: pvd_inv4_status
+        name: "wr4_status"
+        state: "Normal"
+      - default_entity_id: sensor.evcc_wallbox_1_effective_plan_time
+        unique_id: pvd_wb1_plan
+        name: "evcc_wallbox_1_effective_plan_time"
+        device_class: timestamp
+        state: "{{ (today_at('07:00') + timedelta(days=1)).isoformat() }}"
+      - default_entity_id: sensor.evcc_wallbox_2_effective_plan_time
+        unique_id: pvd_wb2_plan
+        name: "evcc_wallbox_2_effective_plan_time"
+        device_class: timestamp
+        state: "{{ none }}"
+      - default_entity_id: sensor.nilan_betriebsart
+        unique_id: pvd_hp_vent_mode
+        name: "nilan_betriebsart"
+        state: "Auto"
+      - default_entity_id: sensor.nilan_jahreszeit
+        unique_id: pvd_hp_season
+        name: "nilan_jahreszeit"
+        state: "Sommer"
+      - default_entity_id: sensor.nilan_bypass
+        unique_id: pvd_hp_bypass
+        name: "nilan_bypass"
+        state: "Geschlossen"
+      - default_entity_id: sensor.nilan_kompressor
+        unique_id: pvd_hp_compressor
+        name: "nilan_kompressor"
+        state: "Warmwasser"
+      - default_entity_id: sensor.solcast_pv_forecast_zeitpunkt_spitzenleistung_heute
+        unique_id: pvd_solcast_peak_time
+        name: "solcast_pv_forecast_zeitpunkt_spitzenleistung_heute"
+        device_class: timestamp
+        state: "{{ today_at('13:00').isoformat() }}"
+      - default_entity_id: sensor.solcast_pv_forecast_zeitpunkt_letzter_api_abruf
+        unique_id: pvd_solcast_last_poll
+        name: "solcast_pv_forecast_zeitpunkt_letzter_api_abruf"
+        device_class: timestamp
+        state: "{{ now().replace(minute=0, second=0, microsecond=0).isoformat() }}"
+  - select:
+      - default_entity_id: select.evcc_wallbox_1_mode
+        unique_id: pvd_wb1_mode
+        name: "evcc_wallbox_1_mode"
+        optimistic: true
+        options: "{{ ['off', 'pv', 'minpv', 'now'] }}"
+      - default_entity_id: select.evcc_wallbox_1_vehicle_name
+        unique_id: pvd_wb1_vehicle
+        name: "evcc_wallbox_1_vehicle_name"
+        optimistic: true
+        options: "{{ ['', 'Kombi'] }}"
+      - default_entity_id: select.evcc_wallbox_2_mode
+        unique_id: pvd_wb2_mode
+        name: "evcc_wallbox_2_mode"
+        optimistic: true
+        options: "{{ ['off', 'pv', 'minpv', 'now'] }}"
+      - default_entity_id: select.evcc_wallbox_2_vehicle_name
+        unique_id: pvd_wb2_vehicle
+        name: "evcc_wallbox_2_vehicle_name"
+        optimistic: true
+        options: "{{ ['', 'Kombi'] }}"
+  - weather:
+      - default_entity_id: weather.dwd_station
+        unique_id: pvd_weather
+        name: "dwd_station"
+        condition: "partlycloudy"
+        temperature: "16.8"
+        temperature_unit: "°C"
+        humidity: "62"
+        pressure: "1016"
+        pressure_unit: "hPa"
+        wind_speed: "12"
+        wind_bearing: "240"
+        wind_speed_unit: "km/h"
+        forecast_hourly: >-
+          {%- set ns = namespace(l=[]) -%}
+          {%- set lage = ['clear-night', 'clear-night', 'fog', 'partlycloudy', 'sunny', 'sunny', 'partlycloudy', 'cloudy', 'rainy', 'pouring', 'rainy', 'cloudy'] -%}
+          {%- for i in range(24) -%}
+          {%- set t = now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=i) -%}
+          {%- set ns.l = ns.l + [{'datetime': t.isoformat(), 'condition': lage[t.hour // 2], 'temperature': 9 + (t.hour if t.hour < 15 else 30 - t.hour) * 0.7, 'precipitation': [0, 0, 0, 0, 0, 0, 0, 0.2, 1.1, 2.3, 0.6, 0.1][t.hour // 2], 'precipitation_probability': [0, 0, 10, 10, 5, 0, 10, 40, 80, 90, 60, 30][t.hour // 2], 'wind_gust_speed': 24, 'cloud_coverage': 40}] -%}
+          {%- endfor -%}
+          {{ ns.l }}
+        forecast_daily: >-
+          {%- set ns = namespace(l=[]) -%}
+          {%- set lage = ['partlycloudy', 'sunny', 'rainy', 'cloudy', 'partlycloudy', 'lightning-rainy', 'sunny'] -%}
+          {%- for i in range(7) -%}
+          {%- set ns.l = ns.l + [{'datetime': (today_at('00:00') + timedelta(days=i)).isoformat(), 'condition': lage[i], 'temperature': [19, 22, 14, 15, 18, 16, 21][i], 'templow': [8, 9, 10, 9, 7, 11, 8][i], 'precipitation': [2.4, 0, 11.3, 1.2, 0.3, 6.8, 0][i], 'precipitation_probability': [70, 5, 95, 40, 20, 80, 5][i], 'wind_speed': [14, 9, 28, 19, 12, 22, 10][i]}] -%}
+          {%- endfor -%}
+          {{ ns.l }}

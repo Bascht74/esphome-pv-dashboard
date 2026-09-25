@@ -226,6 +226,9 @@ voice_assistant:
   # --- Rueckmeldung auf dem Display ----------------------------------------
   # Die Label-IDs kommen aus dem Display-Package.
   on_listening:
+    # Eine Anschlussfrage beginnt, bevor das Ausblenden der letzten Sitzung
+    # abgelaufen ist -- das Fenster bleibt offen.
+    - script.stop: voice_panel_hide
     - script.execute: display_wake
     - lvgl.widget.show: voice_panel
     - lvgl.label.update:
@@ -260,8 +263,7 @@ voice_assistant:
         id: lbl_assist_status
         text: "Bereit"
     # Overlay noch kurz stehen lassen, damit die Antwort lesbar bleibt.
-    - delay: 6s
-    - lvgl.widget.hide: voice_panel
+    - script.execute: voice_panel_hide
   on_error:
     # Manche Fehler beenden die Pipeline ohne on_end.
     - script.execute: wake_word_resume
@@ -270,9 +272,21 @@ voice_assistant:
         # Blockform noetig: ein ": " im einzeiligen Lambda bricht das YAML.
         text: !lambda |-
           return "Fehler: " + code;
+    # Ohne on_end bliebe das Fenster sonst stehen.
+    - script.execute: voice_panel_hide
 
 # --- Halbduplex-Wechsel (siehe Kopf) ----------------------------------------
 script:
+  # Sprachfenster nach 6 s ausblenden. Als Skript, damit on_listening einer
+  # Anschlussfrage das Ausblenden abbrechen kann (vorher lief ein delay im
+  # on_end weiter und schloss das Fenster mitten in der neuen Sitzung);
+  # mode restart: das juengste Ende zaehlt.
+  - id: voice_panel_hide
+    mode: restart
+    then:
+      - delay: 6s
+      - lvgl.widget.hide: voice_panel
+
   # Wiedergabe startet: Das Mikrofon muss den I2S-Bus freigeben.
   - id: wake_word_pause
     mode: restart

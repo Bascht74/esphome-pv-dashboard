@@ -9,13 +9,14 @@ Der Anlagenaufbau, den das Panel abbildet: ein Wechselrichter auf Volleinspeisun
 mit zwei Dachflächen, zwei Hybrid-Wechselrichter mit je zwei Flächen, ein
 Mini-Wechselrichter mit zwei Einzelmodulen, drei Speicher über Busbar an beiden
 Hybriden, zwei Wallboxen, eine Wärmepumpe sowie Hauszähler und ein separater
-Zähler für den Volleinspeise-Kreis. Fabrikate und Typen nennt der aktuelle Stand
-nicht. Der Aufbau und die festgelegten Kennzahlen-Definitionen stehen in
+Zähler für den Volleinspeise-Kreis. Wechselrichter, Speicher und Flächen sind
+neutral beschrieben; Wärmepumpe (Nilan Compact P) und Netzzähler (Shelly Pro 3EM)
+sind bewusst benannt, weil die Seiten darauf zugeschnitten sind. Der Aufbau und die festgelegten Kennzahlen-Definitionen stehen in
 `docs/01`.
 
 **Die Beschriftungen im Repo sind Demo-Werte.** Jede anlagenabhängige
-Beschriftung — Dachflächen, Wechselrichter, Speicher, Verbraucher, Zähler — und
-die drei Tarife sind `substitutions`. Der Standard steht im jeweiligen Paket, die
+Beschriftung — Dachflächen, Wechselrichter, Speicher, Verbraucher, Zähler — sowie
+die drei Tarife und die Netzanschlusswerte (`pv_kwp`, `feed_limit_pct`) sind `substitutions`. Der Standard steht im jeweiligen Paket, die
 eigene Anlage wird in `.pv-dashboard_anlage.yaml` beschrieben und sticht ihn.
 Diese Datei steht in `.gitignore` und bleibt auf dem Rechner; im Repo liegt nur
 die Vorlage `.pv-dashboard_anlage.yaml.example` mit den Demo-Werten.
@@ -45,19 +46,35 @@ Dazu drei Fenster über der Oberfläche: Sprachassistent (`voice_panel`),
 Firmware-Update mit Fortschrittsbalken (`ota_panel`) und System (`sys_panel`,
 Tipp auf die Symbole oben rechts) mit dem Alter der Werte je Quelle.
 
-**Es sind noch keine echten Daten angebunden.** Die Oberfläche wird über feste
-Skript-Schnittstellen gefüttert (`alert_push`, `alert_clear`, `storage_update`, `pv_update`,
-`pv_status`, `money_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`, `wx_hour`,
-`wx_day`, `wx_warning`, `grid_update`, `grid_phase`, `grid_meter`, `grid_rules`,
-`stats_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`,
-`house_battery`, `house_loadpoint`, `house_update`, `house_history`, `record_hour`).
-Beispielwerte für Meldungen, Speicher, PV, Wallboxen, Wärmepumpe, Haus, Netz, Statistik, Prognose und Wetter gibt es
-nur im Screenshot-Lauf
-(`shots_run` in `pv-dashboard-shots.yaml`). Die Demo-Leistungen der
-Flussanimation stehen dagegen unter `#ifdef USE_HOST` und laufen auf der ganzen
-host-Plattform — im Simulator wie im Screenshot-Lauf. **Auf dem Panel steht
-alles auf 0:** `WATT[]` steht auf 37 Nullen, die Flussanimation ruht, solange
-keine Sensoren angebunden sind. Was dafür noch fehlt, steht in `docs/06`.
+**Anbindung.** Die Oberfläche wird über feste Skript-Schnittstellen gefüttert
+(`alert_push`, `alert_clear`, `storage_update`, `pv_update`, `pv_status`,
+`money_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`, `wx_hour`, `wx_day`,
+`wx_warning`, `grid_update`, `grid_phase`, `grid_meter`, `grid_rules`,
+`stats_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`,
+`heatpump_extra`, `house_flow`, `house_battery`, `house_loadpoint`, `house_update`,
+`house_history`, `record_hour`, für das Anlagenschema `ov_roof` … `ov_totals`).
+Am Gerät ruft sie seit dem 25.09.2026 der **Datenweg von Home Assistant**
+(`.pv-dashboard_ha.yaml`, erzeugt von `tools/ha_bindings.py`): jeder Wert als
+`homeassistant`-Sensor, gedrosselt auf einen Aufruf je Gruppe und Sekunde;
+Vorhersagen, Solcast-Halbstunden und Statistik über Aktionen mit Antwort. Die
+Entitäts-IDs sind Vorschläge und zeigen vorerst auf **Dummy-Entitäten**, die
+`ha/pv_dashboard_dummy.yaml` in Home Assistant anlegt; eigene IDs kommen als
+`ha_<name>` in `.pv-dashboard_anlage.yaml`. In Home Assistant muss beim Gerät
+**„Allow the device to perform Home Assistant actions“** eingeschaltet sein.
+Jedes Gerät hat eine **Referenz-Entität** (etwa Wallbox → Modus, Speicher →
+Ladestand): Liefert sie keinen gültigen Wert, verschwindet die ganze Grafik des
+Geräts, die übrigen bleiben an ihrem Platz. Jede andere Entität, die fehlt oder
+nicht verfügbar ist, lässt nur ihren Wert leer. Was es nicht gibt, bekommt statt
+einer ID `none` (auch `false`, `off`, `""`); zusätzliche Entitäten braucht es
+nicht. Einzelheiten in `docs/03`
+(„Datenweg von Home Assistant“), Offenes in `docs/06`.
+
+Beispielwerte gibt es nur im Screenshot-Lauf (`shots_run` in
+`pv-dashboard-shots.yaml`), der die Übersicht über dieselben Eingabeskripte
+füllt und zum Schluss eine kleinere Anlage zeigt (`*_reduced`). Demo-Leistungen
+der Flussanimation stehen unter `#ifdef USE_HOST` und greifen nur, solange keine
+Werte da sind — also im Simulator. **Auf dem Panel steht ohne Daten alles auf
+Strichen**, die Kugeln ruhen.
 
 ## Inbetriebnahme: vom Clone zum eigenen Panel
 
@@ -74,8 +91,8 @@ Hardware (nächster Abschnitt).
    Wer den ESPHome Device Builder benutzt, bekommt die Datei in aller Regel von
    ihm angelegt. `secrets.yaml` steht in `.gitignore` und gehört nicht ins Repo.
 4. **Die eigene Anlage beschreiben.** `cp .pv-dashboard_anlage.yaml.example
-   .pv-dashboard_anlage.yaml`, dann dort jede anlagenabhängige Beschriftung
-   und die drei Tarife eintragen. Die Datei steht in `.gitignore`, ein
+   .pv-dashboard_anlage.yaml`, dann dort jede anlagenabhängige Beschriftung,
+   die drei Tarife und die Netzanschlusswerte eintragen. Die Datei steht in `.gitignore`, ein
    `git add -A` nimmt sie nicht mit. Hinter jeder Zeile stehen die gemessene
    Breite des Demo-Werts und die verfügbare Breite; wer sie überschreitet,
    bekommt einen gekürzten oder umgebrochenen Text. Jede gelöschte Zeile
@@ -92,8 +109,11 @@ Hardware (nächster Abschnitt).
 7. **Bauen und flashen** über den ESPHome Device Builder, siehe
    „Gerät bauen und flashen“.
 
-Angebunden ist noch nichts: Bis Sensoren daran hängen, zeigt die Oberfläche auf
-dem Panel Strichmuster und Nullen (`docs/06`).
+8. **Home Assistant vorbereiten:** beim ESPHome-Gerät die Option „Allow the
+   device to perform Home Assistant actions“ einschalten; zum Testen ohne die
+   Integrationen `ha/pv_dashboard_dummy.yaml` als Paket einbinden, sonst die
+   abweichenden Entitäts-IDs in `.pv-dashboard_anlage.yaml` eintragen
+   (`docs/03`, „Datenweg von Home Assistant“).
 
 ## Schnellstart: Simulator und Screenshots
 
@@ -119,7 +139,8 @@ Zwei Dinge sind dabei nur die hiesige Arbeitsumgebung, kein Teil des Projekts:
   steht durchgehend der volle Pfad, weil diese Texte für Sitzungen auf genau
   diesem Rechner geschrieben sind.
 - **`sips`.** Das Werkzeug bringt nur macOS mit. Plattformunabhängig geht
-  dasselbe mit Pillow, das in der ESPHome-Umgebung ohnehin steckt:
+  dasselbe mit Pillow, das in der ESPHome-Umgebung ohnehin steckt — also mit dem
+  `python` dieser Umgebung aufrufen (`~/.venvs/esphome-beta/bin/python`):
 
   ```
   python -c "from PIL import Image; import glob; [Image.open(f).save(f[:-4]+'.png') for f in glob.glob('shots/*.bmp')]"
@@ -137,6 +158,22 @@ mehrere Minuten. Dabei kommen die Schriften aus dem Netz — IBM Plex Sans/Mono
 Material-Design-Webfont. Der Build-Rechner braucht also Internet.
 
 Die Rendering-Kontrolle nach jeder Layoutänderung ist Pflicht, siehe `docs/04`.
+
+### Tests
+
+```
+~/.venvs/esphome-beta/bin/python -m unittest discover tests
+~/.venvs/esphome-beta/bin/python tests/ha_probe.py
+```
+
+Der erste Befehl prüft in Sekunden die beiden Werkzeuge und den Sonderwert
+„leer“ (−∞) als kleines C++-Programm mit `g++` (erzeugte Dateien aktuell, jede Zuordnung mit Standard und Referenz, `none`/`FALSE`/`""` über
+ESPHomes eigene Substitution, jede Leitung der Flussanimation mit Kanal und
+Sichtbarkeitsregel). Der zweite baut Simulator plus Datenweg mit einer API ohne
+Schlüssel (`tests/ha-test.yaml`), startet ihn ohne Fenster und spielt über
+`aioesphomeapi` ein Home Assistant nach: Gerät weg und wieder da über die
+Referenz, einzelne Werte leer (auch in Summen), nirgends „inf“, Prognosen
+und Statistik, Sammelmeldung beim Trennen. Einzelheiten in `docs/03`, Abschnitt „Tests“.
 
 ## Gerät bauen und flashen
 
@@ -161,12 +198,13 @@ API-Schlüssel im Klartext.
 | Datei | Inhalt |
 | --- | --- |
 | `pv-dashboard.yaml` | Gerät: Gerätename, die Verweise auf `secrets.yaml` als `substitutions`, das Einbinden von `.pv-dashboard_anlage.yaml`, die Packages aus dem GitHub-Repo; am Ende auskommentiert der Rückfall auf die Dateien von der Platte |
-| `.pv-dashboard_anlage.yaml.example` | Vorlage für die eigene Anlage: alle Beschriftungen und die drei Tarife mit Demo-Werten und Breiten. Die eigene Fassung `.pv-dashboard_anlage.yaml` steht in `.gitignore` |
+| `.pv-dashboard_anlage.yaml.example` | Vorlage für die eigene Anlage: alle Beschriftungen, die drei Tarife und die Netzanschlusswerte mit Demo-Werten und Breiten. Die eigene Fassung `.pv-dashboard_anlage.yaml` steht in `.gitignore` |
 | `secrets.yaml.example` | Dokumentiert, welche Schlüssel `secrets.yaml` enthalten muss — die echte Datei legt der Device Builder an |
 | `.pv-dashboard_core.yaml` | Nur Gerät: SoC, PSRAM, LDO, Funkstrecke zum C6, WLAN, API, Logger, OTA, Bluetooth, Zeit und Diagnose, serielle Schnittstellen |
+| `.pv-dashboard_ha.yaml` | Nur Gerät, **erzeugt** von `tools/ha_bindings.py`: Datenweg von Home Assistant — Sensoren mit Standard-IDs, Drosselung, Referenz-Entitäten je Gerät, Abrufe von Vorhersagen und Statistik |
 | `.pv-dashboard_utility.yaml` | Gemeinsam mit dem Simulator: Schriften (IBM Plex Sans/Mono) und die Bilder aus `images/`, dazu die Design-Tokens für Farben, Maße und Abstände — einzige Quelle dafür |
 | `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die elf Seiten ein |
-| `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, `money_update`, erzeugter Flussanimations-Block |
+| `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, `money_update`, Eingabeskripte `ov_*`, erzeugter Flussanimations-Block |
 | `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose: Wechselrichter und Flächen je Kreis, Tagesverlauf mit Kennzahlen, `pv_status` / `pv_update` / `pv_redraw_curve` |
 | `.pv-dashboard_page_forecast.yaml` | Seite 3 Prognose: Solcast heute, Halbstunden, sieben Tage, `fc_*` |
 | `.pv-dashboard_page_weather.yaml` | Seite 4 Wetter: DWD jetzt, 24 Stunden, sieben Tage, Warnung, `wx_*` |
@@ -185,6 +223,9 @@ API-Schlüssel im Klartext.
 | `pv-dashboard-demo-a.yaml` | Prototyp: Kettenreaktion auf dem echten Schema |
 | `pv-dashboard-demo-b.yaml` | Prototyp: zwei Kennlinien für die Kugelgeschwindigkeit im Vergleich |
 | `tools/flow_animation.py` | Generator der Flussanimation; erzeugt den markierten Block in der Übersichtsseite |
+| `tools/ha_bindings.py` | Generator des Datenwegs: eine Zuordnungstabelle Wert → Entität → Skript; erzeugt `.pv-dashboard_ha.yaml` und `ha/pv_dashboard_dummy.yaml` |
+| `tests/` | Tests: `test_ha_bindings.py`, `test_flow_animation.py`, `test_leer_cpp.py` (unittest), `ha_probe.py` mit `ha-test.yaml` (Panel gegen nachgebautes Home Assistant) |
+| `ha/pv_dashboard_dummy.yaml` | Paket für Home Assistant, **erzeugt**: Ersatz-Entitäten unter den Standard-IDs (input_number, input_boolean, Templates, Wetter) |
 | `images/` | `solar_panel.png` (Modulfeld) und `solar_module.png` (Einzelmodul); das Haus der Seite Wärmepumpe ist aus LVGL-Flächen gebaut |
 | `patches/` | `pace_bms-check_uart_settings.patch` für die externe PACE-BMS-Komponente, Anleitung in `docs/06` |
 | `docs/` | Projektwissen, siehe unten |
@@ -193,15 +234,16 @@ API-Schlüssel im Klartext.
 
 Gerät und Simulator binden `utility` und `ui` gemeinsam ein: Eine Änderung an
 der Oberfläche, an den Schriften oder an den Farben wirkt auf beiden Seiten.
-Nur am Gerät hängen `display`, `audio` und `core`.
+Nur am Gerät hängen `display`, `audio`, `core` und `ha`.
 
 Die Oberfläche liegt in **zwölf** Dateien: dem Kern `.pv-dashboard_ui.yaml`
-(1205 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
+(1381 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
 eigenen `packages:`-Block ein — **diese Reihenfolge ist die Reihenfolge der
 Seiten**. Jedes Skript liegt bei der Seite, die es benutzt; im Kern bleiben nur
 `sys_refresh`, `record_hour` und `update_clock`, die kein Seiten-Widget anfassen,
-dazu die gemeinsamen Formatierer `fmt_num`, `fmt_watt` und `fmt_power`. Die größte
-Einzeldatei ist damit `.pv-dashboard_page_overview.yaml` mit **1281 Zeilen**
+und `dev_apply`, das auf mehreren Seiten zugleich ausblendet, dazu die gemeinsamen
+Formatierer `fmt_num`, `fmt_watt` und `fmt_power`. Die größte handgeschriebene
+Einzeldatei ist damit `.pv-dashboard_page_overview.yaml` mit **1600 Zeilen**
 (Arbeitsstand 25.09.2026; die Zahl altert mit jeder Änderung), darin der
 erzeugte Flussanimations-Block. Nicht am Stück lesen: `docs/03` hat unter
 „Einstieg" die Dateitabelle mit Zeilennummern und den passenden grep-Mustern.
@@ -249,7 +291,7 @@ Für Assistenz-Sitzungen in diesem Repo gelten zusätzlich die Regeln in
 Zugangsdaten enthält das Repo nicht: Sie stehen ausschließlich in der nicht
 mitversionierten `secrets.yaml`. Die Beschriftungen und Tarife im Repo sind
 Demo-Werte, die Widget-IDs heißen nach Stellung und Aufgabe, und die Dokumente
-unter `docs/` beschreiben den Aufbau — Fabrikate, Typenbezeichnungen und die
-echten Flächennamen stehen im aktuellen Stand nirgends mehr. Die Commit-Historie
-trägt sie noch; wie sie vor dem Veröffentlichen bereinigt wird, steht in
-`docs/06`.
+unter `docs/` beschreiben den Aufbau — Wechselrichter, Speicher und Flächen sind
+neutral; Wärmepumpe (Nilan Compact P) und Netzzähler (Shelly Pro 3EM) sind bewusst
+benannt, weil die Seiten darauf zugeschnitten sind. Ältere Commits tragen den
+Stand vor der Generalisierung; das bleibt so (`docs/06`).

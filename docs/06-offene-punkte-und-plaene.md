@@ -38,6 +38,24 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 - [x] **Seiten Prognose (Solcast) und Wetter (DWD)**, auf Zuruf des Nutzers. Siehe
       „Prognose und Wetter“. Menüleiste mit elf Reitern, der PV-Reiter heißt „PV“.
 
+**Erledigt am 25.09.2026, später Tag** (auf Zuruf des Nutzers)
+
+- [x] **Datenweg von Home Assistant** gebaut: `.pv-dashboard_ha.yaml`, erzeugt von
+      `tools/ha_bindings.py`, dazu das Dummy-Paket `ha/pv_dashboard_dummy.yaml` für
+      Home Assistant. Siehe „Echte Daten anbinden“ und Dokument 03.
+- [x] **Übersicht speisbar**: Eingabeskripte `ov_*`, Flussanimation liest `flow_ch`
+      statt fester `WATT[]` (Regel 9 im Werkzeug).
+- [x] **Fehlende Geräte ausblenden**: `dev_present`, `dev_apply`; Leitungen und Kugeln
+      nach Regel 10. Screenshots `*_reduced`. Seit dem Abend des 25.09.2026 ohne
+      eigene Anker-Entitäten: Je Gerät zeigt eine **Referenz-Entität** aus der
+      Zuordnung an, ob es da ist (Referenz ohne Wert → Grafik weg, andere Entität
+      ohne Wert → nur der Wert leer); `ha_<name>: none` für „nicht belegt“;
+      `dev_present` nicht mehr im NVS. Leer ist −∞ (`val_leer`), plattformunabhängig
+      nach IEEE 754, auch auf dem RISC-V des P4 (Dokument 03).
+- [x] **Tests** (25.09.2026): `tests/` mit unittest für beide Werkzeuge und
+      `ha_probe.py`, das Panel gegen ein nachgebautes Home Assistant (Dokument 03,
+      „Tests“).
+
 **Entschieden, nicht zu tun**
 
 - [x] **Commit-Historie bereinigen** — am 20.09.2026 verworfen. Nicht erneut
@@ -57,9 +75,9 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 
 **Vertagt (Entscheidung liegt vor, Zeitpunkt offen)**
 
-- [ ] **Echte Daten anbinden** — über die Skript-Schnittstellen der Seiten (Dokument 03)
-      plus `WATT[37]`. Am 20.09.2026
-      vertagt: die neuen Geräte laufen beim Nutzer noch nicht.
+- [ ] **Echte Daten anbinden** — der Weg steht (Datenweg, 25.09.2026), angebunden
+      sind vorerst Dummy-Entitäten. Offen: gegen ein echtes Home Assistant testen,
+      dann die echten IDs eintragen. Siehe „Echte Daten anbinden“.
 - [ ] **Kamera** — blockiert durch esphome/esphome#16944. Am 20.09.2026 vertagt, der
       PR-Stand ist seit 11.09.2026 nicht nachgeprüft.
 
@@ -79,7 +97,8 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 
 ## Detailseiten
 
-Alle vier Detailseiten sind gebaut. Jede liegt in ihrer eigenen Datei
+Die vier geplanten Detailseiten sind gebaut; dazu seit dem 25.09.2026 Netz,
+Statistik, Prognose und Wetter. Jede liegt in ihrer eigenen Datei
 `.pv-dashboard_page_*.yaml`, eingebunden vom `packages:`-Block in
 `.pv-dashboard_ui.yaml`. **PV & Prognose ist seit dem 23.09.2026 gebaut**, auf
 Zuruf des Nutzers („mit der ersten anfangen"): Wechselrichter und Flächen je
@@ -160,7 +179,7 @@ Geplanter Inhalt (Festlegung 30.07.2026):
 - **Wärmepumpe** — Betriebsmodus, Vorlauf/Rücklauf, COP, Leistungsaufnahme, Tagesverbrauch (gebaut 24.09.2026; für die Compact P ohne Vorlauf/Rücklauf/COP, siehe oben)
 - **Haus** — Backofen, Waschmaschine, Spülmaschine, Trockner einzeln, plus Grundlast (gebaut 24.09.2026, nach evcc um Energiefluss, Verbrauch jetzt und 24 Stunden erweitert)
 
-**Entscheidungsstand:** erledigt, alle vier gebaut (23. und 24.09.2026). Vorher
+**Entscheidungsstand:** erledigt, alle vier geplanten gebaut (23. und 24.09.2026). Vorher
 bewusst vertagt: Der Nutzer hatte am 30.07.2026 ausdrücklich gesagt, die
 Detailseiten kommen später und sollen nicht ungefragt gebaut werden. Am 12.09.2026 für die
 Verläufe wiederholt: Ringe, Tagesbalken und Akzente zuerst nur in der Übersicht, die
@@ -170,9 +189,8 @@ Detailseiten PV, Haus, Wallbox und WP bleiben für später.
 Skript-Schnittstelle nach dem Muster von `storage_update(...)`: ein Skript mit benannten
 Parametern, das nur Widgets füllt. Bis Sensoren daran hängen, steht in den Widgets das
 Strichmuster aus Dokument 01 (Regel „Fehlender Wert") — keine erfundenen Zahlen. So
-gebaut sind `pv_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`,
-`heatpump_extra` und die fünf `house_*`-Skripte; die
-Aufrufe kommen erst mit den Sensoren. Was beim Anlegen einer Seite sonst
+gebaut sind die Skripte aller Detailseiten (Liste in Dokument 03, „Skripte und
+ihre Schnittstellen“); die Aufrufe kommen erst mit den Sensoren. Was beim Anlegen einer Seite sonst
 dazugehört (Kachelkonvention, `scrollable`, nav-Knopf, Screenshots, Flussanimation), steht
 in Dokument 03 unter „Neue Detailseite".
 
@@ -205,8 +223,10 @@ Namen nachgezogen worden, die eine Beschriftungsänderung überdauern — **erle
   `.pv-dashboard_page_overview.yaml` und in Dokument 01.
 - **Die Dokumente beschrieben die echte Anlage** — Fabrikate, Typenbezeichnungen,
   echte Dachflächennamen, Speichergröße, Förderdauer, das BMS-Kit. Dokument 01, die
-  Anlagenbeschreibung in `README.md` und dieses Dokument nennen jetzt nur noch den
-  Aufbau. Was zur Anlage des Nutzers gehört, steht in seinen privaten Notizen
+  Anlagenbeschreibung in `README.md` und dieses Dokument beschreiben jetzt den
+  Aufbau: Wechselrichter, Speicher und Flächen sind neutral; Wärmepumpe (Nilan
+  Compact P) und Netzzähler (Shelly Pro 3EM) sind bewusst benannt, weil die
+  Seiten darauf zugeschnitten sind. Was zur Anlage des Nutzers gehört, steht in seinen privaten Notizen
   außerhalb des Repos.
 
 **Erledigt: die eigenen Werte liegen nicht mehr in einer versionierten Datei.** Bis
@@ -335,7 +355,10 @@ Speicher, Wallboxen, Wärmepumpe, Haus, Netz, Prognose, Wetter). Jedes Update-Sk
 (300 s, `.pv-dashboard_utility.yaml`) färbt das Symbol gelb und legt **einmal**
 je Quelle eine Warnung in die Meldungsliste. Solange eine Quelle noch nie
 geliefert hat, gilt sie nicht als veraltet (sonst stünden vor der Anbindung
-sechs Warnungen da).
+acht Warnungen da). Seit dem 25.09.2026 gilt: Fehlt die Verbindung zu Home
+Assistant (WLAN oder API), kommt statt einer Warnung je Quelle **eine**
+Sammelmeldung „Keine Verbindung zu Home Assistant“ (Störung, sobald eine Quelle
+schon geliefert hat); sie verschwindet, wenn die Verbindung wieder steht.
 
 ## Geldwerte
 
@@ -352,21 +375,53 @@ Zeitraums als fertigen Wert (`stats_update`).
 
 ## Echte Daten anbinden
 
-Alle Seiten sind gebaut, die Datenquellen fehlen. Für Übersicht, Speicher und
-Meldungen gibt es die vier Anbindungspunkte unten; jede Detailseite bringt ihre eigene
-Schnittstelle mit (Dokument 03, „Skripte und ihre Schnittstellen“).
+Alle Seiten sind gebaut. Seit dem 25.09.2026 steht der **Datenweg von Home
+Assistant** (`.pv-dashboard_ha.yaml`, erzeugt von `tools/ha_bindings.py`, nur Gerät):
+Jeder Wert kommt als `homeassistant`-Sensor, gedrosselt auf einen Aufruf je Gruppe und
+Sekunde, Listen über `homeassistant.action` mit Antwort. Nach der Entscheidung des
+Nutzers zeigen die Standard-IDs vorerst auf **Dummy-Entitäten**
+(`ha/pv_dashboard_dummy.yaml`), die Historie hält Home Assistant und das Panel holt sie
+nach jedem Start per `recorder.get_statistics`, fehlende Geräte blendet die
+Referenz-Entität je Gerät aus (ohne gültigen Wert → Grafik weg; `ha_<name>: none` =
+nicht belegt). Einzelheiten in Dokument 03, „Datenweg von Home Assistant“.
+
+Offen am Datenweg:
+
+- [ ] **Gegen ein echtes Home Assistant testen.** Geprüft ist bisher das Paket
+      samt Simulator gegen ein nachgebautes Home Assistant (`tests/ha_probe.py`:
+      echte API-Verbindung, Jinja2 außerhalb von Home Assistant für die Vorlagen). Offen: ob
+      Home Assistant die Vorlagen so rendert (strenger Modus, `as_datetime` auf den
+      Zeitangaben der Statistik), ob die Antwort als Objekt oder als Text ankommt
+      (beides wird gelesen), wie groß die Antworten werden, und die Option „Allow
+      the device to perform Home Assistant actions“.
+- [ ] **Echte IDs eintragen** — die Standards sind Vorschläge (deutsche IDs, Platzhalter
+      für Shelly-Gerät, DWD-Station und Warnzelle, evcc-Ladepunkte, Wechselrichter,
+      Nilan). Nach `.pv-dashboard_anlage.yaml`, nur die abweichenden.
+- [ ] **Annahmen prüfen:** Vorzeichen von `sensor.evcc_battery_power` (+ = Entladen) und
+      der Zählerleistungen (+ = Einspeisung); Einheit der Ladedauer (Anzeige in min);
+      `sun_duration` der DWD-Tagesprognose in Sekunden; „Sonstige“ = evcc-Hausverbrauch
+      ohne Wärmepumpe; „solar“ der 24-h-Reihe = Verbrauch − Netzbezug; Ertrag der
+      Statistik aus Erzeugung, Einspeisung, Volleinspeisung und Bezug mit den Tarifen;
+      Überschuss ohne Hauszähler = Einspeisung − Volleinspeisung.
+- [ ] **Speicher über Home Assistant nur zum Testen** — das BMS kommt nativ ans Panel
+      (unten); dann fallen die `bat*`-Zeilen der Tabelle weg.
+- [ ] **Netzseite** blendet fehlende Zähler noch nicht aus (nur Übersicht und die Seiten
+      PV, Speicher, Wallboxen, Wärmepumpe, Haus).
+- [ ] **Laufende Stunde** fehlt in `house_history` und `day_curve`, bis Home Assistant
+      die Stundenstatistik geschrieben hat (Minute 2 der Folgestunde).
 
 **Tagesreihe.** In `record_hour` steht eine einzige auskommentierte Quellzeile für die
 Erzeugung der abgelaufenen Stunde in kWh: `// kwh = id(<Erzeugungssensor>).state;`. Solange
-sie auskommentiert ist, wird 0 eingetragen. Der Kommentar daneben nennt die Stelle
-ausdrücklich „die einzige Stelle zum Anbinden".
+sie auskommentiert ist, wird 0 eingetragen. Am Gerät schreibt der Datenweg `day_curve`
+stündlich ganz neu aus der Statistik (Erzeugung heute 06 bis 22 Uhr) und `forecast_curve`
+aus den Solcast-Halbstunden; die Quellzeile bleibt für eine native Quelle.
 
 **Speicher.** `storage_update(...)` füllt Tabellenspalte und Ring der Speicherseite;
 Signatur und Sonderwerte stehen in Dokument 03. Künftige BMS-Sensoren rufen nur dieses
 Skript auf.
 
-**Die Batteriekästen der Übersicht füllt `storage_update` nicht.** Sie stehen dort auf
-`v_bat1` = „--" und `d_bat1` = „% · --- A · --,- V". Format laut Kommentar: Strom **vor** der
+**Die Batteriekästen der Übersicht füllt `ov_battery`** (seit 25.09.2026), nicht
+`storage_update`. Ohne Werte stehen sie auf `v_bat1` = „--" und `d_bat1` = „% · --- A · --,- V". Format laut Kommentar: Strom **vor** der
 Spannung und ganzzahlig (`%+.0f`), die Nachkommastelle nur in der Tabelle der Speicherseite.
 „% · -12 A · 53,2 V" misst 102,8 px bei Innenbreite 108; ab 100 A kürzt `DOT` die Spannung,
 nie den Strom samt Vorzeichen.
@@ -386,12 +441,12 @@ neue Firmware des Co-Prozessors, bleiben bis zum Quittieren und Leeren stehen.
 misst sie dort gegen die Breiten aus Dokument 01; die Demo-Werte im Repo sind rund
 und erfunden.
 
-**Flussanimation.** Die Leistungen je Teilstrecke stehen in `WATT[]` — „hier binden später die
-Sensoren an". Das Feld hat **37 Einträge**, einen je Teilstrecke; die Reihenfolge erzeugt
-`tools/flow_animation.py`. Demo-Werte gibt es nur unter `USE_HOST` (Simulator, Screenshots),
-auf dem Panel steht alles auf 0, keine erfundenen Flüsse. Das **Vorzeichen** wertet die Logik noch nicht
-aus; eine Flussumkehr braucht die Topologie rückwärts und kommt mit der Sensoranbindung. Der
-Block ist von `tools/flow_animation.py` erzeugt und wird nicht von Hand geändert.
+**Flussanimation.** Seit dem 25.09.2026 gibt es keine feste Tabelle `WATT[]` mehr: Der
+erzeugte Block liest je Tick die 24 Kanäle in `flow_ch`, geschrieben von den Skripten
+`ov_*` (Dokument 03, Abschnitt Flussanimation). Negative Leistung läuft rückwärts, unter
+10 W steht die Kugel. Demo-Werte gibt es nur unter `USE_HOST` und nur, solange `flow_ch`
+leer ist; auf dem Panel steht ohne Daten alles still. Der Block ist von
+`tools/flow_animation.py` erzeugt und wird nicht von Hand geändert.
 
 ## BMS: serielle Anbindung
 
@@ -546,15 +601,9 @@ Simulator und Screenshots decken Layout und Logik ab, diese Punkte nicht:
   bisher per Quelltext-Prüfung (11.09.2026) und im Simulator belegt, nicht mit dem Finger auf
   dem GT911.
 - **Audio-Halbduplex.** Umgesetzt am 11.09.2026, **Hardware-Test steht aus** — siehe die
-  zwei offenen 9.0-Punkte unten.
+  zwei offenen Punkte im nächsten Abschnitt.
 
-## Offene Frage: Quittung nach Home Assistant
-
-Das Quittieren wirkt heute nur auf dem Panel: `alert_ack` setzt die Zeile auf
-`LV_STATE_CHECKED` und schreibt „Quittiert HH:MM" in den Hinweis. Der Kommentar über dem
-Skript hält den Platz frei — „hier später auch die Quittung an das Gerät bzw. an Home
-Assistant". Es geht also noch nichts an Geräte oder HA, und die Liste lebt nur im RAM.
-**Entscheidungsstand: offen**, es ist nicht notiert, wie die Quittung zurücklaufen soll.
+## Offen aus dem 9.0-Umstieg
 
 Vom 9.0-Umstieg sind noch **zwei** Punkte offen, beide in Dokument 05 beschrieben:
 
@@ -566,6 +615,14 @@ Vom 9.0-Umstieg sind noch **zwei** Punkte offen, beide in Dokument 05 beschriebe
 
 Der LVGL-`list`-Bug ist mit 2026.9.0 erledigt.
 
+## Offene Frage: Quittung nach Home Assistant
+
+Das Quittieren wirkt heute nur auf dem Panel: `alert_ack` setzt die Zeile auf
+`LV_STATE_CHECKED` und schreibt „Quittiert HH:MM" in den Hinweis. Der Kommentar über dem
+Skript hält den Platz frei — „hier später auch die Quittung an das Gerät bzw. an Home
+Assistant". Es geht also noch nichts an Geräte oder HA, und die Liste lebt nur im RAM.
+**Entscheidungsstand: offen**, es ist nicht notiert, wie die Quittung zurücklaufen soll.
+
 **Nicht gebaut, bewusst (25.09.2026):** Meldungen über einen Neustart hinweg speichern
 (NVS-Platz, Quittung nach HA offen) und Steuern vom Panel aus (Wallbox-Modus,
 Nilan-Stufe) — die Knöpfe der Wallbox-Seite zeigen nur an. Jeweils auf Zuruf.
@@ -573,7 +630,7 @@ Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 25.09.2026 (Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Stand: 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
 Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc
@@ -591,4 +648,4 @@ auf „Heute -- %" und gilt als erledigt; die Generalisierung ist geschoben, das
 ist öffentlich; die Bereinigung der Commit-Historie hat der Nutzer am selben Tag
 ausdrücklich verworfen; `check_uart_settings` in der PACE-BMS-Komponente erneut
 geprüft; oben eine ToDo-Liste als Kurzfassung ergänzt).
-Geprüfter Commit: `7ddb5c5` (20.09.2026).
+Geprüfter Stand: Commit `0e2bd3d` (25.09.2026).

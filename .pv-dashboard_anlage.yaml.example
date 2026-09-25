@@ -20,7 +20,7 @@
 #
 # Eine geloeschte Zeile faellt auf den Demo-Wert des Pakets zurueck, eine
 # zusaetzliche Zeile gibt es nicht: Nur die hier genannten Namen werden im
-# Schema eingesetzt. Geheimnisse gehoeren nicht hierher, sondern in die
+# Schema eingesetzt (dazu die ha_*-Namen am Ende, nur fuer das Geraet). Geheimnisse gehoeren nicht hierher, sondern in die
 # secrets.yaml; !secret steht weiterhin nur in pv-dashboard.yaml.
 #
 # Die Kaesten sind knapp gerechnet. Eine laengere Beschriftung sprengt den
@@ -128,3 +128,29 @@ tarif_bezug_ct: "30.0"            # Strombezug
 # docs/06). Demo-Werte.
 pv_kwp: "30.0"
 feed_limit_pct: "60"
+
+# --- Entitaeten in Home Assistant (nur Geraet, .pv-dashboard_ha.yaml) ---
+# Welche Entitaet welchen Wert liefert, steht als Substitution ha_<name>
+# in .pv-dashboard_ha.yaml (Liste oben in der Datei, erzeugt von
+# tools/ha_bindings.py). Die Standards sind Vorschlaege [A] und passen zu
+# den Ersatz-Entitaeten aus ha/pv_dashboard_dummy.yaml. Mit den echten
+# Integrationen hier nur die Namen eintragen, deren ID abweicht -- nach
+# Einstellungen > Entitaeten in Home Assistant. Beispiele, auskommentiert:
+#
+# ha_weather: weather.<station>                 # DWD-Wetter
+# ha_grid_power: sensor.<shelly>_leistung       # Hausanschluss, + = Bezug
+# ha_wb1_power: sensor.evcc_<ladepunkt>_charge_power
+# ha_solcast_today: sensor.solcast_pv_forecast_forecast_today   # englisch
+#
+# Nicht vorhanden: none, false, off, null oder "" (Gross-/Kleinschreibung
+# egal) statt einer ID = nicht belegt. Jedes Geraet hat eine Referenz-
+# Entitaet (Liste oben in .pv-dashboard_ha.yaml): Flaeche N ha_pvN_power,
+# Wechselrichter N ha_invN_power, Speicher N ha_batN_soc, Wallbox N
+# ha_wbN_mode, Waermepumpe ha_hp_dhw, Zaehler ha_meter_pv_power und
+# ha_meter_house_power. Ohne gueltigen Wert der Referenz verschwindet die
+# ganze Grafik des Geraets (Lage bleibt); jede andere nicht belegte oder
+# nicht verfuegbare Entitaet laesst nur ihren Wert leer. Beispiele:
+#
+# ha_pv8_power: none                            # keine Flaeche 8
+# ha_bat3_soc: none                             # kein Speicher 3
+# ha_inv1_temp: none                            # WR 1 meldet keine Temperatur

@@ -66,6 +66,29 @@ DIE REGELN, jede aus einem konkreten Fehler im Bild entstanden:
    Bewegung kostet zwei Flaechen. Deshalb ein Deckel auf MAXMOVE Bewegungen
    je Tick, der Rest wartet einen Tick. Das Dashboard braucht zusaetzlich
    Reserve fuer Uhr, Messwerte und die Stundenbalken.
+
+9. LEISTUNG KOMMT AUS KANAELEN (seit 25.09.2026).
+   Die Leistung je Strecke steht nicht mehr fest im Block, sondern in dem
+   global flow_ch (std::array<float, len(KANAELE)>, Uebersichtsseite). Die
+   Skripte ov_* der Uebersicht schreiben hinein, der Block liest je Tick.
+   Welche Strecke welchen Kanal zeigt, leitet kanal() aus der Geometrie
+   ab: Anfang und Ende der Strecke liegen in einem Geraetekasten oder frei
+   (Knoten). Die Kaesten liest kaesten_lesen() aus derselben Datei; ihr
+   Name ist die ID des Wert-Labels darin (v_roof_1, v_wr_full, e_batt ...).
+   Vorzeichen: positiv = in Zeichenrichtung. Negativ laeuft die Kugel
+   rueckwaerts, endlos und ohne etwas auszuloesen (Speicher entlaedt,
+   Netzbezug). Unter 10 W steht die Kugel.
+
+10. FEHLENDE GERAETE (Referenz-Entitaeten, dev_present).
+   Jede Leitung bekommt die ID lnNN und eine Sichtbarkeitsregel aus der
+   Geometrie: Sie ist sichtbar, wenn (a) jedes Geraet, dessen Kasten sie
+   beruehrt, vorhanden ist und (b) hinter ihr noch etwas Vorhandenes haengt.
+   "Hinter ihr" heisst: Nimmt man die Leitung heraus, faellt ein Teil des
+   Schemas vom Hausanschluss (v_grid) ab; mindestens ein Geraet dieses Teils
+   muss vorhanden sein. Haengt dort etwas, das es immer gibt (Hausnetz,
+   Sonstige), oder faellt nichts ab (Masche), gilt nur (a). Der Block
+   vergleicht dev_present je Tick mit dem letzten Stand und blendet
+   Leitungen und ihre Kugeln um; eine versteckte Strecke bekommt 0 W.
 ------------------------------------------------------------------------------
 """
 import re
@@ -80,6 +103,45 @@ MAXMOVE = 13       # Bewegungen je Tick -> 26 von 32 Flaechen. Die restlichen
                    #  6 reichen dem Dashboard: Uhr und Messwerte aendern sich
                    # im Minutentakt, die Stundenbalken nur bei neuen Daten
 MARKER = "# >>> flow-animation"
+TOL = 6            # px: so weit darf ein Leitungsende neben einem Kasten
+                   # liegen und gehoert noch dazu (die Dachleitungen
+                   # beginnen 5 px unter dem Dachkasten)
+MINWATT = 10       # darunter steht die Kugel (Messrauschen)
+
+# Geraeteplaetze = Bits in dev_present, in dieser Reihenfolge. Dieselbe
+# Tabelle steht in .pv-dashboard_ui.yaml (dev_present) und in
+# tools/ha_bindings.py (PLAETZE, REFERENZ) -- alle drei gleich halten.
+SLOTS = ([f"pv_{i}" for i in range(1, 9)] + [f"inv_{i}" for i in range(1, 5)] +
+         ["bat_1", "bat_2", "bat_3", "wb_1", "wb_2", "heatpump", "meter_pv", "meter_house"])
+BIT = {s: 1 << i for i, s in enumerate(SLOTS)}
+BAT_ALL = BIT["bat_1"] | BIT["bat_2"] | BIT["bat_3"]
+
+# Kasten (ID seines Wert-Labels) -> Geraeteplatz. "immer" = gibt es in
+# jeder Anlage, "speicher" = Summenkasten, da sobald ein Speicher da ist.
+KASTEN = {**{f"v_roof_{i}": f"pv_{i}" for i in range(1, 9)},
+          "v_wr_full": "inv_1", "v_wr_mini": "inv_2",
+          "v_wr_hybrid1": "inv_3", "v_wr_hybrid2": "inv_4",
+          "v_bat1": "bat_1", "v_bat2": "bat_2", "v_bat3": "bat_3",
+          "e_batt": "speicher", "v_heatpump": "heatpump", "v_wb1": "wb_1",
+          "v_wb2": "wb_2", "v_meter_pv": "meter_pv", "v_meter_house": "meter_house",
+          "v_house": "immer", "v_misc": "immer", "v_grid": "immer"}
+WURZEL = "v_grid"  # Hausanschluss: von hier aus zaehlt "dahinter"
+
+# Kanaele in flow_ch, in dieser Reihenfolge. Vorzeichen: positiv in
+# Zeichenrichtung (Erzeugung zum Wechselrichter, Speicher laden, Verbrauch,
+# Einspeisung Richtung Netz).
+KANAELE = ([f"pv_{i}" for i in range(1, 9)] + [f"inv_{i}" for i in range(1, 5)] +
+           ["batt", "bat_1", "bat_2", "bat_3", "home", "heatpump", "misc", "wb_1", "wb_2",
+            "meter_pv", "meter_house", "grid"])
+VERBRAUCHER = {"v_heatpump": "heatpump", "v_misc": "misc", "v_wb1": "wb_1", "v_wb2": "wb_2"}
+
+# Demo-Leistungen je Kanal, nur host (Simulator), und nur solange niemand
+# flow_ch beschrieben hat. Der Screenshot-Lauf setzt eigene Werte.
+DEMO = {"pv_1": 2840, "pv_2": 1620, "pv_3": 335, "pv_4": 290, "pv_5": 1910, "pv_6": 1240,
+        "pv_7": 680, "pv_8": 1465, "inv_1": 4460, "inv_2": 625, "inv_3": 3150, "inv_4": 2145,
+        "batt": 760, "bat_1": 300, "bat_2": 250, "bat_3": 210, "home": 1790,
+        "heatpump": 430, "misc": 210, "wb_1": 1150, "wb_2": 0,
+        "meter_pv": 4460, "meter_house": 3180, "grid": 7640}
 
 
 def leitungen_lesen(text):
@@ -88,8 +150,38 @@ def leitungen_lesen(text):
         {"pts": [[int(x), int(y)] for x, y in re.findall(r"\[(\d+),(\d+)\]", m.group(1))],
          "col": m.group(2)}
         for m in re.finditer(
-            r"- line: \{ points: \[((?:\[\d+,\d+\],?)+)\], line_color: \$(\w+)", block)
+            r"- line: \{ (?:id: \w+, )?points: \[((?:\[\d+,\d+\],?)+)\], line_color: \$(\w+)", block)
     ]
+
+
+def kaesten_lesen(text):
+    """Geraetekaesten im Schema: jedes Widget der obersten Ebene von
+    schema_area mit Lage und Groesse in der ersten Zeile und einem Wert-Label
+    (v_..., e_batt) darin. Name = ID dieses Labels."""
+    block = text[text.index("id: schema_area"):text.index("\ninterval:")]
+    starts = [m.start() for m in re.finditer(r"^ {14}- \w+: ", block, re.M)] + [len(block)]
+    boxes = {}
+    for a, b in zip(starts, starts[1:]):
+        chunk = block[a:b]
+        erste = chunk.split("\n", 1)[0]
+        g = re.search(r"\bx: (\d+), y: (\d+), width: (\d+), height: (\d+)", erste)
+        name = re.search(r"\bid: ((?:v|e)_\w+)", chunk)
+        if not (g and name and erste.lstrip().startswith("- obj:")):
+            continue
+        x, y, w, h = map(int, g.groups())
+        if name.group(1) not in KASTEN:
+            sys.exit(f"Kasten {name.group(1)} fehlt in KASTEN -- Tabelle ergaenzen")
+        boxes[name.group(1)] = (x, y, x + w, y + h)
+    return boxes
+
+
+def kasten_bei(p, boxes):
+    x, y = p
+    treffer = [n for n, (x0, y0, x1, y1) in boxes.items()
+               if x0 - TOL <= x <= x1 + TOL and y0 - TOL <= y <= y1 + TOL]
+    if len(treffer) > 1:
+        sys.exit(f"Punkt {p} liegt an zwei Kaesten {treffer} -- TOL zu gross")
+    return treffer[0] if treffer else None
 
 
 def auf_strecke(p, a, b):
@@ -114,7 +206,7 @@ def topologie(lines):
 
     # Regel 2 -- an den Knoten teilen, Schnittpunkte SORTIERT einfuegen
     teile = []
-    for l in lines:
+    for li, l in enumerate(lines):
         p = [tuple(x) for x in l["pts"]]
         cut = {k for k in range(1, len(p) - 1) if p[k] in knoten}
         treffer = []
@@ -128,12 +220,12 @@ def topologie(lines):
             cut = {i + len(auf) if i > k else i for i in cut} | {k + 1 + j for j in range(len(auf))}
         idx = sorted(cut)
         if not idx:
-            teile.append({"pts": [list(x) for x in p], "col": l["col"]})
+            teile.append({"pts": [list(x) for x in p], "col": l["col"], "src": li})
             continue
         start = 0
         for c in idx + [len(p) - 1]:
             if c > start:
-                teile.append({"pts": [list(x) for x in p[start:c + 1]], "col": l["col"]})
+                teile.append({"pts": [list(x) for x in p[start:c + 1]], "col": l["col"], "src": li})
                 start = c
 
     # Regel 3 -- rueckwaerts zeigende Querstuecke umdrehen
@@ -161,12 +253,104 @@ def topologie(lines):
     return teile, succ, still, ab
 
 
+def kanal(teil, boxes, still):
+    """Regel 9: welchen Kanal eine Strecke zeigt, aus den Kaesten an ihrem
+    Anfang (a) und Ende (e). Die erste passende Zeile gewinnt."""
+    if still:
+        return None                                    # Verteilstrecke, keine Kugel
+    a = kasten_bei(teil["pts"][0], boxes)
+    e = kasten_bei(teil["pts"][-1], boxes)
+    ka, ke = KASTEN.get(a), KASTEN.get(e)
+    if ke and ke.startswith("bat_"):
+        return ke                                      # Schiene -> Speicher n
+    if "speicher" in (ka, ke):
+        return "batt"                                  # zum / vom Summenkasten
+    if "v_house" in (a, e):
+        return "home"                                  # ins Hausnetz / zur Schiene
+    if e in VERBRAUCHER:
+        return VERBRAUCHER[e]                          # Abgang zum Verbraucher
+    if ka and ka.startswith("pv_"):
+        return ka                                      # Dach -> Knoten
+    if ke and ke.startswith("inv_") and a is None:
+        return ke                                      # Knoten -> Wechselrichter
+    if ke == "meter_house" or ka in ("meter_pv", "meter_house"):
+        return ke if ke == "meter_house" else ka       # Zaehler Richtung Netz
+    if ka and ka.startswith("inv_"):
+        return ka                                      # Wechselrichter weiter
+    if a == WURZEL:
+        return "grid"                                  # Hausanschluss -> Netz
+    sys.exit(f"Strecke {teil['pts']} passt auf keine Kanalregel ({a} -> {e})")
+
+
+def sichtbarkeit(lines, boxes):
+    """Regel 10: je Leitung drei Masken fuer dev_present.
+    alle  jedes dieser Bits muss gesetzt sein (beruehrte Kaesten)
+    a, b  0 = keine Bedingung, sonst mindestens ein Bit gesetzt
+          (a: was hinter der Leitung haengt, b: Summenkasten Speicher)"""
+    def knoten(p):
+        return kasten_bei(p, boxes) or tuple(p)
+
+    enden = {tuple(p) for l in lines for p in (l["pts"][0], l["pts"][-1])}
+    mengen = []
+    for l in lines:
+        m = {knoten(l["pts"][0]), knoten(l["pts"][-1])}
+        # Knoten, die mitten auf der Leitung liegen, gehoeren auch dazu
+        for k in range(len(l["pts"]) - 1):
+            m |= {knoten(p) for p in enden if auf_strecke(p, l["pts"][k], l["pts"][k + 1])}
+        mengen.append(m)
+
+    def bit(n):
+        s = KASTEN.get(n) if isinstance(n, str) else None
+        return BAT_ALL if s == "speicher" else BIT.get(s, 0)
+
+    out = []
+    for i, m in enumerate(mengen):
+        # Zusammenhang ohne Leitung i (Union-Find ueber die Knoten)
+        eltern = {}
+
+        def wurzel(x):
+            while eltern.get(x, x) != x:
+                x = eltern[x]
+            return x
+        for j, mm in enumerate(mengen):
+            if j == i:
+                continue
+            mm = list(mm)
+            for x in mm[1:]:
+                ra, rb = wurzel(mm[0]), wurzel(x)
+                if ra != rb:
+                    eltern[ra] = rb
+        alle_knoten = set().union(*mengen)
+        ab = {wurzel(n) for n in m if wurzel(n) != wurzel(WURZEL)}
+        hinter = [n for n in alle_knoten if wurzel(n) in ab]
+        if any(KASTEN.get(n) == "immer" for n in hinter if isinstance(n, str)):
+            a = 0
+        else:
+            a = 0
+            for n in hinter:
+                a |= bit(n)
+        alle = 0
+        b = 0
+        for n in m:
+            if isinstance(n, str):
+                if KASTEN[n] == "speicher":
+                    b = BAT_ALL
+                else:
+                    alle |= BIT.get(KASTEN[n], 0)
+        out.append((alle, a, b))
+    return out
+
+
+def maske_text(v):
+    return "+".join(s for s in SLOTS if v & BIT[s]) or "-"
+
+
 def laenge(pts):
     return sum(abs(pts[k + 1][0] - pts[k][0]) + abs(pts[k + 1][1] - pts[k][1])
                for k in range(len(pts) - 1))
 
 
-def erzeugen(lines):
+def erzeugen(lines, boxes):
     teile, succ, still, ab = topologie(lines)
     n = len(teile)
     ziele = {j for v in succ.values() for j in v}
@@ -200,8 +384,11 @@ def erzeugen(lines):
         sf += v
         sc.append(len(v))
     lmax = max(laenge(l["pts"]) for l in teile)
+    ch = [kanal(l, boxes, i in still) for i, l in enumerate(teile)]
+    sicht = sichtbarkeit(lines, boxes)
     return dict(teile=teile, succ=succ, still=still, ab=ab, root=root, slot2=slot2,
-                segs=segs, offs=offs, cnt=cnt, sf=sf, so=so, sc=sc, lmax=lmax, n=n)
+                segs=segs, offs=offs, cnt=cnt, sf=sf, so=so, sc=sc, lmax=lmax, n=n,
+                ch=ch, sicht=sicht, nl=len(lines), lines=lines)
 
 
 def bericht(d):
@@ -211,6 +398,15 @@ def bericht(d):
     print(f"{len(d['slot2'])} Strecken mit zweiter Kugel (Regel 6)")
     print(f"laengste Strecke {d['lmax']} px, Laengenfaktor bezieht sich darauf (Regel 7)")
     print(f"Deckel {MAXMOVE} Bewegungen/Tick = {MAXMOVE * 2} von 32 Flaechen (Regel 8)")
+    print(f"{len(KANAELE)} Kanaele in flow_ch, {sum(c is not None for c in d['ch'])} Strecken zeigen einen (Regel 9)")
+    print(f"{d['nl']} Leitungen mit Sichtbarkeitsregel (Regel 10)")
+    if "-v" in sys.argv:
+        print("\nStrecke  Leitung  Kanal        von -> nach")
+        for i, l in enumerate(d["teile"]):
+            print(f"  {i:2d}      ln{l['src']:02d}     {d['ch'][i] or '(verteilt)':12s} {l['pts'][0]} -> {l['pts'][-1]}")
+        print("\nLeitung  alle vorhanden        eines davon (dahinter)             Speicher")
+        for k, (al, a, b) in enumerate(d["sicht"]):
+            print(f"  ln{k:02d}   {maske_text(al):22s} {maske_text(a):34s} {'ja' if b else '-'}")
     # Ueberlappungsprobe -- Regel 2
     n = 0
     for i, a in enumerate(d["teile"]):
@@ -230,45 +426,11 @@ def bericht(d):
     print(f"Ueberlappungen: {n}" + ("" if n == 0 else "   ACHTUNG"))
 
 
-def watt_verteilen(teile, ab, root):
-    """Demo-Leistungen: nur die speisenden Strecken bekommen einen Startwert,
-    alles Weitere folgt der Knotenregel -- was hineinfliesst, kommt heraus.
-    Spaeter ersetzt die Sensoranbindung diese Funktion."""
-    import random
-    zu = {}
-    for i, l in enumerate(teile):
-        zu.setdefault(tuple(l["pts"][-1]), []).append(i)
-    DACH = {55: 2840, 159: 1620, 285: 335, 389: 290,
-            515: 1910, 619: 1240, 745: 680, 849: 1465}
-    rng = random.Random(7)
-    w = [0.0] * len(teile)
-    for i, r in enumerate(root):
-        if not r:
-            continue
-        x, y = teile[i]["pts"][0]
-        w[i] = (DACH[x] if (y < 140 and x in DACH)
-                else 3180 if teile[i]["col"] == "col_feed"
-                else rng.choice([210, 430, 760, 1150]))
-    gew = {}
-    for k, v in ab.items():
-        if len(v) > 1:
-            g = [rng.uniform(0.6, 1.6) for _ in v]
-            gew[k] = [x / sum(g) for x in g]
-    for _ in range(len(teile)):
-        for kn, ein in zu.items():
-            raus = ab.get(kn, [])
-            if not raus:
-                continue
-            su = sum(w[i] for i in ein)
-            if su > 0:
-                for j, f in zip(raus, gew.get(kn, [1 / len(raus)] * len(raus))):
-                    w[j] = su * f
-    return [max(50, round(x)) for x in w]
-
-
-def yaml_bauen(d, w):
+def yaml_bauen(d):
     """Kugel-Widgets und Steuerlogik erzeugen."""
-    n, lmax = d["n"], d["lmax"]
+    n, lmax, nl = d["n"], d["lmax"], d["nl"]
+    if nl > 64:
+        sys.exit("mehr als 64 Leitungen -- die Maske im Block ist ein uint64_t")
     A = lambda k: ",".join(str(s[k]) for s in d["segs"])
     I = " " * 14
     dots = [f'{I}- obj: {{ id: fl{i:02d}, x: {l["pts"][0][0]-DOT//2}, y: {l["pts"][0][1]-DOT//2}, '
@@ -284,12 +446,24 @@ def yaml_bauen(d, w):
                   if (s == "" and j not in d["still"]) or (s == "b" and j in d["slot2"])
                   else "nullptr" for j in range(i, min(i + 5, n)))
         for i in range(0, n, 5))
+    lref = ",\n            ".join(
+        ", ".join(f"id(ln{j:02d})->obj" for j in range(i, min(i + 5, nl)))
+        for i in range(0, nl, 5))
+    ch = ",".join(str(KANAELE.index(c)) if c else "-1" for c in d["ch"])
+    lnof = ",".join(str(l["src"]) for l in d["teile"])
+    m_all = ",".join(f"0x{s[0]:X}" for s in d["sicht"])
+    m_a = ",".join(f"0x{s[1]:X}" for s in d["sicht"])
+    m_b = ",".join(f"0x{s[2]:X}" for s in d["sicht"])
+    demo = ", ".join(f"{DEMO[k]}" for k in KANAELE)
+    kan_doc = "\n".join(
+        "          //   " + "  ".join(f"{j:2d} {KANAELE[j]:<11s}" for j in range(i, min(i + 4, len(KANAELE))))
+        for i in range(0, len(KANAELE), 4))
     # AC ist der Zaehler der jeweiligen Kugel: acc fuer die Haupt-Kugel, accB
     # fuer die zweite (Regel 6). Ein gemeinsamer Zaehler gaebe die ganze
     # Bewegung der Kugel, die gerade die Schwelle ueberschreitet -- die
     # andere stuende bei 0,25 bis 0,5 px/Tick still.
     schritt = lambda AC: f"""
-            float wl = fabsf((float) WATT[i]), umlauf;
+            float wl = fabsf(WATT[i]), umlauf;
             if (wl <= 500.0f) umlauf = 16.0f / powf(fmaxf(wl, 50.0f) / 50.0f, 0.30103f);
             else              umlauf = 8.0f / powf(wl / 500.0f, 0.48945f);
             if (umlauf < 1.0f) umlauf = 1.0f;
@@ -324,19 +498,21 @@ def yaml_bauen(d, w):
             // Tick -- fluessiger als grosse Spruenge. Der Deckel bleibt bei
             // der Kugelgroesse, damit die Spur nicht reisst.
             if (sch > {DOT}.0f) sch = {DOT}.0f;"""
-    lauf = lambda P, AC, LV, LX, LY, D, rz: f"""{schritt(AC)}
+    # Haupt-Kugel: rueckwaerts (rev) laeuft sie endlos und loest nichts
+    # aus; die zweite Kugel (B) laeuft nur vorwaerts.
+    lauf = lambda P, AC, LV, LX, LY, D, haupt: f"""{schritt(AC)}
             {P}[i] += sch + {AC}[i];
             {AC}[i] = 0;
             if ({P}[i] >= total) {{
-              {P}[i] = 0; {LV}[i] = {'ROOT[i]' if rz else 'false'};
-              for (int s = 0; s < SCNT[i]; s++) {{
+              {P}[i] = 0; {LV}[i] = {'rev || ROOT[i]' if haupt else 'false'};
+              {'if (!rev) ' if haupt else ''}for (int s = 0; s < SCNT[i]; s++) {{
                 int t = SUCC[SOFF[i] + s];
                 if (!live[t]) live[t] = true;
                 else if (dotsB[t] && !liveB[t]) {{ liveB[t] = true; posB[t] = 0; }}
               }}
               if (!{LV}[i]) {{ lv_obj_add_flag({D}[i], LV_OBJ_FLAG_HIDDEN); continue; }}
             }}
-            float rest = {P}[i];
+            float rest = {'rev ? total - pos[i] : pos[i]' if haupt else P + '[i]'};
             int16_t px = SX[OFF[i]], py = SY[OFF[i]];
             for (int s = 0; s < CNT[i]; s++) {{
               int k = OFF[i] + s;
@@ -371,24 +547,26 @@ def yaml_bauen(d, w):
           static const uint16_t SOFF[] = {{{",".join(map(str, d["so"]))}}};
           static const uint8_t  SCNT[] = {{{",".join(map(str, d["sc"]))}}};
           static const bool     ROOT[] = {{{",".join("true" if r else "false" for r in d["root"])}}};
-          // Leistung je Strecke in W, hier binden spaeter die Sensoren an.
-          // Die Kugel laeuft in Zeichenrichtung, ihr Tempo folgt dem Betrag;
-          // 0 blendet sie aus, die Strecke loest dann auch nichts aus. Das
-          // VORZEICHEN wertet die Logik noch nicht aus -- eine Umkehr braucht
-          // die Topologie rueckwaerts und kommt mit der Sensoranbindung.
-          // Bis dahin laufen die Demo-Leistungen aus der Knotenregel nur auf
-          // der host-Plattform (Simulator, Screenshots). Auf dem Panel steht
-          // alles auf 0: keine erfundenen Fluesse.
-          #ifdef USE_HOST
-          static const int32_t  WATT[] = {{{",".join(map(str, w))}}};
-          #else
-          static const int32_t  WATT[{n}] = {{0}};
-          #endif
+          // Kanal in flow_ch je Strecke (-1 = Verteilstrecke ohne Kugel) und
+          // die Leitung lnNN, aus der die Strecke stammt. flow_ch fuellen die
+          // Skripte ov_* der Uebersicht, in W, positiv in Zeichenrichtung:
+{kan_doc}
+          static const int8_t   CH[] = {{{ch}}};
+          static const uint8_t  LN[] = {{{lnof}}};
+          // Sichtbarkeit je Leitung gegen dev_present (Bits wie dort):
+          // alle Bits aus L_ALL gesetzt und, wo nicht 0, je eines aus L_A
+          // (dahinter) und L_B (Summenkasten Speicher).
+          static const uint32_t L_ALL[] = {{{m_all}}};
+          static const uint32_t L_A[] = {{{m_a}}};
+          static const uint32_t L_B[] = {{{m_b}}};
+          static_assert(sizeof(id(flow_ch)) == {len(KANAELE)} * sizeof(float), "flow_ch passt nicht zu KANAELE in tools/flow_animation.py");
           static float   pos[{n}] = {{0}}, posB[{n}] = {{0}}, acc[{n}] = {{0}}, accB[{n}] = {{0}};
           static bool    live[{n}] = {{false}}, liveB[{n}] = {{false}};
           static int16_t lx[{n}], ly[{n}], lxB[{n}], lyB[{n}];
           static bool    init = false;
           static uint8_t next = 0;
+          static uint32_t gesehen = 0xFFFFFFFFu;
+          static uint64_t lvis = ~0ULL;
           lv_obj_t *const dots[{n}] = {{
             {ref("")} }};
           lv_obj_t *const dotsB[{n}] = {{
@@ -398,18 +576,53 @@ def yaml_bauen(d, w):
           // einem Load access fault (get_prop_core) und damit im Rollback.
           static uint16_t anlauf = 0;
           if (anlauf < {startticks}) {{ anlauf++; return; }}
-          if (!init) {{ init = true; for (int i = 0; i < {n}; i++) live[i] = ROOT[i]; }}
+          if (!init) {{
+            init = true;
+            for (int i = 0; i < {n}; i++) live[i] = ROOT[i];
+            // Demo-Leistungen nur auf der host-Plattform (Simulator), und
+            // nur solange noch kein Skript flow_ch beschrieben hat. Auf dem
+            // Panel bleibt alles 0, bis Werte kommen: keine erfundenen Fluesse.
+            #ifdef USE_HOST
+            static const float DEMO[] = {{{demo}}};
+            bool leer = true;
+            for (float v : id(flow_ch)) if (v != 0.0f) leer = false;
+            if (leer) for (int k = 0; k < {len(KANAELE)}; k++) id(flow_ch)[k] = DEMO[k];
+            #endif
+          }}
+          // Fehlende Geraete (Referenz): Leitungen um- und ausblenden, sobald
+          // sich dev_present aendert. Kostet nur beim Wechsel etwas.
+          const uint32_t da = id(dev_present);
+          if (da != gesehen) {{
+            gesehen = da;
+            lv_obj_t *const lines[{nl}] = {{
+            {lref} }};
+            for (int k = 0; k < {nl}; k++) {{
+              const bool v = (da & L_ALL[k]) == L_ALL[k] && (!L_A[k] || (da & L_A[k])) && (!L_B[k] || (da & L_B[k]));
+              if (v) {{ lvis |= 1ULL << k; lv_obj_remove_flag(lines[k], LV_OBJ_FLAG_HIDDEN); }}
+              else   {{ lvis &= ~(1ULL << k); lv_obj_add_flag(lines[k], LV_OBJ_FLAG_HIDDEN); }}
+            }}
+          }}
+          // Leistung je Strecke aus ihrem Kanal; versteckte Strecken und
+          // Werte unter {MINWATT} W zaehlen als 0 (Kugel steht, loest nichts aus).
+          float WATT[{n}];
+          for (int i = 0; i < {n}; i++) {{
+            float w = (CH[i] >= 0 && ((lvis >> LN[i]) & 1ULL)) ? id(flow_ch)[CH[i]] : 0.0f;
+            WATT[i] = (std::isfinite(w) && fabsf(w) >= {MINWATT}.0f) ? w : 0.0f;
+          }}
           int bewegt = 0;
           for (int q = 0; q < {n}; q++) {{
             int i = (next + q) % {n};
             // Verteilstrecken haben keine Kugel (nullptr) und loesen nichts
             // aus; ihre Abgaenge laufen als ROOT endlos (Regel 4 und 5).
-            if (!dots[i] || !live[i] || WATT[i] == 0) {{ if (dots[i]) lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }}
+            // Negativ: rueckwaerts, endlos, ohne Ausloesen (Regel 9).
+            const bool rev = WATT[i] < 0.0f;
+            if (dots[i] && rev) live[i] = true;
+            if (!dots[i] || !live[i] || WATT[i] == 0.0f) {{ if (dots[i]) lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }}
 {lauf("pos", "acc", "live", "lx", "ly", "dots", True)}
           }}
           for (int i = 0; i < {n}; i++) {{
             if (!dotsB[i]) continue;
-            if (!liveB[i] || WATT[i] == 0) {{ lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }}{lauf("posB", "accB", "liveB", "lxB", "lyB", "dotsB", False)}
+            if (!liveB[i] || WATT[i] <= 0.0f) {{ lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }}{lauf("posB", "accB", "liveB", "lxB", "lyB", "dotsB", False)}
           }}
           next = (next + bewegt + 1) % {n};
   # <<< flow-animation
@@ -420,13 +633,20 @@ def yaml_bauen(d, w):
 # Eine vom Werkzeug erzeugte Kugel-Zeile (IDs flNN und flNNb, siehe yaml_bauen)
 KUGEL = re.compile(r"^ {14}- obj: \{ id: fl\d{2}b?, x: -?\d+, y: -?\d+, width: \d+, "
                    r"height: \d+, radius: CIRCLE, .*hidden: true, scrollable: false \}\n", re.M)
+# Eine Leitung im Schema, mit oder ohne ID
+LEITUNG = re.compile(r"(- line: \{ )(?:id: \w+, )?(points: )")
 
 
 def einbauen(text, dots, logik):
-    """Kugeln und Steuerlogik einsetzen. Vorhandene Kugeln und der Block
-    zwischen den Markern werden ERSETZT, nicht verdoppelt -- ein zweiter
-    Lauf aendert nichts."""
+    """Kugeln, Leitungs-IDs und Steuerlogik einsetzen. Vorhandene Kugeln
+    und der Block zwischen den Markern werden ERSETZT, nicht verdoppelt --
+    ein zweiter Lauf aendert nichts."""
     text = KUGEL.sub("", text)
+    a = text.index("id: schema_area")
+    b = text.find("\ninterval:", a)
+    zaehler = iter(range(1000))
+    schema = LEITUNG.sub(lambda m: f"{m.group(1)}id: ln{next(zaehler):02d}, {m.group(2)}", text[a:b])
+    text = text[:a] + schema + text[b:]
     stelle = text.index("\n", text.index("            widgets:", text.index("id: schema_area")))
     text = text[:stelle + 1] + dots + "\n" + text[stelle + 1:]
     if MARKER in text:
@@ -441,16 +661,19 @@ def einbauen(text, dots, logik):
 if __name__ == "__main__":
     text = UI.read_text(encoding="utf-8")
     lines = leitungen_lesen(text)
-    print(f"{len(lines)} Leitungen im Schema gefunden\n")
-    d = erzeugen(lines)
+    boxes = kaesten_lesen(text)
+    print(f"{len(lines)} Leitungen und {len(boxes)} Geraetekaesten im Schema gefunden\n")
+    d = erzeugen(lines, boxes)
     bericht(d)
-    dots, logik = yaml_bauen(d, watt_verteilen(d["teile"], d["ab"], d["root"]))
+    dots, logik = yaml_bauen(d)
     neu = einbauen(text, dots, logik)
+    if neu.count("%%"):
+        sys.exit("'%%' im erzeugten Text (docs/04, Punkt 8)")
     if neu == text:
         print("\nDie Animation in der Datei ist aktuell -- nichts zu schreiben")
     elif "--write" not in sys.argv:
         print("\n(Vorschau -- die Datei weicht ab, mit --write wird die Animation eingebaut)")
     else:
         UI.write_text(neu, encoding="utf-8")
-        print(f"\n{UI.name} geschrieben: {len(dots.splitlines())} Kugeln, "
+        print(f"\n{UI.name} geschrieben: {len(dots.splitlines())} Kugeln, {len(lines)} Leitungs-IDs, "
               "Block zwischen den Markern ersetzt")

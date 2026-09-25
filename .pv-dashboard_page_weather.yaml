@@ -136,7 +136,7 @@ script:
           lv_label_set_text(id(wx_minmax), mm.c_str());
           static const char *const DIR[8] = {"N", "NO", "O", "SO", "S", "SW", "W", "NW"};
           std::string ws = num(wind, "%.0f", "--");
-          if (!std::isnan(wind) && !std::isnan(bearing))
+          if (std::isfinite(wind) && std::isfinite(bearing))
             ws += std::string(" ") + DIR[((int) lroundf(fmodf(fmodf(bearing, 360.0f) + 360.0f, 360.0f) / 45.0f)) % 8];
           lv_label_set_text(id(wx_wind), ws.c_str());
           lv_label_set_text(id(wx_gust), num(gust, "%.0f", "--").c_str());
@@ -275,11 +275,11 @@ script:
           for (int i = 0; i < 12; i++) {
             if (!(seen & (1 << i)))
               continue;
-            if (!std::isnan(t[i])) {
+            if (std::isfinite(t[i])) {
               tmin = std::min(tmin, t[i]);
               tmax = std::max(tmax, t[i]);
             }
-            if (!std::isnan(r[i]))
+            if (std::isfinite(r[i]))
               rmax = std::max(rmax, r[i]);
           }
           if (tmax - tmin < 4.0f) {
@@ -292,7 +292,7 @@ script:
           static lv_point_precise_t pts[12];
           int np = 0;
           for (int i = 0; i < 12; i++) {
-            if (!(seen & (1 << i)) || std::isnan(t[i]))
+            if (!(seen & (1 << i)) || !std::isfinite(t[i]))
               continue;
             pts[np].x = (lv_value_precise_t) (HW * i + HW / 2);
             pts[np].y = (lv_value_precise_t) (70.0f - (t[i] - tmin) / (tmax - tmin) * 70.0f);
@@ -306,7 +306,7 @@ script:
           // Regenbalken: 190..250 (60 px), Skala mindestens 2 mm
           lv_obj_t *const bar[12] = {id(wx_hr_00), id(wx_hr_01), id(wx_hr_02), id(wx_hr_03), id(wx_hr_04), id(wx_hr_05), id(wx_hr_06), id(wx_hr_07), id(wx_hr_08), id(wx_hr_09), id(wx_hr_10), id(wx_hr_11)};
           for (int i = 0; i < 12; i++) {
-            if (!(seen & (1 << i)) || std::isnan(r[i]) || r[i] <= 0.0f) {
+            if (!(seen & (1 << i)) || !std::isfinite(r[i]) || r[i] <= 0.0f) {
               lv_obj_add_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
               continue;
             }

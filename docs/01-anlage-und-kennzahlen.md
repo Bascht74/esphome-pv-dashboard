@@ -14,7 +14,8 @@ Layout. Jede von ihnen ist eine Substitution:
   vier Wechselrichter, der Volleinspeise-Rahmen, das Hausnetz, die Verbraucher, die
   Zähler und die Zweitzeile der Eigenverbrauchskachel in
   `.pv-dashboard_page_overview.yaml`, die drei Speichernamen zusätzlich in
-  `.pv-dashboard_page_battery.yaml`. Dadurch bauen Simulator und Screenshot-Lauf
+  `.pv-dashboard_page_battery.yaml`; dazu die Blöcke der Seiten Wallboxen, Haus
+  und Netz (Liste in Dokument 03, „Fünf Seiten tragen …“). Dadurch bauen Simulator und Screenshot-Lauf
   ohne `pv-dashboard.yaml`.
 - Die **eigene Anlage** wird in `.pv-dashboard_anlage.yaml` beschrieben. Die
   Datei steht in `.gitignore` und bleibt auf dem Rechner, im Repo liegt nur die
@@ -34,10 +35,10 @@ Layout. Jede von ihnen ist eine Substitution:
 
 Die Werte **im Repo sind Demo-Werte** — neutrale Namen und runde Tarife, damit das
 öffentliche Repo nicht die Anlage des Nutzers beschreibt. Dieses Dokument
-beschreibt ebenfalls nur den **Aufbau**, nicht eine bestimmte Anlage: Fabrikate,
-Typenbezeichnungen und die echten Flächennamen stehen im aktuellen Stand nirgends
-mehr. Die Commit-Historie trägt sie noch; wie sie vor dem Veröffentlichen
-bereinigt wird, steht in Dokument 06. Wer das Dashboard auf seine eigene Anlage
+beschreibt ebenfalls nur den **Aufbau**, nicht eine bestimmte Anlage: Wechselrichter,
+Speicher und Flächen sind neutral; Wärmepumpe (Nilan Compact P) und Netzzähler
+(Shelly Pro 3EM) sind bewusst benannt, weil die Seiten darauf zugeschnitten sind.
+Ältere Commits tragen den Stand vor der Generalisierung; das bleibt so (Dokument 06). Wer das Dashboard auf seine eigene Anlage
 setzt, trägt seine Namen in `.pv-dashboard_anlage.yaml` ein und hält seine
 Anlagennotizen außerhalb des Repos.
 
@@ -255,22 +256,54 @@ Prüfliste in Dokument 04 (LVGL-Checkliste).
 - **Zeit:** kommt auf dem Gerät von Home Assistant (`time: platform: homeassistant`),
   im Simulator von der Systemuhr.
 
-Angebunden ist bisher nichts davon. Die Oberfläche hat dafür feste Schnittstellen
-(`alert_push`, `alert_clear`, `storage_update`, `pv_update`, `pv_status`, `money_update`, `wallbox_update`,
+Die Oberfläche hat dafür feste Schnittstellen (`alert_push`, `alert_clear`,
+`storage_update`, `pv_update`, `pv_status`, `money_update`, `wallbox_update`,
 `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`, `house_battery`,
 `house_loadpoint`, `house_update`, `house_history`, `grid_update`, `grid_phase`,
 `grid_meter`, `grid_rules`, `stats_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`,
-`wx_hour`, `wx_day`, `wx_warning`, `record_hour`, `WATT[]`), siehe Dokument 03
-zum Dashboard-Aufbau.
+`wx_hour`, `wx_day`, `wx_warning`, `record_hour`) und für das Anlagenschema die
+Eingabeskripte `ov_roof`, `ov_inverter`, `ov_battery`, `ov_battery_total`,
+`ov_consumer`, `ov_meter`, `ov_grid`, `ov_house` und `ov_totals`; siehe Dokument 03.
+
+**Weg über Home Assistant (seit 25.09.2026, nur Gerät).** `.pv-dashboard_ha.yaml`
+holt jeden Wert als `homeassistant`-Sensor und ruft damit gedrosselt diese
+Skripte; Listen (Vorhersagen, Solcast-Halbstunden, Statistik) holt es über
+Aktionen mit Antwort. Welche Entität welchen Wert liefert, steht als
+Substitution `ha_<name>` in der Datei. Die Standards sind **Vorschläge** aus einer
+Recherche ohne Zugriff auf die eigene Instanz (deutsche IDs bei Solcast, DWD und
+Shelly; evcc-Ladepunkte `wallbox_1`/`wallbox_2`, Shelly-Gerät „hausanschluss“,
+DWD-Station `dwd_station`, Wechselrichter `sensor.wr<n>_…`, Nilan
+`sensor.nilan_…` — alles Platzhalter). Abweichende IDs trägt man in
+`.pv-dashboard_anlage.yaml` ein. Zum Testen ohne die Integrationen legt
+`ha/pv_dashboard_dummy.yaml` in Home Assistant genau diese IDs an. Einbinden und
+Umstellen: Dokument 03, „Datenweg von Home Assistant“.
+
+In Home Assistant muss beim ESPHome-Gerät die Option **„Allow the device to
+perform Home Assistant actions“** eingeschaltet sein, sonst bleiben Prognosen,
+Stundenwerte und Statistik leer.
+
+**Welche Geräte die Anlage hat**, ergibt sich aus der Zuordnung selbst, ohne
+zusätzliche Entitäten. Jedes Gerät hat eine **Referenz-Entität**: Fläche →
+Leistung, Wechselrichter → Leistung, Speicher → Ladestand, Wallbox → Modus
+(„WB-Status“), Wärmepumpe → Warmwasser oben, Zähler → Leistung. Liefert sie
+keinen gültigen Wert (nicht belegt, nicht verfügbar, kein Wert), verschwindet
+die ganze Grafik des Geräts aus Schema und Detailseiten – Kasten, Werte,
+Leitungen, Kugeln –, die übrigen bleiben an ihrem Platz; es meldet keine
+veralteten Daten und keine Störung. Kommt ein Wert, ist es wieder da. Jede
+**andere** Entität, die fehlt oder nicht verfügbar ist, lässt nur ihren Wert
+leer, das Gerät bleibt. Was es in der Anlage nicht gibt, bekommt in
+`.pv-dashboard_anlage.yaml` `ha_<name>: none` (auch `false`, `off`, `""`). Das
+Panel merkt sich nichts über einen Neustart: Bis die Referenzen melden, zeigt es
+keine Geräte.
 
 ---
 
-Stand: 25.09.2026 (Geldrechnung gebaut, Netzanschluss-Werte, Nilan klassisches
-Bedienteil, Shelly Pro 3EM); davor 24.09.2026 (Beschriftungen der Seite Haus, Nilan Compact P, Schnittstellen der Seiten
+Stand: 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`); davor 25.09.2026, später Tag (Datenweg über Home Assistant); davor 25.09.2026 (Geldrechnung gebaut, Netzanschluss-Werte, Nilan klassisches
+Bedienteil, Shelly Pro 3EM; Abschnitt zu Fabrikaten und Historie an den Stand angepasst, Orte der Standards ergänzt); davor 24.09.2026 (Beschriftungen der Seite Haus, Nilan Compact P, Schnittstellen der Seiten
 Wallboxen, Wärmepumpe und Haus); davor 23.09.2026 (eigene Werte in `.pv-dashboard_anlage.yaml` statt in
 `pv-dashboard.yaml`, `pv_update` ergänzt; davor 20.09.2026:
 Aufbau- und Kennzahlenfestlegungen vom 30.07.2026; die
 Entscheidung zur Autarkie-Zweitzeile vom 20.09.2026; Beschriftungen und Tarife am
 20.09.2026 auf Substitutions mit Demo-Werten umgestellt; am selben Tag Fabrikate,
-Typenbezeichnungen und echte Flächennamen aus dem Dokument genommen). Geprüfter Commit:
-`c6a432f` (12.09.2026).
+Typenbezeichnungen und echte Flächennamen aus dem Dokument genommen). Geprüfter Stand:
+Commit `0e2bd3d` (25.09.2026).

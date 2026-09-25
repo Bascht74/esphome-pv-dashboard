@@ -11,6 +11,14 @@
 # die Kugel-Widgets flNN/flNNb im schema_area stammen NUR von
 # tools/flow_animation.py -- nicht von Hand aendern. Das Werkzeug liest und
 # schreibt genau diese Datei.
+#
+# Werte bekommt das Schema nur ueber die Eingabeskripte ov_roof,
+# ov_inverter, ov_battery, ov_battery_total, ov_consumer, ov_meter,
+# ov_grid, ov_house und ov_totals (vor redraw_curve). Sie schreiben die
+# Kaesten und die Leistung je Kanal in flow_ch; daraus nimmt die Animation
+# Richtung und Tempo der Kugeln. Gerufen werden sie vom Datenweg
+# (.pv-dashboard_ha.yaml, nur Geraet) und im Screenshot-Lauf. Fehlende
+# Geraete blendet dev_apply aus (.pv-dashboard_ui.yaml).
 ##############################################################################
 
 ##############################################################################
@@ -111,6 +119,28 @@ globals:
     type: float
     restore_value: false
     initial_value: 'NAN'
+  # Leistung je Kanal der Flussanimation in W (25.09.2026). Die Skripte
+  # ov_* unten schreiben hinein, der erzeugte Block am Ende liest je Tick.
+  # Reihenfolge = KANAELE in tools/flow_animation.py (der Block prueft die
+  # Groesse beim Bauen mit static_assert):
+  #    0..7  pv_1..pv_8  Dach/Modul -> Wechselrichter
+  #    8..11 inv_1..inv_4  Wechselrichter weiter (Zaehler, Hybrid, Knoten)
+  #   12 batt  Summenkasten Speicher     13..15 bat_1..bat_3
+  #   16 home  Hausnetz -> Verbraucher   17 heatpump  18 misc  19 wb_1  20 wb_2
+  #   21 meter_pv  22 meter_house  23 grid
+  # Positiv = in Zeichenrichtung: Erzeugung, Speicher LADEN, Verbrauch,
+  # Einspeisung Richtung Netz. Negativ laeuft die Kugel rueckwaerts
+  # (Speicher entlaedt, Netzbezug). Fehlende Geraete bekommen 0.
+  - id: flow_ch
+    type: std::array<float, 24>
+    restore_value: false
+    initial_value: '{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}'
+  # Momentanwerte fuer die Statusleiste (ov_status): Hausnetz in W, Netz
+  # in W (positiv = Bezug), Restprognose heute in kWh
+  - id: ov_now
+    type: std::array<float, 3>
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN}'
 
 sensor:
   - platform: template
@@ -168,23 +198,263 @@ script:
       grid_in: float
     then:
       - lambda: |-
-          const float sub = (full_feed * ${tarif_volleinspeisung_ct} + surplus * ${tarif_ueberschuss_ct}) / 100.0f;
-          const float saved = self_use * ${tarif_bezug_ct} / 100.0f;
-          const float cost = grid_in * ${tarif_bezug_ct} / 100.0f;
-          const float total = sub + saved - cost;
-          id(money_subsidy) = sub;
-          id(money_saved) = saved;
-          id(money_import) = cost;
-          id(money_total) = total;
+          // Leerer Wert (val_leer, -inf) macht das Ergebnis leer -- nie
+          // inf * 0 oder inf - inf (NAN) und kein Vorzeichenwechsel
+          const float LEER = id(val_leer);
+          auto ct = [LEER](float kwh, float tarif) -> float {
+            return std::isinf(kwh) ? LEER : kwh * tarif / 100.0f;
+          };
+          const float a = ct(full_feed, ${tarif_volleinspeisung_ct}), b = ct(surplus, ${tarif_ueberschuss_ct});
+          const float sub = (std::isinf(a) || std::isinf(b)) ? LEER : a + b;
+          const float saved = ct(self_use, ${tarif_bezug_ct});
+          const float cost = ct(grid_in, ${tarif_bezug_ct});
+          const float total = (std::isinf(sub) || std::isinf(saved) || std::isinf(cost)) ? LEER : sub + saved - cost;
+          // Nach aussen (Globals, Home Assistant) nur Zahlen oder NAN, nie -inf
+          auto ha = [](float v) -> float { return std::isfinite(v) ? v : NAN; };
+          id(money_subsidy) = ha(sub);
+          id(money_saved) = ha(saved);
+          id(money_import) = ha(cost);
+          id(money_total) = ha(total);
           auto &num = id(fmt_num);
           lv_label_set_text(id(val_money), num(total, "%.2f", "--,--").c_str());
           const std::string split = num(sub, "+%.2f", "+--,--") + " €\n" + num(saved, "+%.2f", "+--,--") + " €\n" +
-                                    num(-cost, "%.2f", "---,--") + " €";
+                                    num(std::isinf(cost) ? cost : -cost, "%.2f", "---,--") + " €";
           lv_label_set_text(id(money_split), split.c_str());
-          id(sensor_money_total).publish_state(total);
-          id(sensor_money_subsidy).publish_state(sub);
-          id(sensor_money_saved).publish_state(saved);
-          id(sensor_money_import).publish_state(cost);
+          id(sensor_money_total).publish_state(ha(total));
+          id(sensor_money_subsidy).publish_state(ha(sub));
+          id(sensor_money_saved).publish_state(ha(saved));
+          id(sensor_money_import).publish_state(ha(cost));
+
+  # ---------------------------------------------------------------------
+  # Eingaenge des Anlagenschemas (25.09.2026). Jedes Skript fuellt seine
+  # Kaesten, stempelt data_seen und schreibt seinen Kanal in flow_ch. Ein
+  # Geraet, das laut dev_present fehlt, bekommt 0 W: Seine Kaesten sind
+  # ausgeblendet (dev_apply), und es treibt keine Kugel an.
+  # Einheiten wie im Schema: Daecher und Wechselrichter in W mit
+  # Tausenderpunkt, alles andere in kW mit einer Stelle, Energie in kWh.
+  # NAN = kein Wert (Striche).
+  #
+  #   ov_roof(n, power, energy)         n 0..7 = Flaeche/Modul 1..8
+  #   ov_inverter(n, power, energy)     n 0..3 = Wechselrichter 1..4
+  #   ov_battery(n, soc, current, voltage)   n 0..2, current + = Laden
+  #   ov_battery_total(power, charged, discharged)  Summenkasten, W,
+  #                                     + = Laden; kWh heute rein / raus
+  #   ov_consumer(n, power, sub)        n 0 Waermepumpe, 1 Sonstige,
+  #                                     2 Wallbox 1, 3 Wallbox 2; W; sub
+  #                                     = Text hinter "kW · " ("" = lassen)
+  #   ov_meter(n, power, energy)        n 0 PV-Zaehler, 1 Hauszaehler;
+  #                                     W, + = Einspeisung; kWh heute
+  #   ov_grid(power)                    Hausanschluss, W, + = BEZUG (wie
+  #                                     grid_update und der Shelly)
+  #   ov_house(power, energy)           Hausnetz: alles auf der
+  #                                     Verbraucherschiene, W; kWh heute
+  #   ov_totals(gen, use, feed, draw, full_feed, surplus, remaining)
+  #                                     Kacheln und Ringe, kWh heute;
+  #                                     remaining = Restprognose
+  # ---------------------------------------------------------------------
+  - id: ov_roof
+    parameters:
+      n: int
+      power: float
+      energy: float
+    then:
+      - lambda: |-
+          if (n < 0 || n > 7)
+            return;
+          lv_obj_t *const val[8] = {id(v_roof_1), id(v_roof_2), id(v_roof_3), id(v_roof_4), id(v_roof_5), id(v_roof_6), id(v_roof_7), id(v_roof_8)};
+          lv_obj_t *const sub[8] = {id(e_roof_1), id(e_roof_2), id(e_roof_3), id(e_roof_4), id(e_roof_5), id(e_roof_6), id(e_roof_7), id(e_roof_8)};
+          lv_label_set_text(val[n], id(fmt_watt)(power, "-.---").c_str());
+          lv_label_set_text(sub[n], ("W · " + id(fmt_num)(energy, "%.1f", "--,-") + " kWh").c_str());
+          const bool da = id(dev_present) & (1u << n);
+          id(flow_ch)[n] = (da && std::isfinite(power)) ? power : 0.0f;
+          id(data_seen)[0] = millis();
+
+  - id: ov_inverter
+    parameters:
+      n: int
+      power: float
+      energy: float
+    then:
+      - lambda: |-
+          if (n < 0 || n > 3)
+            return;
+          lv_obj_t *const val[4] = {id(v_wr_full), id(v_wr_mini), id(v_wr_hybrid1), id(v_wr_hybrid2)};
+          lv_obj_t *const sub[4] = {id(e_wr_full), id(e_wr_mini), id(e_wr_hybrid1), id(e_wr_hybrid2)};
+          lv_label_set_text(val[n], id(fmt_watt)(power, "--.---").c_str());
+          lv_label_set_text(sub[n], ("W · " + id(fmt_num)(energy, "%.1f", "--,-") + " kWh").c_str());
+          const bool da = id(dev_present) & (1u << (8 + n));
+          id(flow_ch)[8 + n] = (da && std::isfinite(power)) ? power : 0.0f;
+          id(data_seen)[0] = millis();
+
+  # Strom ganzzahlig VOR der Spannung (Einheitenregel, docs/01); Leistung
+  # fuer die Kugel = Strom x Spannung, positiv = Laden.
+  - id: ov_battery
+    parameters:
+      n: int
+      soc: float
+      current: float
+      voltage: float
+    then:
+      - lambda: |-
+          if (n < 0 || n > 2)
+            return;
+          auto &num = id(fmt_num);
+          lv_obj_t *const val[3] = {id(v_bat1), id(v_bat2), id(v_bat3)};
+          lv_obj_t *const sub[3] = {id(d_bat1), id(d_bat2), id(d_bat3)};
+          lv_label_set_text(val[n], num(soc, "%.0f", "--").c_str());
+          const std::string a = (std::isfinite(current) && fabsf(current) < 0.5f) ? std::string("0") : num(current, "%+.0f", "---");
+          lv_label_set_text(sub[n], ("% · " + a + " A · " + num(voltage, "%.1f", "--,-") + " V").c_str());
+          const bool da = id(dev_present) & (1u << (12 + n));
+          const float w = current * voltage;
+          id(flow_ch)[13 + n] = (da && std::isfinite(w)) ? w : 0.0f;
+          id(data_seen)[1] = millis();
+
+  - id: ov_battery_total
+    parameters:
+      power: float
+      charged: float
+      discharged: float
+    then:
+      - lambda: |-
+          auto &num = id(fmt_num);
+          lv_label_set_text(id(e_batt), id(fmt_watt)(power, "---.---").c_str());
+          // Pfeile wie in .pv-dashboard_utility.yaml: runter = Laden, hoch = Entladen
+          const std::string s = "W · \U000F0045" + num(charged, "%.1f", "--,-") + " kWh · \U000F005D" +
+                                num(discharged, "%.1f", "--,-") + " kWh";
+          lv_label_set_text(id(sub_battery_total), s.c_str());
+          const bool da = id(dev_present) & (7u << 12);
+          id(flow_ch)[12] = (da && std::isfinite(power)) ? power : 0.0f;
+          id(data_seen)[1] = millis();
+
+  - id: ov_consumer
+    parameters:
+      n: int
+      power: float
+      sub: string
+    then:
+      - lambda: |-
+          if (n < 0 || n > 3)
+            return;
+          // Ohne Zahl unveraendert weiterreichen (val_leer = -inf bleibt leer)
+          auto kw = [](float w) -> float { return !std::isfinite(w) ? w : w / 1000.0f; };
+          lv_obj_t *const val[4] = {id(v_heatpump), id(v_misc), id(v_wb1), id(v_wb2)};
+          lv_obj_t *const det[4] = {id(d_heatpump), id(d_misc), id(d_wb1), id(d_wb2)};
+          lv_label_set_text(val[n], id(fmt_num)(kw(power), "%.1f", "--,-").c_str());
+          if (!sub.empty())
+            lv_label_set_text(det[n], ("kW · " + sub).c_str());
+          // Bits in dev_present: Waermepumpe 17, Wallboxen 15 und 16;
+          // "Sonstige" gibt es immer
+          const uint32_t bit[4] = {1u << 17, 0, 1u << 15, 1u << 16};
+          const bool da = bit[n] == 0 || (id(dev_present) & bit[n]);
+          id(flow_ch)[17 + n] = (da && std::isfinite(power)) ? power : 0.0f;
+          const int src[4] = {3, 4, 2, 2};   // Datenalter: Waermepumpe, Haus, Wallboxen
+          id(data_seen)[src[n]] = millis();
+
+  - id: ov_meter
+    parameters:
+      n: int
+      power: float
+      energy: float
+    then:
+      - lambda: |-
+          if (n < 0 || n > 1)
+            return;
+          auto kw = [](float w) -> float { return !std::isfinite(w) ? w : w / 1000.0f; };
+          lv_obj_t *const val[2] = {id(v_meter_pv), id(v_meter_house)};
+          lv_obj_t *const sub[2] = {id(e_meter_pv), id(e_meter_house)};
+          lv_label_set_text(val[n], id(fmt_num)(kw(power), "%.1f", "--,-").c_str());
+          lv_label_set_text(sub[n], ("kW · " + id(fmt_num)(energy, "%.1f", "--,-") + " kWh").c_str());
+          const bool da = id(dev_present) & (1u << (18 + n));
+          id(flow_ch)[21 + n] = (da && std::isfinite(power)) ? power : 0.0f;
+          id(data_seen)[5] = millis();
+
+  # Hausanschluss: Betrag in kW, die Richtung steht in der Zweitzeile.
+  # Bezug rot (col_draw), sonst wie gezeichnet (col_feed).
+  - id: ov_grid
+    parameters:
+      power: float
+    then:
+      - lambda: |-
+          lv_label_set_text(id(v_grid), id(fmt_num)(!std::isfinite(power) ? power : fabsf(power) / 1000.0f, "%.1f", "--,-").c_str());
+          const bool bezug = std::isfinite(power) && power > 10.0f;
+          const bool ein = std::isfinite(power) && power < -10.0f;
+          lv_label_set_text(id(dir_grid), bezug ? "kW · Bezug" : (ein ? "kW · Einspeisung" : "kW"));
+          lv_obj_set_style_text_color(id(v_grid), lv_color_hex(bezug ? $col_draw : $col_feed), 0);
+          id(flow_ch)[23] = !std::isfinite(power) ? 0.0f : -power;   // Kanal: + = zum Netz
+          id(ov_now)[1] = power;
+          id(data_seen)[5] = millis();
+      - script.execute: ov_status
+
+  - id: ov_house
+    parameters:
+      power: float
+      energy: float
+    then:
+      - lambda: |-
+          auto &num = id(fmt_num);
+          lv_label_set_text(id(v_house), num(!std::isfinite(power) ? power : power / 1000.0f, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(e_house), ("kW · " + num(energy, "%.1f", "--,-") + " kWh heute").c_str());
+          id(flow_ch)[16] = !std::isfinite(power) ? 0.0f : power;
+          id(ov_now)[0] = power;
+          id(data_seen)[4] = millis();
+      - script.execute: ov_status
+
+  # Kacheln der Energiebilanz und die zwei Ringe (Tageswerte, docs/01):
+  #   Autarkie        = (Verbrauch - Netzbezug) / Verbrauch
+  #   Eigenverbrauch  = (Hybrid-Erzeugung - Ueberschuss) / Hybrid-Erzeugung,
+  #                     Hybrid-Erzeugung = gen - full_feed (ohne Voll-WR)
+  # Unter 0,05 kWh Nenner bleiben die Ringe auf Strichen.
+  - id: ov_totals
+    parameters:
+      gen: float
+      use: float
+      feed: float
+      draw: float
+      full_feed: float
+      surplus: float
+      remaining: float
+    then:
+      - lambda: |-
+          auto &num = id(fmt_num);
+          lv_label_set_text(id(val_gen), num(gen, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(val_use), num(use, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(val_feed), num(feed, "%.1f", "--,-").c_str());
+          lv_label_set_text(id(val_draw), num(draw, "%.1f", "--,-").c_str());
+          // Leerer Wert (val_leer, -inf) -> Quote leer; nie inf - inf
+          const float LEER = id(val_leer);
+          auto dif = [LEER](float a, float b) -> float { return (std::isinf(a) || std::isinf(b)) ? LEER : a - b; };
+          auto quote = [LEER](float z, float nn) -> float {
+            if (std::isinf(z) || std::isinf(nn))
+              return LEER;
+            if (!std::isfinite(z) || !std::isfinite(nn) || nn < 0.05f)
+              return NAN;
+            return std::clamp(z / nn * 100.0f, 0.0f, 100.0f);
+          };
+          const float aut = quote(dif(use, draw), use);
+          const float hyb = dif(gen, full_feed);
+          const float own = quote(dif(hyb, surplus), hyb);
+          lv_arc_set_value(id(ring_cover_autarky), !std::isfinite(aut) ? 100 : (int32_t) lroundf(100.0f - aut));
+          lv_arc_set_value(id(ring_cover_selfuse), !std::isfinite(own) ? 100 : (int32_t) lroundf(100.0f - own));
+          lv_label_set_text(id(val_autarky), num(aut, "%.0f", "--").c_str());
+          lv_label_set_text(id(val_selfuse), num(own, "%.0f", "--").c_str());
+          lv_label_set_text(id(sub_autarky), ("Heute " + num(aut, "%.0f", "--") + " %").c_str());
+          id(ov_now)[2] = remaining;
+          id(data_seen)[4] = millis();
+      - script.execute: ov_status
+
+  # Statusleiste links: Autarkie JETZT (Momentanwert, docs/01) aus Hausnetz
+  # und Netzbezug, dazu die Restprognose. Nur von den Skripten oben gerufen.
+  - id: ov_status
+    then:
+      - lambda: |-
+          const float house = id(ov_now)[0], grid = id(ov_now)[1];
+          float aut = (std::isinf(house) || std::isinf(grid)) ? id(val_leer) : NAN;
+          if (std::isfinite(house) && std::isfinite(grid) && house > 10.0f)
+            aut = std::clamp((house - std::max(grid, 0.0f)) / house * 100.0f, 0.0f, 100.0f);
+          auto &num = id(fmt_num);
+          const std::string s = "Autarkie " + num(aut, "%.0f", "--") + " % · Restprognose " +
+                                num(id(ov_now)[2], "%.1f", "--,-") + " kWh";
+          lv_label_set_text(id(lbl_status_left), s.c_str());
 
   # Zeichnet Balken (Ist) und Linie (Prognose) aus beiden Reihen. Sie liegen
   # uebereinander in derselben Kachel: Die Linie steht im YAML nach den Balken
@@ -793,44 +1063,61 @@ lvgl:
               # (Kacheln ab Schirm 84): So bleiben 8 bis zum Dachbild (y 12),
               # fast wie die 9 seitlich. Buendig blieben dort nur 4; der
               # Versatz von 4 zur Kachelkante ist dafuer in Kauf genommen.
-              - obj: { scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 2, y: 4, width: 210, height: 246, bg_opa: TRANSP,
+              - obj: { id: frame_full, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE, x: 2, y: 4, width: 210, height: 246, bg_opa: TRANSP,
                        border_color: $col_full, border_width: 1, border_opa: 45%, radius: 12, pad_all: 0 }
-              - label: { x: 116, y: 231, text: "${name_feedin}", text_align: CENTER, text_color: $col_full,
+              - label: { id: lbl_feedin, x: 116, y: 231, text: "${name_feedin}", text_align: CENTER, text_color: $col_full,
                          text_font: f_unit, bg_color: $col_bg, bg_opa: COVER,
                          pad_left: 6, pad_right: 6, pad_top: 2, pad_bottom: 2 }
 
               # ---------- Leitungen --------------------------------------
-              - line: { points: [[55,107],[55,119],[107,119],[107,131]], line_color: $col_full, line_width: 3, line_rounded: true }
-              - line: { points: [[159,107],[159,119],[107,119]], line_color: $col_full, line_width: 3, line_rounded: true }
-              - line: { points: [[285,107],[285,119],[337,119],[337,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[389,107],[389,119],[337,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[515,107],[515,119],[567,119],[567,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[619,107],[619,119],[567,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[745,107],[745,119],[797,119],[797,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[849,107],[849,119],[797,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[407,171],[497,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[727,171],[637,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[553,211],[553,241],[330,241],[330,257]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[581,211],[581,250],[590,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { points: [[783,211],[783,250],[774,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { points: [[556,285],[808,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { points: [[556,285],[556,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { points: [[682,274],[682,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { points: [[808,285],[808,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              # Jede Leitung gehoert zu genau einem Geraetepfad: Stiche vom
+              # Dach zum Knoten, vom Knoten zum Wechselrichter und die
+              # Stuecke der beiden Schienen stehen deshalb als eigene
+              # Linien da (25.09.2026), damit dev_apply ein fehlendes
+              # Geraet samt seiner Leitung ausblenden kann, ohne dass eine
+              # Nachbarleitung mitgeht. Die IDs lnNN und die Regel, wann
+              # eine Leitung sichtbar ist, setzt tools/flow_animation.py
+              # (aus der Geometrie); das Bild ist dasselbe wie vorher.
+              - line: { id: ln00, points: [[55,107],[55,119],[107,119]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln01, points: [[107,119],[107,131]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln02, points: [[159,107],[159,119],[107,119]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln03, points: [[285,107],[285,119],[337,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln04, points: [[337,119],[337,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln05, points: [[389,107],[389,119],[337,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln06, points: [[515,107],[515,119],[567,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln07, points: [[567,119],[567,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln08, points: [[619,107],[619,119],[567,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln09, points: [[745,107],[745,119],[797,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln10, points: [[797,119],[797,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln11, points: [[849,107],[849,119],[797,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln12, points: [[407,171],[497,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln13, points: [[727,171],[637,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln14, points: [[553,211],[553,241],[330,241],[330,257]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln15, points: [[581,211],[581,250],[590,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln16, points: [[783,211],[783,250],[774,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln17, points: [[682,285],[556,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln18, points: [[682,285],[808,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln19, points: [[556,285],[556,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln20, points: [[682,274],[682,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln21, points: [[682,285],[682,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln22, points: [[808,285],[808,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
               # Einspeisung knickt bei y 241 ab, gespiegelt zur Solarleitung
               # links (553 / 811 = 682 -/+ 129, beide 30 unter den Kaesten):
               # 28 zur Speicherleitung bei 783, 44 ueber der Schiene (285).
-              - line: { points: [[811,211],[811,241],[882,241],[882,517],[797,517],[797,545]], line_color: $col_feed, line_width: 3, line_rounded: true }
-              - line: { points: [[330,385],[330,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[144,403],[516,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[144,403],[144,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[268,403],[268,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[392,403],[392,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { points: [[516,403],[516,419]], line_color: $col_line, line_width: 3, line_rounded: true }
-              - line: { points: [[107,211],[107,545]], line_color: $col_full, line_width: 3, line_rounded: true }
-              - line: { points: [[171,595],[370,595]], line_color: $col_full, line_width: 3, line_rounded: true }
-              - line: { points: [[733,595],[534,595]], line_color: $col_feed, line_width: 3, line_rounded: true }
-              - line: { points: [[452,657],[452,664]], line_color: $col_feed, line_width: 3, line_rounded: true }
+              - line: { id: ln23, points: [[811,211],[811,241],[882,241],[882,517],[797,517],[797,545]], line_color: $col_feed, line_width: 3, line_rounded: true }
+              - line: { id: ln24, points: [[330,385],[330,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln25, points: [[144,403],[268,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln26, points: [[330,403],[268,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln27, points: [[330,403],[392,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln28, points: [[392,403],[516,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln29, points: [[144,403],[144,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln30, points: [[268,403],[268,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln31, points: [[392,403],[392,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln32, points: [[516,403],[516,419]], line_color: $col_line, line_width: 3, line_rounded: true }
+              - line: { id: ln33, points: [[107,211],[107,545]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln34, points: [[171,595],[370,595]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln35, points: [[733,595],[534,595]], line_color: $col_feed, line_width: 3, line_rounded: true }
+              - line: { id: ln36, points: [[452,657],[452,664]], line_color: $col_feed, line_width: 3, line_rounded: true }
 
               # ---------- Dachgruppen: je zwei Dachflaechen ueber ihrem
               #            Wechselrichter, Verlauf grad_lit_*, vor den
@@ -843,10 +1130,10 @@ lvgl:
               #            draw_rounding 2 ab 102. So bleiben 2 px Abstand,
               #            und die Flussanimation zeichnet die Gruppen nie
               #            mit.
-              - obj: { x: 7, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_full, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
-              - obj: { x: 237, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
-              - obj: { x: 467, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
-              - obj: { x: 697, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { id: roof_grp_1, x: 7, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_full, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { id: roof_grp_2, x: 237, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { id: roof_grp_3, x: 467, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
+              - obj: { id: roof_grp_4, x: 697, y: 9, width: 200, height: 91, radius: 7, bg_grad: grad_lit_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollbar_mode: 'off', scrollable: false, scroll_dir: NONE }
 
               # ---------- Dachflaechen: feste y-Positionen, kein Flex. Bild 0..24,
               #            Name 25..42, Wert 45..66, Tageswert 68..85 -> Kasten 90,
@@ -1095,24 +1382,31 @@ interval:
           static const uint16_t SOFF[] = {0,1,1,2,3,3,4,5,5,6,7,7,8,8,8,8,8,8,9,10,10,13,13,13,13,15,16,17,19,20,20,20,20,20,20,20,20};
           static const uint8_t  SCNT[] = {1,0,1,1,0,1,1,0,1,1,0,1,0,0,0,0,0,1,1,0,3,0,0,0,2,1,1,2,1,0,0,0,0,0,0,0,0};
           static const bool     ROOT[] = {true,false,true,true,false,true,true,false,true,true,false,true,true,true,true,true,true,false,false,true,true,false,true,true,true,true,false,false,true,true,true,true,true,true,true,true,true};
-          // Leistung je Strecke in W, hier binden spaeter die Sensoren an.
-          // Die Kugel laeuft in Zeichenrichtung, ihr Tempo folgt dem Betrag;
-          // 0 blendet sie aus, die Strecke loest dann auch nichts aus. Das
-          // VORZEICHEN wertet die Logik noch nicht aus -- eine Umkehr braucht
-          // die Topologie rueckwaerts und kommt mit der Sensoranbindung.
-          // Bis dahin laufen die Demo-Leistungen aus der Knotenregel nur auf
-          // der host-Plattform (Simulator, Screenshots). Auf dem Panel steht
-          // alles auf 0: keine erfundenen Fluesse.
-          #ifdef USE_HOST
-          static const int32_t  WATT[] = {2840,4460,1620,335,625,290,1910,3150,1240,680,2145,1465,760,430,1150,210,210,149,263,149,760,349,263,3180,430,210,154,276,122,1150,364,154,122,210,1150,3180,3180};
-          #else
-          static const int32_t  WATT[37] = {0};
-          #endif
+          // Kanal in flow_ch je Strecke (-1 = Verteilstrecke ohne Kugel) und
+          // die Leitung lnNN, aus der die Strecke stammt. flow_ch fuellen die
+          // Skripte ov_* der Uebersicht, in W, positiv in Zeichenrichtung:
+          //    0 pv_1          1 pv_2          2 pv_3          3 pv_4       
+          //    4 pv_5          5 pv_6          6 pv_7          7 pv_8       
+          //    8 inv_1         9 inv_2        10 inv_3        11 inv_4      
+          //   12 batt         13 bat_1        14 bat_2        15 bat_3      
+          //   16 home         17 heatpump     18 misc         19 wb_1       
+          //   20 wb_2         21 meter_pv     22 meter_house  23 grid       
+          static const int8_t   CH[] = {0,8,1,2,9,3,4,10,5,6,11,7,9,11,16,12,12,-1,-1,13,12,14,15,22,16,-1,-1,-1,-1,17,18,19,20,8,21,22,23};
+          static const uint8_t  LN[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36};
+          // Sichtbarkeit je Leitung gegen dev_present (Bits wie dort):
+          // alle Bits aus L_ALL gesetzt und, wo nicht 0, je eines aus L_A
+          // (dahinter) und L_B (Summenkasten Speicher).
+          static const uint32_t L_ALL[] = {0x1,0x100,0x2,0x4,0x200,0x8,0x10,0x400,0x20,0x40,0x800,0x80,0x600,0xC00,0x400,0x400,0x800,0x0,0x0,0x1000,0x0,0x2000,0x4000,0x80800,0x0,0x0,0x0,0x0,0x0,0x20000,0x0,0x8000,0x10000,0x40100,0x40000,0x80000,0x0};
+          static const uint32_t L_A[] = {0x1,0x3,0x2,0x4,0xC,0x8,0x10,0x30,0x20,0x40,0xC0,0x80,0x20C,0x0,0x0,0x0,0x0,0x1000,0x4000,0x1000,0x7000,0x2000,0x4000,0x0,0x0,0x20000,0x0,0x18000,0x10000,0x20000,0x0,0x8000,0x10000,0x103,0x40103,0x0,0x0};
+          static const uint32_t L_B[] = {0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x7000,0x7000,0x0,0x0,0x0,0x7000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0};
+          static_assert(sizeof(id(flow_ch)) == 24 * sizeof(float), "flow_ch passt nicht zu KANAELE in tools/flow_animation.py");
           static float   pos[37] = {0}, posB[37] = {0}, acc[37] = {0}, accB[37] = {0};
           static bool    live[37] = {false}, liveB[37] = {false};
           static int16_t lx[37], ly[37], lxB[37], lyB[37];
           static bool    init = false;
           static uint8_t next = 0;
+          static uint32_t gesehen = 0xFFFFFFFFu;
+          static uint64_t lvis = ~0ULL;
           lv_obj_t *const dots[37] = {
             reinterpret_cast<lv_obj_t *>(id(fl00)), reinterpret_cast<lv_obj_t *>(id(fl01)), reinterpret_cast<lv_obj_t *>(id(fl02)), reinterpret_cast<lv_obj_t *>(id(fl03)), reinterpret_cast<lv_obj_t *>(id(fl04)),
             reinterpret_cast<lv_obj_t *>(id(fl05)), reinterpret_cast<lv_obj_t *>(id(fl06)), reinterpret_cast<lv_obj_t *>(id(fl07)), reinterpret_cast<lv_obj_t *>(id(fl08)), reinterpret_cast<lv_obj_t *>(id(fl09)),
@@ -1136,15 +1430,57 @@ interval:
           // einem Load access fault (get_prop_core) und damit im Rollback.
           static uint16_t anlauf = 0;
           if (anlauf < 150) { anlauf++; return; }
-          if (!init) { init = true; for (int i = 0; i < 37; i++) live[i] = ROOT[i]; }
+          if (!init) {
+            init = true;
+            for (int i = 0; i < 37; i++) live[i] = ROOT[i];
+            // Demo-Leistungen nur auf der host-Plattform (Simulator), und
+            // nur solange noch kein Skript flow_ch beschrieben hat. Auf dem
+            // Panel bleibt alles 0, bis Werte kommen: keine erfundenen Fluesse.
+            #ifdef USE_HOST
+            static const float DEMO[] = {2840, 1620, 335, 290, 1910, 1240, 680, 1465, 4460, 625, 3150, 2145, 760, 300, 250, 210, 1790, 430, 210, 1150, 0, 4460, 3180, 7640};
+            bool leer = true;
+            for (float v : id(flow_ch)) if (v != 0.0f) leer = false;
+            if (leer) for (int k = 0; k < 24; k++) id(flow_ch)[k] = DEMO[k];
+            #endif
+          }
+          // Fehlende Geraete (Referenz): Leitungen um- und ausblenden, sobald
+          // sich dev_present aendert. Kostet nur beim Wechsel etwas.
+          const uint32_t da = id(dev_present);
+          if (da != gesehen) {
+            gesehen = da;
+            lv_obj_t *const lines[37] = {
+            id(ln00)->obj, id(ln01)->obj, id(ln02)->obj, id(ln03)->obj, id(ln04)->obj,
+            id(ln05)->obj, id(ln06)->obj, id(ln07)->obj, id(ln08)->obj, id(ln09)->obj,
+            id(ln10)->obj, id(ln11)->obj, id(ln12)->obj, id(ln13)->obj, id(ln14)->obj,
+            id(ln15)->obj, id(ln16)->obj, id(ln17)->obj, id(ln18)->obj, id(ln19)->obj,
+            id(ln20)->obj, id(ln21)->obj, id(ln22)->obj, id(ln23)->obj, id(ln24)->obj,
+            id(ln25)->obj, id(ln26)->obj, id(ln27)->obj, id(ln28)->obj, id(ln29)->obj,
+            id(ln30)->obj, id(ln31)->obj, id(ln32)->obj, id(ln33)->obj, id(ln34)->obj,
+            id(ln35)->obj, id(ln36)->obj };
+            for (int k = 0; k < 37; k++) {
+              const bool v = (da & L_ALL[k]) == L_ALL[k] && (!L_A[k] || (da & L_A[k])) && (!L_B[k] || (da & L_B[k]));
+              if (v) { lvis |= 1ULL << k; lv_obj_remove_flag(lines[k], LV_OBJ_FLAG_HIDDEN); }
+              else   { lvis &= ~(1ULL << k); lv_obj_add_flag(lines[k], LV_OBJ_FLAG_HIDDEN); }
+            }
+          }
+          // Leistung je Strecke aus ihrem Kanal; versteckte Strecken und
+          // Werte unter 10 W zaehlen als 0 (Kugel steht, loest nichts aus).
+          float WATT[37];
+          for (int i = 0; i < 37; i++) {
+            float w = (CH[i] >= 0 && ((lvis >> LN[i]) & 1ULL)) ? id(flow_ch)[CH[i]] : 0.0f;
+            WATT[i] = (std::isfinite(w) && fabsf(w) >= 10.0f) ? w : 0.0f;
+          }
           int bewegt = 0;
           for (int q = 0; q < 37; q++) {
             int i = (next + q) % 37;
             // Verteilstrecken haben keine Kugel (nullptr) und loesen nichts
             // aus; ihre Abgaenge laufen als ROOT endlos (Regel 4 und 5).
-            if (!dots[i] || !live[i] || WATT[i] == 0) { if (dots[i]) lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            // Negativ: rueckwaerts, endlos, ohne Ausloesen (Regel 9).
+            const bool rev = WATT[i] < 0.0f;
+            if (dots[i] && rev) live[i] = true;
+            if (!dots[i] || !live[i] || WATT[i] == 0.0f) { if (dots[i]) lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }
 
-            float wl = fabsf((float) WATT[i]), umlauf;
+            float wl = fabsf(WATT[i]), umlauf;
             if (wl <= 500.0f) umlauf = 16.0f / powf(fmaxf(wl, 50.0f) / 50.0f, 0.30103f);
             else              umlauf = 8.0f / powf(wl / 500.0f, 0.48945f);
             if (umlauf < 1.0f) umlauf = 1.0f;
@@ -1182,15 +1518,15 @@ interval:
             pos[i] += sch + acc[i];
             acc[i] = 0;
             if (pos[i] >= total) {
-              pos[i] = 0; live[i] = ROOT[i];
-              for (int s = 0; s < SCNT[i]; s++) {
+              pos[i] = 0; live[i] = rev || ROOT[i];
+              if (!rev) for (int s = 0; s < SCNT[i]; s++) {
                 int t = SUCC[SOFF[i] + s];
                 if (!live[t]) live[t] = true;
                 else if (dotsB[t] && !liveB[t]) { liveB[t] = true; posB[t] = 0; }
               }
               if (!live[i]) { lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }
             }
-            float rest = pos[i];
+            float rest = rev ? total - pos[i] : pos[i];
             int16_t px = SX[OFF[i]], py = SY[OFF[i]];
             for (int s = 0; s < CNT[i]; s++) {
               int k = OFF[i] + s;
@@ -1211,8 +1547,8 @@ interval:
           }
           for (int i = 0; i < 37; i++) {
             if (!dotsB[i]) continue;
-            if (!liveB[i] || WATT[i] == 0) { lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }
-            float wl = fabsf((float) WATT[i]), umlauf;
+            if (!liveB[i] || WATT[i] <= 0.0f) { lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            float wl = fabsf(WATT[i]), umlauf;
             if (wl <= 500.0f) umlauf = 16.0f / powf(fmaxf(wl, 50.0f) / 50.0f, 0.30103f);
             else              umlauf = 8.0f / powf(wl / 500.0f, 0.48945f);
             if (umlauf < 1.0f) umlauf = 1.0f;
