@@ -67,7 +67,16 @@ SO LAEUFT EIN WERT (docs/03, Abschnitt "Datenweg"):
    "Allow the device to perform Home Assistant actions" einschalten,
    sonst lehnt Home Assistant jede Aktion ab (on_error, Log "ha").
 
-5. DUMMY. Fuer jede Standard-ID eine Ersatz-Entitaet in Home Assistant:
+5. STEUERN (Wunsch des Nutzers, 25.09.2026). Der Modus-Schalter der Seite
+   Wallboxen ruft wallbox_mode_set (.pv-dashboard_page_wallbox.yaml); das
+   Paket haengt daran mit !extend select.select_option auf ${ha_wb<N>_mode}
+   an. Welche Optionen gelten, liest es aus dem Attribut options der
+   Entitaet: marq24/ha-evcc bietet off/smart/now (evcc mit alwaysCharge,
+   ab Sommer 2026) oder off/pv/minpv/now (aelter), unter derselben ID.
+   Nicht belegt oder Wallbox fehlt: kein Befehl. Nach 10 s bzw. bei einem
+   Fehler zeichnet die Karte aus dem gemeldeten Zustand neu.
+
+6. DUMMY. Fuer jede Standard-ID eine Ersatz-Entitaet in Home Assistant:
    Zahlen ueber input_number.pvd_<name> (von Hand verstellbar), Zaehler-
    staende laufen mit der Zeit hoch (fuer recorder.get_statistics), Texte
    und Zeitpunkte fest, dazu eine Template-Wetter-Entitaet mit Vorhersagen.
@@ -207,7 +216,7 @@ gruppe(21, 0, "Hausnetz", """
                           "Basis " + num(mul(@dev5_power, 0.001f), "%.1f", "--,-"));
 }""")
 gruppe(22, 0, "Netz", """
-id(grid_update).execute(@grid_power, @grid_freq, @curtailed_today, @grid_n_current);
+id(grid_update).execute(@grid_power, @grid_freq, @grid_n_current);
 id(ov_grid).execute(@grid_power);
 """ + "\n".join(
     f"id(grid_phase).execute({p}, @grid_l{p + 1}_voltage, @grid_l{p + 1}_current, @grid_l{p + 1}_power, "
@@ -327,6 +336,11 @@ z("tariff_home", "n", "sensor.evcc_tariff_price_home", [HN], "€/kWh", 0.12, mu
 z("tariff_feedin", "n", "sensor.evcc_tariff_feed_in", [HN], "€/kWh", 0.10, mul=100, hin="EUR/kWh -> ct")
 
 # --- Ladepunkte (evcc; Ladepunkt-Titel "wallbox_1"/"wallbox_2" [A]) -----------
+# Optionen der Modus-Entitaet (marq24/ha-evcc, pyevcc_ha/keys.py): aeltere
+# evcc-Versionen MODE_PV_MINPV, mit alwaysCharge MODE_SMART. Der Dummy und
+# die Probe nehmen die aeltere Liste; tests/ha_probe.py schaltet um.
+MODUS_OPTIONEN_ALT = ["off", "pv", "minpv", "now"]
+MODUS_OPTIONEN_NEU = ["off", "smart", "now"]
 WB_DEMO = [
     ("pv", True, True, 7.4, 3, 12.8, 64, 104, "Kombi", 58, 212, 80, "{{ (today_at('07:00') + timedelta(days=1)).isoformat() }}"),
     ("off", False, False, 0.0, 0, 0.0, 0, 0, "", 0, 0, 100, "{{ none }}"),
@@ -335,7 +349,8 @@ for n in range(1, 3):
     g = [G[f"Wallbox {n}"]]
     lp = f"evcc_wallbox_{n}"
     d = WB_DEMO[n - 1]
-    z(f"wb{n}_mode", "t", f"select.{lp}_mode", g, demo=d[0], hin="off/pv/minpv/now")
+    z(f"wb{n}_mode", "t", f"select.{lp}_mode", g, demo=d[0], hin="off/smart/now bzw. off/pv/minpv/now")
+    z(f"wb{n}_mode_options", "t", f"wb{n}_mode", g, demo=str(MODUS_OPTIONEN_ALT), attr="options")
     z(f"wb{n}_charging", "b", f"binary_sensor.{lp}_charging", g, demo=d[1])
     z(f"wb{n}_connected", "b", f"binary_sensor.{lp}_connected", g, demo=d[2])
     z(f"wb{n}_power", "n", f"sensor.{lp}_charge_power", g + [HN], "kW", d[3], hin="kW")
@@ -394,7 +409,6 @@ for d, (geraet, w, kwh) in enumerate(
 NZ = [G["Netz"]]
 z("grid_power", "n", "sensor.hausanschluss_leistung", NZ, "W", -11340, hin="W, + = Bezug (total_act_power)")
 z("grid_freq", "n", "sensor.hausanschluss_phase_a_frequenz", NZ, "Hz", 50.01, hin="ab Werk aus")
-z("curtailed_today", "n", "sensor.pv_abgeregelt_heute", NZ, "kWh", 0.0, hin="vom Wechselrichter [A]")
 z("grid_n_current", "n", "sensor.hausanschluss_neutralleiterstrom", NZ, "A", 0.8, hin="ab Werk aus [A]")
 for p, ph in enumerate("abc", start=1):
     z(f"grid_l{p}_voltage", "n", f"sensor.hausanschluss_phase_{ph}_spannung", NZ, "V", [231.2, 230.8, 232.0][p - 1])
@@ -788,6 +802,55 @@ if (!dc.empty() && jetzt.is_valid() && dc != id(day_curve).state) {
 }"""
 
 
+MODUS_SET = '''
+  # Modus-Schalter der Seite Wallboxen: wallbox_mode_set
+  # (.pv-dashboard_page_wallbox.yaml) laesst den getippten Teil leuchten;
+  # hier kommt der Befehl an evcc dazu (!extend: die Schritte laufen nach
+  # denen der Seite). Nicht belegt oder Wallbox nicht da: nichts.
+  # Optionen nach marq24/ha-evcc (pyevcc_ha/keys.py): MODE_SMART
+  # off/smart/now, wenn evcc alwaysCharge kennt, sonst MODE_PV_MINPV
+  # off/pv/minpv/now -- beide unter derselben ID. Smart heisst dann "pv"
+  # (evcc hat pv in smart umbenannt). Welche Liste gilt, steht im Attribut
+  # options; fehlt es, entscheidet der gemeldete Modus, sonst "smart".
+  # Faellt die Aktion durch (Option unbekannt, Aktionen in Home Assistant
+  # nicht erlaubt) oder meldet evcc nach 10 s nichts Neues, zeichnet die
+  # Karte aus dem gemeldeten Zustand neu.
+  - id: !extend wallbox_mode_set
+    then:
+      - if:
+          condition:
+            lambda: |-
+              constexpr bool B[2] = {%(b1)s, %(b2)s};
+              return wb >= 0 && wb <= 1 && seg >= 0 && seg <= 2 && B[wb] && ((id(dev_present) >> (15 + wb)) & 1u);
+          then:
+            - homeassistant.action:
+                action: select.select_option
+                data:
+                  entity_id: !lambda 'return std::string(wb == 0 ? "${ha_wb1_mode}" : "${ha_wb2_mode}");'
+                  option: !lambda |-
+                    if (seg == 0)
+                      return std::string("off");
+                    if (seg == 2)
+                      return std::string("now");
+                    const auto *o = wb == 0 ? id(ha_wb1_mode_options) : id(ha_wb2_mode_options);
+                    const auto *m = wb == 0 ? id(ha_wb1_mode) : id(ha_wb2_mode);
+                    if (o->has_state() && o->state.find("smart") != std::string::npos)
+                      return std::string("smart");
+                    if (o->has_state() && o->state.find("pv") != std::string::npos)
+                      return std::string("pv");
+                    if (m->has_state() && (m->state == "pv" || m->state == "minpv"))
+                      return std::string("pv");
+                    return std::string("smart");
+                on_error:
+                  - lambda: |-
+                      ESP_LOGW("ha", "select.select_option Wallbox %%d: %%s", wb + 1, error.c_str());
+                      id(wb_mode_pending)[wb] = -1;
+                      id(ha_dirty) |= 0x%(dirty)08Xu;
+            - delay: 10s
+            - lambda: 'id(ha_dirty) |= 0x%(dirty)08Xu;'
+'''
+
+
 def panel_bauen():
     out = []
     w = out.append
@@ -831,6 +894,9 @@ def panel_bauen():
 #     capture_response; die Jinja-Vorlage rechnet sie in Home Assistant auf
 #     kurze Reihen zusammen. Abruf 20 s / 30 s nach dem Verbinden, dann
 #     Prognosen alle 30 min, Statistik stuendlich ab Minute 2.
+#   - Steuern: Der Modus-Schalter der Seite Wallboxen (wallbox_mode_set)
+#     schickt select.select_option an ${ha_wb<N>_mode}, Optionen nach
+#     dem Attribut options (off/smart/now oder off/pv/minpv/now).
 #
 # [A] = vorgeschlagene ID bzw. Annahme, am eigenen Home Assistant pruefen
 # (Einstellungen > Entitaeten). Zum Testen ohne die Integrationen:
@@ -1043,7 +1109,8 @@ def panel_bauen():
               ("start_time", "{{ (" + STUNDEN_T0 + ").isoformat() }}"),
               ("types", "{{ ['change'] }}"), ("units", "{{ {'energy': 'kWh'} }}")],
              JINJA_STUNDEN, ERFOLG_STUNDEN, "Statistik 24 h"))
-    w("")
+    w(MODUS_SET % {"b1": j_belegt("ha_wb1_mode"), "b2": j_belegt("ha_wb2_mode"),
+                   "dirty": (1 << G["Wallbox 1"]) | (1 << G["Wallbox 2"])})
     # --- Intervalle
     w("""interval:
   # Drosselung: je Gruppe hoechstens ein Aufruf der Seitenskripte je Sekunde
@@ -1181,7 +1248,7 @@ BEREICH = {  # Einheit -> min, max, Schritt der input_number
     "Hz": (45, 55, 0.01), "km": (0, 1000, 1), "min": (0, 1440, 1), "€/kWh": (-1, 2, 0.001),
     "VA": (0, 30000, 1), "s": (0, 86400, 1), "d": (0, 400, 1), "": (-100000, 100000, 0.01),
 }
-SELECT_OPTIONEN = {"mode": ["off", "pv", "minpv", "now"], "vehicle": ["", "Kombi"]}
+SELECT_OPTIONEN = {"mode": MODUS_OPTIONEN_ALT, "vehicle": ["", "Kombi"]}
 
 
 def y(s):

@@ -314,7 +314,7 @@ Betrieb ging (dann zählt er nicht mit) oder einen eigenen Netzanschluss hat.
 Ab zusammen 25 kW verlangt § 9 Abs. 2 Nr. 2 zusätzlich eine Einrichtung, mit
 der der Netzbetreiber die Einspeisung fernsteuern kann. Keine Rechtsberatung.
 
-**Offen:** Was der Wechselrichter als „abgeregelt heute“ liefert, hängt am Fabrikat.
+**Abgeregelte Energie:** Die Zeile „abgeregelt heute“ ist am 26.09.2026 auf Wunsch des Nutzers entfallen. Abgeregelte Energie wird nicht erzeugt und deshalb nirgends gemessen; sie ließe sich nur schätzen (etwa Prognose minus Erzeugung, solange die Einspeisung an der Grenze liegt). Die Kachel zeigt nur Gemessenes.
 
 ## Prognose und Wetter
 
@@ -624,13 +624,18 @@ Assistant". Es geht also noch nichts an Geräte oder HA, und die Liste lebt nur 
 **Entscheidungsstand: offen**, es ist nicht notiert, wie die Quittung zurücklaufen soll.
 
 **Nicht gebaut, bewusst (25.09.2026):** Meldungen über einen Neustart hinweg speichern
-(NVS-Platz, Quittung nach HA offen) und Steuern vom Panel aus (Wallbox-Modus,
-Nilan-Stufe) — die Knöpfe der Wallbox-Seite zeigen nur an. Jeweils auf Zuruf.
+(NVS-Platz, Quittung nach HA offen) und Steuern der Nilan-Stufe vom Panel aus.
+Jeweils auf Zuruf. Der **Wallbox-Modus** (Aus / Smart / Schnell) ist seit dem
+25.09.2026 abends vom Panel aus schaltbar, auf Wunsch des Nutzers:
+`select.select_option` über Home Assistant (Dokument 03, Datenweg, „Steuern“).
+Offen [A]: am eigenen Home Assistant prüfen, welche Optionsliste die
+Modus-Entität hat und dass die Aktion ankommt (Option „Allow the device to
+perform Home Assistant actions“).
 Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Stand: 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
 Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc

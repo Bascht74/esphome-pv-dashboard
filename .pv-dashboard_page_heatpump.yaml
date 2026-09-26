@@ -6,11 +6,15 @@
 # Dargestellt wird trotzdem grafisch, auf seinen Wunsch: Aufbau nach der
 # Startseite des Touch-Bedienteils der Nilan Compact P, wie sie die Nilan-
 # Bedienungsanleitung "CTS700 Touch, Compact P / Compact P Polar"
-# (Version 1.10) zeigt: blaugrauer Grund, gruenes Haus, links oben die
+# (Version 1.10) zeigt: blaugrauer Grund, gruenes Haus, die
 # Aussentemperatur mit Sonne, im Dach die Raumtemperatur (gemessen in der
 # Abluft), in der Hauswand Luftfeuchte, CO2 und die Warmwasserkachel mit
-# rotem Punkt fuer die Zusatzheizung, rechts die runde Lueftertaste mit der
-# Lueftungsstufe. CO2, Jahreszeit und Alarm hat der klassische Satz nicht;
+# rotem Punkt fuer die Zusatzheizung, dazu die runde Lueftertaste mit der
+# Lueftungsstufe. Seit 25.09.2026 frei angeordnet statt genau nach Nilan
+# (Wunsch des Nutzers): Symbol direkt links vom Wert, die Aussentemperatur
+# links neben dem Dach auf einer Zeile mit der Raumtemperatur, in der Wand
+# oben die Raumluft (Feuchte, CO2), unten die Technik (Luefter, Warmwasser).
+# CO2, Jahreszeit und Alarm hat der klassische Satz nicht;
 # sie bleiben leer bzw. ausgeblendet, bis eine andere Quelle sie liefert. Den blaugrauen Grund hat der Nutzer am 24.09.2026 gegen
 # den Dashboard-Grund getauscht; Haus und Kachel sind dafuer abgedunkelt
 # (col_nilan_*, .pv-dashboard_utility.yaml). Das Nilan-Logo ist bewusst
@@ -30,14 +34,17 @@
 # Flaeche x 4..1276, y 84..736.
 #   Nilan-Kachel x 4, 760 x 652, innen 738 x 630
 #     Titel, Warnsymbol   0..24
-#     Aussen             60..117  (Wert f_val_xl 39 + 1 + Einheit 17)
-#     Haus              170..530  (Flaechen 440 x 360 bei x 149: Spitze 369/170,
-#                                  Traufe 320, Wand 149..589)
-#     Raum              232..288  im Dach, mittig auf 369
-#     Wand              350..493  drei Gruppen, Mitten 229 / 369 / 509
-#     Luefter           330..402  Kreis 72 bei x 640, Stufe 410..427,
-#                                 Zu- und Abluft 429..465
-#     Hinweise          560..580  Enteisung, Legionellenschutz
+#     Haus               40..530  (Flaechen 544 breit bei x 178: Spitze 450/40,
+#                                  Traufe 240, Wand 178..722)
+#     Aussen, Raum      160..218  eine Zeile: Wert f_val_xl 39 + 2 + Einheit
+#                                 17; Aussen x 80..202 links vom Dach, Raum
+#                                 x 374..526 im Dach, mittig auf 450
+#     Raumluft          272..321  Feuchte, CO2 (Flex, Mitten 330 / 570 bzw.
+#                                 450 ohne CO2), Wert f_val_l 30 + 2 + 17
+#     Technik           353..498  Luefter Mitte 330: Kreis 353..425, Stufe,
+#                                 Zu- und Abluft 433..488; Warmwasser Mitte
+#                                 570: Kachel 353..473, Beschriftung 481..498
+#     Hinweise          554..574  Enteisung, Legionellenschutz
 #     Stand             600..617
 #   Info-Kachel  x 772, 504 x 432, innen 482 x 410: Titel 0..17, acht
 #                Zeilen im Raster 47 ab 30 (Wert f_val_m 25), letzte
@@ -199,25 +206,33 @@ lvgl:
               - label: { x: 0, y: 0, width: 600, height: 17, long_mode: DOT, styles: st_label, text: "${ name_heatpump | upper }" }
               - label: { id: hp_alarm, x: 714, y: 0, text: "\U000F0026", text_font: f_icon, text_color: $col_warn, hidden: true }
 
-              # Aussen: Wert links oben, Sonne rechts neben der Dachspitze
-              - label: { id: hp_outdoor, x: 40, y: 60, width: 160, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
-              - label: { x: 40, y: 100, width: 160, height: 17, long_mode: DOT, text: "°C außen", text_font: f_unit, text_color: $col_ink }
-              - label: { x: 420, y: 110, text: "\U000F05A8", text_font: f_icon, text_color: $col_nilan_sun }
+              # Raster: Symbol 24 + Abstand 8 + Wert, Einheit 2 unter dem
+              # Wert, beide linksbuendig. Das Symbol steht mittig zur Zeile
+              # des Werts (f_val_xl + 8, f_val_l + 4). Abstaende 8 / 16 / 24 / 32.
+              #
+              # Aussen: links vom Dach, auf einer Zeile mit dem Raumwert
+              # (160..199, Einheit 201..218). Block x 80..202; die Dachkante
+              # liegt bei y 199 auf x 234, bei y 218 auf x 208.
+              - label: { x: 80, y: 168, text: "\U000F05A8", text_font: f_icon, text_color: $col_nilan_sun }
+              - label: { id: hp_outdoor, x: 112, y: 160, width: 90, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { x: 112, y: 201, width: 90, height: 17, long_mode: DOT, text: "°C außen", text_font: f_unit, text_color: $col_ink }
 
-              # Haus aus Flaechen statt aus einem Bild. Dach: ein Quadrat 311 x 311, um 45 Grad um seine Mitte
-              # gedreht, ist eine Raute 440 breit mit der Spitze oben; ihr
-              # Rahmen 440 x 220 laesst nur die obere Haelfte stehen (ein
-              # Dreieck 440 x 220) und wird um 150 / 220 = 0,682 auf 150
-              # gestaucht. So liegen alle geglaetteten Kanten aussen; zwei
-              # gedrehte Rechtecke nebeneinander zeigten innen eine dunkle
-              # Naht. Die gestauchte Unterkante des Daches ist ebenfalls
-              # geglaettet; deshalb kommt die Wand danach und beginnt 2 px
-              # hoeher (y 318), sie deckt die Kante zu.
+              # Haus aus Flaechen statt aus einem Bild, 544 breit bei x 178
+              # (Mitte 450), Spitze 40, Traufe 240, Wand bis 530. Dach: ein
+              # Quadrat 385 x 385, um 45 Grad um seine Mitte gedreht, ist
+              # eine Raute 544 breit mit der Spitze oben; ihr Rahmen 544 x 272
+              # laesst nur die obere Haelfte stehen (ein Dreieck 544 x 272)
+              # und wird um 200 / 272 = 0,735 auf 200 gestaucht. So liegen
+              # alle geglaetteten Kanten aussen; zwei gedrehte Rechtecke
+              # nebeneinander zeigten innen eine dunkle Naht. Die gestauchte
+              # Unterkante des Daches ist ebenfalls geglaettet; deshalb kommt
+              # die Wand danach und beginnt 2 px hoeher (y 238), sie deckt
+              # die Kante zu.
               - obj:
-                  x: 149
-                  y: 170
-                  width: 440
-                  height: 220
+                  x: 178
+                  y: 40
+                  width: 544
+                  height: 272
                   bg_opa: TRANSP
                   border_width: 0
                   pad_all: 0
@@ -228,68 +243,76 @@ lvgl:
                   scroll_dir: NONE
                   transform_pivot_x: 0
                   transform_pivot_y: 0
-                  transform_scale_y: 0.682
+                  transform_scale_y: 0.735
                   widgets:
-                    - obj: { x: 65, y: 65, width: 311, height: 311, radius: 0, bg_color: $col_nilan_house, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, transform_pivot_x: 155, transform_pivot_y: 155, transform_rotation: 45 }
-              - obj: { x: 149, y: 318, width: 440, height: 212, radius: 0, bg_color: $col_nilan_house, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 80, y: 80, width: 385, height: 385, radius: 0, bg_color: $col_nilan_house, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, transform_pivot_x: 192, transform_pivot_y: 192, transform_rotation: 45 }
+              - obj: { x: 178, y: 238, width: 544, height: 292, radius: 0, bg_color: $col_nilan_house, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
 
-              # Raum im Dach: Wert 232..271, Thermometer daneben, Einheit
-              # 273..290
-              - label: { id: hp_room, x: 269, y: 232, width: 200, height: 39, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
-              - label: { x: 454, y: 239, text: "\U000F050F", text_font: f_icon, text_color: $col_ink }
-              - label: { x: 269, y: 273, width: 200, height: 17, long_mode: DOT, text_align: CENTER, id: hp_room_unit, text: "°C Raum", text_font: f_unit, text_color: $col_ink }
+              # Raum im Dach: Block 152 breit mittig auf 450 (x 374..526),
+              # Thermometer 374, Wert 406 bei 160..199, Einheit 201..218.
+              # Das Dach ist bei y 160 noch 326 breit.
+              - label: { x: 374, y: 168, text: "\U000F050F", text_font: f_icon, text_color: $col_ink }
+              - label: { id: hp_room, x: 406, y: 160, width: 120, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
+              - label: { id: hp_room_unit, x: 406, y: 201, width: 120, height: 17, long_mode: DOT, text: "°C Raum", text_font: f_unit, text_color: $col_ink }
 
-              # Wand: Symbol 360..384, Wert 392..422 (f_val_l), Einheit
-              # 424..441. Gruppen je 140 breit, Mitten 229 / 369 / 509.
-              - label: { x: 217, y: 360, text: "\U000F058C", text_font: f_icon, text_color: $col_ink3 }
-              - label: { id: hp_humidity, x: 159, y: 392, width: 140, height: 30, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_val_l, text_color: $col_ink }
-              - label: { x: 159, y: 424, width: 140, height: 17, long_mode: DOT, text_align: CENTER, text: "% Feuchte", text_font: f_unit, text_color: $col_ink }
+              # Wand oben, Raumluft: Feuchte und CO2, Wert 272..302 (f_val_l),
+              # Einheit 304..321. Flex mit SPACE_AROUND auf 480 bei x 210:
+              # zwei Bloecke stehen mittig auf 330 / 570 ueber Luefter und
+              # Warmwasser, ohne CO2 steht die Feuchte allein auf 450.
+              # Bloecke 96 breit: Symbol 0..24, Text 32..96 ("% Feuchte" 62).
               - obj:
-                  id: hp_co2_group
-                  x: 299
-                  y: 360
-                  width: 140
-                  height: 81
+                  x: 210
+                  y: 272
+                  width: 480
+                  height: 49
                   bg_opa: TRANSP
                   border_width: 0
                   pad_all: 0
+                  radius: 0
+                  clickable: false
                   scrollbar_mode: 'off'
                   scrollable: false
                   scroll_dir: NONE
-                  hidden: true
+                  layout: { type: FLEX, flex_flow: ROW, flex_align_main: SPACE_AROUND, flex_align_cross: START, flex_align_track: START, pad_column: 0 }
                   widgets:
-                    - label: { align: TOP_MID, y: 0, text: "\U000F07E4", text_font: f_icon, text_color: $col_ink3 }
-                    - label: { id: hp_co2, x: 0, y: 32, width: 140, height: 30, long_mode: DOT, text_align: CENTER, text: "---", text_font: f_val_l, text_color: $col_ink }
-                    - label: { x: 0, y: 64, width: 140, height: 17, long_mode: DOT, text_align: CENTER, text: "ppm CO2", text_font: f_unit, text_color: $col_ink }
-              # Warmwasserkachel 110 x 120 bei x 454 (Mitte 509): Dusche
-              # 8..32, Wert 40..70, Einheit 72..89, Wellenlinie 98..100,
-              # roter Punkt rechts neben dem Wert
-              - obj:
-                  x: 454
-                  y: 350
-                  width: 110
-                  height: 120
-                  radius: 14
-                  bg_color: $col_nilan_tank
-                  bg_opa: COVER
-                  border_color: $col_nilan_tank_edge
-                  border_width: 2
-                  pad_all: 0
-                  scrollbar_mode: 'off'
-                  scrollable: false
-                  scroll_dir: NONE
-                  widgets:
-                    - label: { align: TOP_MID, y: 8, text: "\U000F09A1", text_font: f_icon, text_color: $col_ink3 }
-                    - label: { id: hp_dhw, x: 0, y: 40, width: 110, height: 30, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_l, text_color: $col_ink }
-                    - label: { x: 0, y: 72, width: 110, height: 17, long_mode: DOT, text_align: CENTER, text: "°C", text_font: f_unit, text_color: $col_ink }
-                    - obj: { x: 15, y: 98, width: 80, height: 2, radius: 1, bg_color: $col_ink, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-                    - obj: { id: hp_dhw_dot, x: 94, y: 50, width: 10, height: 10, radius: 5, bg_color: $col_crit, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
-              - label: { id: hp_dhw_label, x: 439, y: 476, width: 140, height: 17, long_mode: DOT, text_align: CENTER, text: "Warmwasser", text_font: f_unit, text_color: $col_ink }
+                    - obj:
+                        width: 96
+                        height: 49
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        clickable: false
+                        scrollbar_mode: 'off'
+                        scrollable: false
+                        scroll_dir: NONE
+                        widgets:
+                          - label: { x: 0, y: 4, text: "\U000F058C", text_font: f_icon, text_color: $col_ink3 }
+                          - label: { id: hp_humidity, x: 32, y: 0, width: 64, height: 30, long_mode: DOT, text: "--", text_font: f_val_l, text_color: $col_ink }
+                          - label: { x: 32, y: 32, width: 64, height: 17, long_mode: DOT, text: "% Feuchte", text_font: f_unit, text_color: $col_ink }
+                    - obj:
+                        id: hp_co2_group
+                        width: 96
+                        height: 49
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        clickable: false
+                        scrollbar_mode: 'off'
+                        scrollable: false
+                        scroll_dir: NONE
+                        hidden: true
+                        widgets:
+                          - label: { x: 0, y: 4, text: "\U000F07E4", text_font: f_icon, text_color: $col_ink3 }
+                          - label: { id: hp_co2, x: 32, y: 0, width: 64, height: 30, long_mode: DOT, text: "---", text_font: f_val_l, text_color: $col_ink }
+                          - label: { x: 32, y: 32, width: 64, height: 17, long_mode: DOT, text: "ppm CO2", text_font: f_unit, text_color: $col_ink }
 
-              # Luefter: runde Taste wie im Bedienteil, darunter die Stufe
+              # Wand unten, Technik: Luefter mittig auf 330, Warmwasser auf
+              # 570, Oberkanten 353 (32 unter der Raumluft).
+              # Luefter: runde Taste wie im Bedienteil 353..425, darunter die
+              # Stufe 433..450, Zu- und Abluft 452..469 und 471..488
               - obj:
-                  x: 640
-                  y: 330
+                  x: 294
+                  y: 353
                   width: 72
                   height: 72
                   radius: CIRCLE
@@ -302,15 +325,40 @@ lvgl:
                   scroll_dir: NONE
                   widgets:
                     - label: { align: CENTER, text: "\U000F0210", text_font: f_icon, text_color: $col_bg }
-              - label: { id: hp_fan, x: 616, y: 410, width: 120, height: 17, long_mode: DOT, text_align: CENTER, text: "Stufe -", text_font: f_unit, text_color: $col_ink }
-              # Ventilatoren in % (heatpump_extra): 429..446 und 448..465
-              - label: { id: hp_fan_in, x: 616, y: 429, width: 120, height: 17, long_mode: DOT, text_align: CENTER, text: "Zuluft -- %", styles: st_unit }
-              - label: { id: hp_fan_out, x: 616, y: 448, width: 120, height: 17, long_mode: DOT, text_align: CENTER, text: "Abluft -- %", styles: st_unit }
-              # Enteisung und Legionellenschutz unter dem Haus (heatpump_extra),
-              # 560..580, nur wenn eins davon laeuft
-              - label: { id: hp_flags, x: 0, y: 560, width: 738, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_warn, hidden: true }
+              - label: { id: hp_fan, x: 258, y: 433, width: 144, height: 17, long_mode: DOT, text_align: CENTER, text: "Stufe -", text_font: f_unit, text_color: $col_ink }
+              - label: { id: hp_fan_in, x: 258, y: 452, width: 144, height: 17, long_mode: DOT, text_align: CENTER, text: "Zuluft -- %", styles: st_unit }
+              - label: { id: hp_fan_out, x: 258, y: 471, width: 144, height: 17, long_mode: DOT, text_align: CENTER, text: "Abluft -- %", styles: st_unit }
+              # Warmwasserkachel 110 x 120 bei x 515 (Mitte 570), 353..473:
+              # Dusche 12..36, Wert 40..70, Einheit 72..89, Wellenlinie
+              # 98..100, roter Punkt rechts neben dem Wert; darunter die
+              # Beschriftung 481..498 (128 breit bei "Soll 50")
+              - obj:
+                  x: 515
+                  y: 353
+                  width: 110
+                  height: 120
+                  radius: 14
+                  bg_color: $col_nilan_tank
+                  bg_opa: COVER
+                  border_color: $col_nilan_tank_edge
+                  border_width: 2
+                  pad_all: 0
+                  scrollbar_mode: 'off'
+                  scrollable: false
+                  scroll_dir: NONE
+                  widgets:
+                    - label: { align: TOP_MID, y: 12, text: "\U000F09A1", text_font: f_icon, text_color: $col_ink3 }
+                    - label: { id: hp_dhw, x: 0, y: 40, width: 110, height: 30, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_l, text_color: $col_ink }
+                    - label: { x: 0, y: 72, width: 110, height: 17, long_mode: DOT, text_align: CENTER, text: "°C", text_font: f_unit, text_color: $col_ink }
+                    - obj: { x: 15, y: 98, width: 80, height: 2, radius: 1, bg_color: $col_ink, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { id: hp_dhw_dot, x: 94, y: 50, width: 10, height: 10, radius: 5, bg_color: $col_crit, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
+              - label: { id: hp_dhw_label, x: 498, y: 481, width: 144, height: 17, long_mode: DOT, text_align: CENTER, text: "Warmwasser", text_font: f_unit, text_color: $col_ink }
 
-              - label: { id: hp_stand, x: 0, y: 600, width: 738, height: 17, long_mode: DOT, text_align: CENTER, text: "Stand --:--", styles: st_unit }
+              # Enteisung und Legionellenschutz unter dem Haus (heatpump_extra),
+              # 554..574 mittig auf 450, nur wenn eins davon laeuft
+              - label: { id: hp_flags, x: 178, y: 554, width: 544, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_warn, hidden: true }
+
+              - label: { id: hp_stand, x: 178, y: 600, width: 544, height: 17, long_mode: DOT, text_align: CENTER, text: "Stand --:--", styles: st_unit }
 
         # ---------------- Information wie hinter der Info-Taste ----------
         # Acht Zeilen, Zeile i ab y 30 + 47 i: Beschriftung f_text_s (20)

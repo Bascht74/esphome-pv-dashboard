@@ -9,7 +9,9 @@
 #                  Frequenz, Einspeisung gegen die Einspeisegrenze
 #                  (Solarspitzengesetz, § 9 Abs. 2 EEG 2023: 60 % der
 #                  installierten Leistung, bis Smart Meter und Steuerbox
-#                  eingebaut und getestet sind), abgeregelte Energie heute
+#                  eingebaut und getestet sind). Keine abgeregelte Energie:
+#                  die misst niemand, sie waere nur geschaetzt (Nutzer,
+#                  26.09.2026: Zeile entfernt)
 #   Phasen         L1..L3 wie der Shelly Pro 3EM sie liefert (EM.GetStatus:
 #                  x_voltage, x_current, x_act_power, x_aprt_power, x_pf),
 #                  dazu der Strom im Neutralleiter (n_current)
@@ -29,8 +31,7 @@
 # oben y 84 / 300 hoch, unten y 392 / 344 hoch.
 #   Netzanschluss innen 610 x 278: Titel 0..17, Wert 36..75 (f_val_xl),
 #       Einheit 77..94, Frequenz rechts gleich hoch, Linie 118, Grenze
-#       Titel 134..151, Balken 162..186, drei Spalten 196..243, abgeregelt
-#       250..267 -> Reserve 11
+#       Titel 134..151, Balken 162..186, drei Spalten 196..243 -> Reserve 35
 #   Phasen innen 610 x 278: Titel 0..17, Kopf 32..49, Linie 54, fuenf
 #       Zeilen im Raster 44 ab 58 (Wert f_val_m 25 bei +10); die letzte
 #       beginnt 234, Wert 244..269 -> Reserve 9
@@ -60,7 +61,6 @@ script:
   #              negativ = Einspeisung (Vorzeichen wie total_act_power
   #              des Shelly Pro 3EM)
   #   freq       Netzfrequenz in Hz
-  #   curtailed  heute abgeregelte Energie in kWh (vom Wechselrichter)
   #   n_current  Strom im Neutralleiter in A
   #   NAN = kein Wert (Striche)
   # ---------------------------------------------------------------------
@@ -68,7 +68,6 @@ script:
     parameters:
       power: float
       freq: float
-      curtailed: float
       n_current: float
     then:
       - lambda: |-
@@ -104,7 +103,6 @@ script:
           // An der Grenze (ab 98 %) gelb: dann regelt der Wechselrichter ab
           const bool at_limit = limit_w > 0.0f && fw >= 0.98f * limit_w;
           lv_obj_set_style_bg_color(id(gr_bar), at_limit ? lv_color_hex($col_warn) : lv_color_hex($col_feed), 0);
-          lv_label_set_text(id(gr_curtail), ("abgeregelt heute " + num(curtailed, "%.1f", "--,-") + " kWh").c_str());
 
   # ---------------------------------------------------------------------
   # Eine Phase, Werte wie EM.GetStatus des Shelly Pro 3EM:
@@ -243,7 +241,6 @@ lvgl:
               - label: { id: gr_limit, x: 205, y: 218, width: 200, height: 25, long_mode: DOT, text: "--", text_font: f_val_m, text_color: $col_ink }
               - label: { x: 410, y: 196, width: 200, height: 20, long_mode: DOT, text: "Auslastung", text_font: f_text_s, text_color: $col_ink3 }
               - label: { id: gr_util, x: 410, y: 218, width: 200, height: 25, long_mode: DOT, text: "--", text_font: f_val_m, text_color: $col_ink }
-              - label: { id: gr_curtail, x: 0, y: 250, width: 610, height: 17, long_mode: DOT, styles: st_unit, text: "abgeregelt heute --,- kWh" }
         # ---------------- Phasen --------------------------------------------
         - obj:
             styles: st_tile
