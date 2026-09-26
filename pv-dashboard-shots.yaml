@@ -258,7 +258,7 @@ script:
           hour: 23
       # Netzseite: Werte wie vom Shelly Pro 3EM, gerade Einspeisung. L3 mit
       # 254 V, damit die gelbe Spannungsmarke mit auf dem Bild ist.
-      - script.execute: { id: grid_update, power: -8420, freq: 50.02, curtailed: 1.8, n_current: 1.4 }
+      - script.execute: { id: grid_update, power: -8420, freq: 50.02, n_current: 1.4 }
       - script.execute: { id: grid_phase, phase: 0, voltage: 236.4, current: 12.1, power: -2710, apparent: 2860, pf: 0.95 }
       - script.wait: grid_phase
       - script.execute: { id: grid_phase, phase: 1, voltage: 238.9, current: 13.4, power: -3050, apparent: 3200, pf: 0.95 }

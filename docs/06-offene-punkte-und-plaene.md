@@ -314,7 +314,7 @@ Betrieb ging (dann zählt er nicht mit) oder einen eigenen Netzanschluss hat.
 Ab zusammen 25 kW verlangt § 9 Abs. 2 Nr. 2 zusätzlich eine Einrichtung, mit
 der der Netzbetreiber die Einspeisung fernsteuern kann. Keine Rechtsberatung.
 
-**Offen:** Was der Wechselrichter als „abgeregelt heute“ liefert, hängt am Fabrikat.
+**Abgeregelte Energie:** Die Zeile „abgeregelt heute“ ist am 26.09.2026 auf Wunsch des Nutzers entfallen. Abgeregelte Energie wird nicht erzeugt und deshalb nirgends gemessen; sie ließe sich nur schätzen (etwa Prognose minus Erzeugung, solange die Einspeisung an der Grenze liegt). Die Kachel zeigt nur Gemessenes.
 
 ## Prognose und Wetter
 

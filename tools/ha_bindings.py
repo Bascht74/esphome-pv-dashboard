@@ -216,7 +216,7 @@ gruppe(21, 0, "Hausnetz", """
                           "Basis " + num(mul(@dev5_power, 0.001f), "%.1f", "--,-"));
 }""")
 gruppe(22, 0, "Netz", """
-id(grid_update).execute(@grid_power, @grid_freq, @curtailed_today, @grid_n_current);
+id(grid_update).execute(@grid_power, @grid_freq, @grid_n_current);
 id(ov_grid).execute(@grid_power);
 """ + "\n".join(
     f"id(grid_phase).execute({p}, @grid_l{p + 1}_voltage, @grid_l{p + 1}_current, @grid_l{p + 1}_power, "
@@ -409,7 +409,6 @@ for d, (geraet, w, kwh) in enumerate(
 NZ = [G["Netz"]]
 z("grid_power", "n", "sensor.hausanschluss_leistung", NZ, "W", -11340, hin="W, + = Bezug (total_act_power)")
 z("grid_freq", "n", "sensor.hausanschluss_phase_a_frequenz", NZ, "Hz", 50.01, hin="ab Werk aus")
-z("curtailed_today", "n", "sensor.pv_abgeregelt_heute", NZ, "kWh", 0.0, hin="vom Wechselrichter [A]")
 z("grid_n_current", "n", "sensor.hausanschluss_neutralleiterstrom", NZ, "A", 0.8, hin="ab Werk aus [A]")
 for p, ph in enumerate("abc", start=1):
     z(f"grid_l{p}_voltage", "n", f"sensor.hausanschluss_phase_{ph}_spannung", NZ, "V", [231.2, 230.8, 232.0][p - 1])

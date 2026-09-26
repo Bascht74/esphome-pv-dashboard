@@ -209,7 +209,6 @@ substitutions:
   ha_dev5_energy: sensor.grundlast_energie_heute  # [A]
   ha_grid_power: sensor.hausanschluss_leistung  # W, + = Bezug (total_act_power)
   ha_grid_freq: sensor.hausanschluss_phase_a_frequenz  # ab Werk aus
-  ha_curtailed_today: sensor.pv_abgeregelt_heute  # vom Wechselrichter [A]
   ha_grid_n_current: sensor.hausanschluss_neutralleiterstrom  # ab Werk aus [A]
   ha_grid_l1_voltage: sensor.hausanschluss_phase_a_spannung
   ha_grid_l1_current: sensor.hausanschluss_phase_a_strom
@@ -1049,12 +1048,6 @@ sensor:
   - platform: homeassistant
     id: ha_grid_freq
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_freq | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_freq }"
-    internal: true
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x00400000u;'
-  - platform: homeassistant
-    id: ha_curtailed_today
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_curtailed_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_curtailed_today }"
     internal: true
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
@@ -2401,7 +2394,6 @@ interval:
           constexpr bool B_bat3_voltage = ${ 'false' if (ha_bat3_voltage | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_bat_charged_today = ${ 'false' if (ha_bat_charged_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_bat_discharged_today = ${ 'false' if (ha_bat_discharged_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_curtailed_today = ${ 'false' if (ha_curtailed_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_dev1_energy = ${ 'false' if (ha_dev1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_dev1_power = ${ 'false' if (ha_dev1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_dev2_energy = ${ 'false' if (ha_dev2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
@@ -2858,14 +2850,13 @@ interval:
           }
           // 22 Netz
           if ((d & (1u << 22)) &&
-              (ready || id(ha_grid_power).has_state() || id(ha_grid_freq).has_state() || id(ha_curtailed_today).has_state() ||
-               id(ha_grid_n_current).has_state() || id(ha_grid_l1_voltage).has_state() || id(ha_grid_l1_current).has_state() ||
-               id(ha_grid_l1_power).has_state() || id(ha_grid_l1_apparent).has_state() || id(ha_grid_l1_pf).has_state() ||
-               id(ha_grid_l2_voltage).has_state() || id(ha_grid_l2_current).has_state() || id(ha_grid_l2_power).has_state() ||
-               id(ha_grid_l2_apparent).has_state() || id(ha_grid_l2_pf).has_state() || id(ha_grid_l3_voltage).has_state() ||
-               id(ha_grid_l3_current).has_state() || id(ha_grid_l3_power).has_state() || id(ha_grid_l3_apparent).has_state() ||
-               id(ha_grid_l3_pf).has_state())) {
-            id(grid_update).execute(V(id(ha_grid_power), B_grid_power), V(id(ha_grid_freq), B_grid_freq), V(id(ha_curtailed_today), B_curtailed_today), V(id(ha_grid_n_current), B_grid_n_current));
+              (ready || id(ha_grid_power).has_state() || id(ha_grid_freq).has_state() || id(ha_grid_n_current).has_state() ||
+               id(ha_grid_l1_voltage).has_state() || id(ha_grid_l1_current).has_state() || id(ha_grid_l1_power).has_state() ||
+               id(ha_grid_l1_apparent).has_state() || id(ha_grid_l1_pf).has_state() || id(ha_grid_l2_voltage).has_state() ||
+               id(ha_grid_l2_current).has_state() || id(ha_grid_l2_power).has_state() || id(ha_grid_l2_apparent).has_state() ||
+               id(ha_grid_l2_pf).has_state() || id(ha_grid_l3_voltage).has_state() || id(ha_grid_l3_current).has_state() ||
+               id(ha_grid_l3_power).has_state() || id(ha_grid_l3_apparent).has_state() || id(ha_grid_l3_pf).has_state())) {
+            id(grid_update).execute(V(id(ha_grid_power), B_grid_power), V(id(ha_grid_freq), B_grid_freq), V(id(ha_grid_n_current), B_grid_n_current));
             id(ov_grid).execute(V(id(ha_grid_power), B_grid_power));
             id(grid_phase).execute(0, V(id(ha_grid_l1_voltage), B_grid_l1_voltage), V(id(ha_grid_l1_current), B_grid_l1_current), V(id(ha_grid_l1_power), B_grid_l1_power), V(id(ha_grid_l1_apparent), B_grid_l1_apparent), V(id(ha_grid_l1_pf), B_grid_l1_pf));
             id(grid_phase).execute(1, V(id(ha_grid_l2_voltage), B_grid_l2_voltage), V(id(ha_grid_l2_current), B_grid_l2_current), V(id(ha_grid_l2_power), B_grid_l2_power), V(id(ha_grid_l2_apparent), B_grid_l2_apparent), V(id(ha_grid_l2_pf), B_grid_l2_pf));

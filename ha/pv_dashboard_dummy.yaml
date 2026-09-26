@@ -860,13 +860,6 @@ input_number:
     step: 0.01
     initial: 50.01
     mode: box
-  pvd_curtailed_today:
-    name: "PVD curtailed_today"
-    min: 0
-    max: 100000
-    step: 0.1
-    initial: 0.0
-    mode: box
   pvd_grid_n_current:
     name: "PVD grid_n_current"
     min: -200
@@ -1776,11 +1769,6 @@ template:
         name: "hausanschluss_phase_a_frequenz"
         unit_of_measurement: "Hz"
         state: "{{ states('input_number.pvd_grid_freq') | float(0) }}"
-      - default_entity_id: sensor.pv_abgeregelt_heute
-        unique_id: pvd_curtailed_today
-        name: "pv_abgeregelt_heute"
-        unit_of_measurement: "kWh"
-        state: "{{ states('input_number.pvd_curtailed_today') | float(0) }}"
       - default_entity_id: sensor.hausanschluss_neutralleiterstrom
         unique_id: pvd_grid_n_current
         name: "hausanschluss_neutralleiterstrom"
