@@ -391,6 +391,21 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   Vorschläge [A]; eigene IDs gehören als `ha_<name>: …` in
   `.pv-dashboard_anlage.yaml` und stechen die Standards. Umrechnungen
   (Wh → kWh, €/kWh → ct, s → h) als `filters: multiply`.
+- **Faktor je Zahlenwert** (seit 09.10.2026, Wunsch des Nutzers: keine
+  Template-Helfer in Home Assistant). Jeder Zahlensensor, auch ein Attribut
+  (`estimate10`, `temperature` …), hat die Substitution `ha_<name>_faktor`,
+  Standard `"1"`, im `substitutions:`-Block der Datei (nur für Zahlen, Texte
+  und An/aus haben keinen). Sie ist der **erste** Filter
+  (`multiply: ${ha_<name>_faktor}`), vor der eingebauten Umrechnung, und
+  bringt den Wert von Home Assistant auf Einheit und Vorzeichen, die der
+  Hinweis in der Tabelle nennt: `"-1"` dreht das Vorzeichen, `"0.001"`
+  macht W → kW, `"0.0166667"` s → min. Eigene Faktoren gehören wie die IDs
+  nach `.pv-dashboard_anlage.yaml`, etwa
+  `ha_meter_house_power_faktor: "-1"`. „Nicht belegt“ und „leer“ bleiben
+  heil: `unavailable` oder keine Zahl kommt vom `homeassistant`-Sensor als
+  `NAN`, und `NAN · k` bleibt `NAN`; `val_leer` (−∞) setzt erst das
+  Intervall (`V()`) **hinter** dem Filter, ein Faktor −1 kann es also nicht
+  zu +∞ drehen.
 - **Drosselung.** Ein neuer Wert ruft kein Seitenskript auf, er setzt nur das
   Bit seiner Gruppe in `ha_dirty` (29 Gruppen: je Fläche, Wechselrichter,
   Speicher und Wallbox eine, dazu Speicher gesamt, Wallbox-Monat,
@@ -535,7 +550,9 @@ Python-Umgebung von ESPHome (nichts nachzuinstallieren):
   Dateien aktuell (`ha_bindings.py`, `flow_animation.py`), jeder `ha_*`-Schlüssel
   mit Standard, je Platz eine Referenz (Zahl oder Text, kein Attribut),
   dieselbe Platzliste in beiden Werkzeugen, keine Anker mehr, `dev_present`
-  ohne NVS; `none`, `FALSE`, `Off`, `""`, `null` … laufen durch ESPHomes eigene
+  ohne NVS; jeder Zahlensensor (auch Attribute) mit `ha_<name>_faktor` =
+  `"1"` als erstem Filter, Texte und An/aus ohne, eigener Faktor (`"-1"`,
+  `"0.001"`) läuft durch ESPHomes Substitution und wird eine Zahl; `none`, `FALSE`, `Off`, `""`, `null` … laufen durch ESPHomes eigene
   Substitution und ergeben Ersatz-ID und `B_… = false`; jeder Kasten des
   Schemas hat einen Platz, jede Strecke einen Kanal oder schweigt, jede Leitung
   eine Sichtbarkeitsregel, jedes Gerät steuert mindestens eine Leitung.
@@ -558,7 +575,9 @@ Python-Umgebung von ESPHome (nichts nachzuinstallieren):
   leuchtet sofort und hält bis zur Meldung, `select.select_option` mit
   Entität und `now`/`pv`/`smart`/`off` je nach Attribut `options`, Ablehnung
   bzw. 10 s ohne Meldung → zurück, fehlende Wallbox → kein Befehl;
-  Trennung → genau eine Sammelmeldung, Verbinden → weg; über den
+  Faktor (`tests/ha-test.yaml`): −1 dreht Hauszähler und Strom von Speicher 1,
+  0.001 macht aus 7400 W an Wallbox 1 „7,4“ kW, `unavailable` mit −1 bleibt
+  leer; Trennung → genau eine Sammelmeldung, Verbinden → weg; über den
   ganzen Lauf in keinem der rund 770 Labels aller Seiten „inf“ oder „nan“.
   `--shots` legt dazu vier BMP nach `shots/ha_probe/` (vorher gelöscht, `snapshot.take` überschreibt nicht). Exit-Code 0 = alles
   bestanden.
@@ -613,7 +632,7 @@ im YAML:
 
 ---
 
-Stand: 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar: `wallbox_mode_set`, Abschnitt „Steuern“, Zeilennummern von Wallboxen und Datenweg neu abgezählt); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, `val_leer` = −∞ samt Rechenregeln, Abschnitt „Tests“, Zeilennummern von Kern, Übersicht und Datenweg neu abgezählt); davor 25.09.2026, später Tag (Datenweg von Home Assistant samt Dummy-Paket, Eingabeskripte `ov_*`, `flow_ch`, `dev_present` und `dev_apply`, Flussanimation mit 37 Leitungen, Tabelle und Skriptliste neu abgezählt); davor 25.09.2026 (Meldungen: Lagebild, Zähler mit Filter, Zusammenfassen, `alert_clear`; danach alle Zeilennummern der Tabelle und der Skriptliste neu abgezählt, Seitenliste in Reiterreihenfolge, `sys_panel`-Maße, `voice_panel_hide`, MDI-Font auf v7.4.47); davor 24.09.2026 (Seiten Wallboxen, Wärmepumpe und Haus samt ihren
+Stand: 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert im Datenweg, Tests dazu); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar: `wallbox_mode_set`, Abschnitt „Steuern“, Zeilennummern von Wallboxen und Datenweg neu abgezählt); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, `val_leer` = −∞ samt Rechenregeln, Abschnitt „Tests“, Zeilennummern von Kern, Übersicht und Datenweg neu abgezählt); davor 25.09.2026, später Tag (Datenweg von Home Assistant samt Dummy-Paket, Eingabeskripte `ov_*`, `flow_ch`, `dev_present` und `dev_apply`, Flussanimation mit 37 Leitungen, Tabelle und Skriptliste neu abgezählt); davor 25.09.2026 (Meldungen: Lagebild, Zähler mit Filter, Zusammenfassen, `alert_clear`; danach alle Zeilennummern der Tabelle und der Skriptliste neu abgezählt, Seitenliste in Reiterreihenfolge, `sys_panel`-Maße, `voice_panel_hide`, MDI-Font auf v7.4.47); davor 24.09.2026 (Seiten Wallboxen, Wärmepumpe und Haus samt ihren
 Skripten, Tabelle neu abgezählt); davor 23.09.2026 (eigene Anlage in `.pv-dashboard_anlage.yaml`, Seite PV &
 Prognose samt `pv_update` und `pv_redraw_curve`, Tabelle und Zeilennummern neu
 abgezählt; davor 20.09.2026: Streckenzahlen aus einem Vorschaulauf; Zeilennummern gegen

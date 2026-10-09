@@ -75,7 +75,7 @@ class Zuordnung(unittest.TestCase):
 
     def test_standard_sind_entity_ids(self):
         for k, v in self.subs.items():
-            if k.startswith("ha_"):
+            if k.startswith("ha_") and not k.endswith("_faktor"):
                 self.assertRegex(v, r"^[a-z_]+\.[a-z0-9_]+$", k)
 
     def test_eine_referenz_je_platz(self):
@@ -109,6 +109,78 @@ class Zuordnung(unittest.TestCase):
         self.assertTrue(ids)
         for v in ids:
             self.assertIn(hb.ERSATZ_ID, v)
+
+
+def sensor_bloecke(text):
+    """id -> (Abschnitt sensor/text_sensor/binary_sensor, Block) der homeassistant-Sensoren."""
+    bloecke = {}
+    abschnitt = None
+    for teil in re.split(r"(?m)^(?=[a-z_]+:$)|^(?=  - platform: homeassistant$)", text):
+        m = re.match(r"^([a-z_]+):$", teil.split("\n", 1)[0])
+        if m:
+            abschnitt = m.group(1)
+            continue
+        m = re.search(r"^    id: (ha_[a-z0-9_]+)$", teil, re.M)
+        if teil.startswith("  - platform: homeassistant") and m:
+            bloecke[m.group(1)] = (abschnitt, teil)
+    return bloecke
+
+
+class Faktor(unittest.TestCase):
+    """ha_<name>_faktor (09.10.2026): Vorzeichen bzw. Einheit je Zahlenwert."""
+
+    def setUp(self):
+        self.text = PANEL.read_text(encoding="utf-8")
+        self.subs = substitutions_block(self.text)
+        self.bloecke = sensor_bloecke(self.text)
+
+    def test_jeder_zahlensensor_hat_faktor(self):
+        zahl = [e for e in hb.TABELLE if e["gr"] and e["art"] in ("n", "z")]
+        self.assertTrue(any(e["attr"] for e in zahl), "auch Attribute")
+        for e in zahl:
+            with self.subTest(name=e["name"]):
+                k = f"ha_{e['name']}_faktor"
+                self.assertEqual(self.subs.get(k), '"1"', "Standard 1")
+                abschnitt, block = self.bloecke[f"ha_{e['name']}"]
+                self.assertEqual(abschnitt, "sensor")
+                filt = re.findall(r"^      - multiply: (\S+)$", block, re.M)
+                self.assertTrue(filt, "Filter fehlt")
+                self.assertEqual(filt[0], "${" + k + "}", "Faktor ist der erste Filter")
+                if e["mul"] is not None:
+                    self.assertEqual(len(filt), 2, "eingebaute Umrechnung bleibt")
+
+    def test_text_und_an_aus_ohne_faktor(self):
+        for e in hb.TABELLE:
+            if e["art"] in ("t", "b"):
+                with self.subTest(name=e["name"]):
+                    self.assertNotIn(f"ha_{e['name']}_faktor", self.subs)
+                    if f"ha_{e['name']}" in self.bloecke:
+                        self.assertNotIn("filters:", self.bloecke[f"ha_{e['name']}"][1])
+
+    def test_kein_faktor_ohne_sensor(self):
+        for k in self.subs:
+            if k.endswith("_faktor"):
+                with self.subTest(k=k):
+                    self.assertIn(k[:-len("_faktor")], self.bloecke)
+
+    def test_faktor_durch_esphome(self):
+        """Eigener Faktor sticht den Standard, ESPHome liest ihn als Zahl."""
+        try:
+            from esphome import yaml_util
+            import esphome.config_validation as cv
+            from esphome.components.substitutions import do_substitution_pass
+        except ImportError:
+            self.skipTest("esphome nicht importierbar -- mit der ESPHome-Umgebung starten")
+        y = ('substitutions:\n  ha_a_faktor: "1"\n  ha_b_faktor: "-1"\n  ha_c_faktor: "0.001"\n'
+             '  ha_d_faktor: -1\nx:\n')
+        for k in "abcd":
+            y += f"  {k}: ${{ha_{k}_faktor}}\n"
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "t.yaml"
+            p.write_text(y, encoding="utf-8")
+            x = do_substitution_pass(yaml_util.load_yaml(p))["x"]
+        werte = {k: cv.float_(x[k]) for k in "abcd"}
+        self.assertEqual(werte, {"a": 1.0, "b": -1.0, "c": 0.001, "d": -1.0})
 
 
 class NichtBelegt(unittest.TestCase):

@@ -25,6 +25,15 @@ SO LAEUFT EIN WERT (docs/03, Abschnitt "Datenweg"):
    Substitution im Paket; eigene IDs gehoeren in .pv-dashboard_anlage.yaml
    (stechen die Standards, docs/03). Attribute lesen eigene Sensoren mit
    attribute:, sie teilen sich die Substitution der Entitaet.
+   FAKTOR (Wunsch des Nutzers, 09.10.2026: keine Template-Helfer in Home
+   Assistant). Jeder Zahlensensor (auch ein Attribut) hat dazu
+   ha_<name>_faktor, Standard "1", als ersten Filter multiply. Er bringt
+   den Wert von Home Assistant auf die Einheit und das Vorzeichen der
+   Tabelle (Spalte einh, Hinweis): "-1" dreht das Vorzeichen, "0.001"
+   macht W -> kW, "0.0166667" s -> min. Texte und an/aus haben keinen.
+   NAN (unavailable, keine Zahl) bleibt NAN; val_leer (-inf) setzt erst
+   das Intervall (V(), Punkt 3c) hinter dem Filter -- ein Faktor -1 kann
+   es also nicht zu +inf drehen.
 
 2. DROSSELUNG. Ein neuer Wert ruft KEIN Seitenskript auf, er setzt nur das
    Bit seiner Gruppe(n) in ha_dirty. Ein Intervall von 1 s ruft je
@@ -498,6 +507,15 @@ z("warn_text", "t", "warn_level", WW, demo="Windboeen bis 18 Uhr", attr="warning
 NAMEN = {e["name"]: e for e in TABELLE}
 
 
+def mit_faktor(e):
+    """Zahlensensor mit eigenem Sensor: bekommt ha_<name>_faktor."""
+    return e["art"] in ("n", "z") and bool(e["gr"])
+
+
+def faktor_sub(e):
+    return f"ha_{e['name']}_faktor"
+
+
 def entitaet(e):
     """Substitution und Standard-ID einer Zeile (Attribute: die der Basis)."""
     if e["attr"]:
@@ -886,6 +904,9 @@ def panel_bauen():
 #     substitutions). Hat sie einen gueltigen Wert, ist das Geraet da; sonst
 #     verschwindet seine ganze Grafik (dev_present, dev_apply). dev_present
 #     startet leer und bleibt nicht ueber einen Neustart.
+#   - Faktor: Jeder Zahlensensor hat ha_<name>_faktor (Standard "1") als
+#     ersten Filter multiply -- Vorzeichen drehen ("-1") oder Einheit
+#     umrechnen ("0.001" W -> kW), ohne Helfer in Home Assistant.
 #   - Jede andere Entitaet, die nicht belegt (none/false/off/""), nicht
 #     verfuegbar oder 10 s nach dem Verbinden ohne Wert ist, zeigt ihren Wert
 #     leer statt mit Strichen (val_leer bzw. " "). Vor dem Verbinden: Striche.
@@ -922,6 +943,13 @@ def panel_bauen():
         gesehen.add(sub)
         hin = f"  # {e['hin']}" if e["hin"] else ""
         w(f"  {sub}: {ent}{hin}")
+    w("  # Faktor je Zahlenwert (auch Attribute), erster Filter multiply des\n"
+      "  # Sensors: bringt den Wert auf Einheit und Vorzeichen oben (Hinweis).\n"
+      "  # Eigene Faktoren in .pv-dashboard_anlage.yaml, z. B. \"-1\" (Vorzeichen),\n"
+      "  # \"0.001\" (W -> kW), \"0.0166667\" (s -> min). NAN bleibt NAN.")
+    for e in TABELLE:
+        if mit_faktor(e):
+            w(f'  {faktor_sub(e)}: "1"')
     w("")
     # --- globals
     w("""globals:
@@ -1042,8 +1070,11 @@ def panel_bauen():
         if e["attr"]:
             z_.append(f"    attribute: {e['attr']}")
         z_.append("    internal: true")
-        if e["mul"] is not None:
+        if mit_faktor(e) or e["mul"] is not None:
             z_.append("    filters:")
+        if mit_faktor(e):
+            z_.append(f"      - multiply: ${{{faktor_sub(e)}}}")
+        if e["mul"] is not None:
             z_.append(f"      - multiply: {e['mul']:.10g}")
         if maske and e["art"] == "b":
             # sonst loest der erste Wert von Home Assistant nicht aus
