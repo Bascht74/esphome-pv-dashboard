@@ -133,8 +133,9 @@ Zwei Dinge sind dabei nur die hiesige Arbeitsumgebung, kein Teil des Projekts:
 
 - **Der volle Pfad statt `esphome`.** Auf dem Rechner des Nutzers gibt es kein
   `esphome` im PATH; dort steht vor jedem Befehl
-  `~/.venvs/esphome-beta/bin/` — die Umgebung enthält ESPHome 2026.9.0, der
-  Ordnername stammt noch aus der Beta-Zeit. Wer ein `esphome` im PATH hat, ruft
+  `~/.venvs/esphome-beta/bin/` — Zielplattform ist seit dem 09.10.2026 die
+  Beta 2026.10.0b2 (`~/.venvs/esphome-beta/bin/pip install -U --pre
+  esphome==2026.10.0b2`, siehe `docs/05`). Wer ein `esphome` im PATH hat, ruft
   einfach `esphome` auf. In `CLAUDE.md`, in den YAML-Köpfen und in `docs/03`
   steht durchgehend der volle Pfad, weil diese Texte für Sitzungen auf genau
   diesem Rechner geschrieben sind.

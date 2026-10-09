@@ -9,7 +9,8 @@
 #   sips -s format png shots/*.bmp --out shots/
 #
 # Der volle Pfad ist nur die hiesige Arbeitsumgebung: Auf diesem Rechner gibt
-# es kein "esphome" im PATH, die Umgebung enthaelt ESPHome 2026.9.0 (stabil).
+# es kein "esphome" im PATH, die Umgebung enthaelt ESPHome 2026.10.0b2 (Beta,
+# docs/05).
 # Wer ein "esphome" im PATH hat, ruft es einfach so auf. Auch "sips" ist nichts
 # vom Projekt -- es bringt nur macOS mit; plattformunabhaengig macht Pillow
 # dasselbe, es steckt ohnehin in der ESPHome-Umgebung. Der zweite Befehl macht

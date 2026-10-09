@@ -49,8 +49,10 @@ aus einem Vorschaulauf von `tools/flow_animation.py`. Sonst offen nennen.
 
 ## Bauen und Prüfen
 
-Kein `esphome` im PATH; jeder Aufruf mit vollem Pfad und aus dem Projektordner,
-ESPHome 2026.9.0 (`docs/05`):
+Kein `esphome` im PATH; jeder Aufruf mit vollem Pfad und aus dem Projektordner.
+Zielplattform ist ESPHome **2026.10.0b2** (Beta, `docs/05`); die Umgebung hebt
+`~/.venvs/esphome-beta/bin/pip install -U --pre esphome==2026.10.0b2`. Bis dahin
+enthält sie 2026.9.0 — vor dem Lauf mit `esphome version` prüfen.
 
 ```
 ~/.venvs/esphome-beta/bin/esphome run pv-dashboard-shots.yaml
