@@ -33,6 +33,10 @@ verfügbar waren, hieß das für den Device Builder: Beta-Kanal einstellen.
   `~/.venvs/esphome-beta/bin/esphome config pv-dashboard.yaml` (nie mit
   `--show-secrets`), entsprechend `run pv-dashboard-sim.yaml` bzw.
   `run pv-dashboard-shots.yaml`.
+- Stand 09.10.2026: Zielplattform ist die Beta **2026.10.0b2** (siehe
+  Abschnitt „Beta 2026.10.0b2“ unten). Die lokale Umgebung hebt
+  `~/.venvs/esphome-beta/bin/pip install -U --pre esphome==2026.10.0b2`; der
+  Device Builder muss dafür auf dem Beta-Kanal stehen.
 
 Die drei Umgebungen sind voneinander unabhängig. Vor dem Bauen oder Flashen
 prüfen, welche Version die jeweilige tatsächlich enthält.
@@ -148,9 +152,9 @@ is valid!" und gibt dabei **genau diese drei** aus (nachgemessen am 20.09.2026):
 - **Geschwärzte Werte in der Config-Ausgabe** — eine Heuristik schwärzt jedes
   Feld mit „_key“ im Namen: hier `transparency_key`, im Simulator zusätzlich
   `snapshot_key: SDLK_F12`. Reine Kosmetik; laut Warnung fällt die Heuristik mit
-  2026.12.0 weg. **Noch zu prüfen beim nächsten `config`-Lauf:** Im YAML steht
-  `transparency_key` nicht mehr, die Bilder nutzen `transparency: alpha_channel`
-  (`.pv-dashboard_utility.yaml`); ob die Warnung dazu noch erscheint, ist offen.
+  2026.12.0 weg. Im YAML steht `transparency_key` nicht; die Warnung kommt vom
+  Standardwert in ESPHomes LVGL-Schema und erscheint auch mit 2026.10.0b2
+  (geprüft 09.10.2026, siehe „Beta 2026.10.0b2“).
 
 **Erst bei der Code-Erzeugung, nicht bei `esphome config`:**
 
@@ -174,9 +178,63 @@ is valid!" und gibt dabei **genau diese drei** aus (nachgemessen am 20.09.2026):
   min_version *.yaml` findet sie sofort — Zeilennummern altern, deshalb stehen
   hier keine.
 
+## Beta 2026.10.0b2
+
+Am 09.10.2026 hat der Nutzer die Beta **2026.10.0b2** (PyPI, 09.10.2026) als
+Plattform gewählt. Geprüft wurde in einer Cloud-Sitzung mit einer eigenen
+Umgebung, die 2026.10.0b2 enthält — nicht auf dem Mac und nicht im Device
+Builder:
+
+- `compile pv-dashboard-sim.yaml` und `run pv-dashboard-shots.yaml` laufen
+  durch, alle 20 Bilder entstehen.
+- `python -m unittest discover tests`: 24 Tests, alle grün.
+  `tests/ha_probe.py --shots`: 37 von 37 Prüfungen bestanden. Die Probe ruft
+  das `esphome` neben dem aufrufenden Python auf, nimmt also automatisch die
+  Version der Umgebung, mit der sie gestartet wird.
+- Bildvergleich gegen die Aufnahmen vom 25.09.2026 (2026.9.0), pixelgenau:
+  Unterschiede nur bei Uhrzeit und Datum, Reiterreihenfolge, zeitabhängigen
+  Werten (Restprognose, Jetzt-Linie, Flusspunkte, Meldungszeiten) und den
+  Commits nach dem 25.09. Die Wallbox-Seite ist bis auf die Uhr identisch —
+  Schriften und Abstände haben sich mit der Beta nicht verschoben.
+- Die geräteeigenen Pakete (`_core`, `_display`, `_audio`, `_utility`, `_ha`,
+  `_ui` mit Seiten) bestehen `esphome config` mit 2026.10.0b2 — geprüft über
+  eine Hilfskonfiguration mit Platzhalterwerten statt `secrets.yaml` und der
+  Vorlage `.pv-dashboard_anlage.yaml.example`. Es erscheinen dieselben drei
+  Warnungen wie unter 2026.9.0 (siehe „Akzeptierte Warnungen“). Gebaut für den
+  ESP32-P4 wurde dabei nicht.
+
+**`transparency_key` geklärt:** Die Warnung kommt nicht aus dem YAML, sondern
+aus ESPHomes eigenem LVGL-Schema: `lvgl:` hat den Schlüssel mit Standardwert
+`0x000400` (`components/lvgl/__init__.py`), die Config-Ausgabe schwärzt ihn.
+Sie bleibt also, bis ESPHome die Heuristik entfernt.
+
+**Durchgesehene Breaking Changes** (Changelog 2026.10.0, Stand b2), soweit sie
+das Dashboard berühren:
+
+- **light** (#18997): `restore_mode` wird durch `restore_state` ersetzt.
+  `restore_mode` wird weiter angenommen und nur zusammen mit `initial_state`
+  bemängelt; das Backlight (`.pv-dashboard_display.yaml`,
+  `restore_mode: RESTORE_DEFAULT_ON`) bleibt deshalb unverändert.
+- **speaker** (#19074): `codec_support_enabled` entfernt — nicht benutzt.
+- **speaker / speaker_source** (#19307, #18412): Lautstärke und Stummschaltung
+  des Media Players sind jetzt unabhängig. Kein YAML betroffen, aber ein Punkt
+  für den Audio-Testplan am Gerät.
+- **host** (#19214): baut mit ninja statt PlatformIO. Simulator, Screenshots und
+  `tests/ha-test.yaml` bauen damit ohne Änderung.
+- Daneben ohne Handlungsbedarf: OTA komprimiert Uploads auf dem ESP32 (#19037),
+  die Empfangsschleife blockiert weiter in einem `loop()`-Durchlauf (die
+  `lv_refr_now()`-Begründung in `_core` gilt also weiter); Workaround für einen
+  ESP-IDF-Stackfehler auf dem P4 (#20181). Die empfohlene ESP-IDF bleibt 5.5.5,
+  der Pin auf 6.0.2 ist unverändert.
+
+**`min_version` bleibt 2026.9.0.** Die Konfiguration nutzt nichts, was erst mit
+2026.10 kommt. Und ESPHome ordnet Vorabversionen beim Vergleich **hinter** die
+stabile ein (`Version.parse("2026.10.0b2") <= Version.parse("2026.10.0")` ist
+`False`): `min_version: 2026.10.0b2` würde die stabile 2026.10.0 ablehnen.
+
 ---
 
-Stand: 25.09.2026 (Demo-Konfigurationen auf 2026.9.0, `transparency_key` als
+Stand: 09.10.2026 (Beta 2026.10.0b2 geprüft, `transparency_key` geklärt); davor 25.09.2026 (Demo-Konfigurationen auf 2026.9.0, `transparency_key` als
 offen markiert); davor 20.09.2026 (#19177 in 2026.9.0 enthalten, in der Bauumgebung
 `esphome-2026.9.0` nachgeprüft; `~/.venvs/esphome-beta` an dem Tag auf 2026.9.0
 gehoben). Geprüfter Stand: Commit `0e2bd3d` (25.09.2026).
