@@ -30,6 +30,10 @@ Entitaet weg -> nur der Wert weg):
      evcc meldet, select.select_option mit Entitaet und Option nach dem
      Attribut options (off/pv/minpv/now bzw. off/smart/now); Fehler oder
      10 s ohne Meldung -> gemeldeter Modus; Wallbox fehlt -> kein Befehl
+  L  Faktor je Zahlenwert (Wunsch des Nutzers, 09.10.2026, ha-test.yaml):
+     -1 dreht das Vorzeichen (Hauszaehler, Strom Speicher 1), 0.001 macht
+     W -> kW (Wallbox 1, die Probe schickt W); unavailable bleibt mit -1
+     leer (NAN * -1 = NAN, val_leer erst hinter dem Filter)
   J  in keinem Label irgendwo "inf" oder "nan", ueber den ganzen Lauf
 
 Liest keine secrets.yaml und nicht .pv-dashboard_anlage.yaml. Ergebnis:
@@ -131,6 +135,7 @@ def zustaende():
     state[E("bat3_soc")] = "unavailable"  # C: Referenz nicht verfuegbar
     state[E("inv1_temp")] = "unavailable"  # D: Nicht-Referenz nicht verfuegbar
     del state[E("hp_humidity")]           # D: Nicht-Referenz fehlt ganz
+    state[E("wb1_power")] = str(round(hb.NAMEN["wb1_power"]["demo"] * 1000))  # L: W statt kW
     return state
 
 
@@ -343,6 +348,12 @@ async def ablauf(panel, ha, bilder):
     pruefe("D", "Raumtemperatur FALSE: leer, Waermepumpe da", t["hp_room"] == "" and d["hid"]["heatpump"] == 0,
            repr(t["hp_room"]))
     pruefe("D", "Luftfeuchte fehlt in HA: nach ha_ready leer", t["hp_humidity"] == "", repr(t["hp_humidity"]))
+    # L: Faktor
+    pruefe("L", "Faktor -1: Hauszaehler 5126 W -> -5,1 kW", t["v_meter_house"] == "-5,1" and bit(d, "meter_house") == 1,
+           repr(t["v_meter_house"]))
+    pruefe("L", "Faktor -1: Strom Speicher 1 12,4 A -> -12 A", "· -12 A ·" in d["txt"]["d_bat1"],
+           repr(d["txt"]["d_bat1"]))
+    pruefe("L", "Faktor 0.001: Wallbox 1 7400 W -> 7,4 kW", t["v_wb1"] == "7,4", repr(t["v_wb1"]))
     if bilder:
         await ha.bild("probe_1_start.bmp")
 
@@ -363,6 +374,13 @@ async def ablauf(panel, ha, bilder):
     pruefe("F", "Nicht-Referenz faellt aus: Speicher 1 da, Spannung leer",
            d["hid"]["bat1"] == 0 and bit(d, "bat_1") == 1 and sub.endswith(" V") and not re.search(r"\d\s*V$", sub)
            and "A" in sub, repr(sub))
+
+    # L: unavailable mit Faktor -1 bleibt leer (nie +inf)
+    ha.setzen("bat1_current", "unavailable")
+    await asyncio.sleep(2)
+    sub = panel.letzte["txt"]["d_bat1"]
+    pruefe("L", "Faktor -1 und unavailable: Strom leer, Speicher 1 da",
+           "·  A ·" in sub and panel.letzte["hid"]["bat1"] == 0, repr(sub))
 
     # I: leerer Wert in einer Summe -> Summe leer, Geraet bleibt
     ha.setzen("hp_power", "unavailable")

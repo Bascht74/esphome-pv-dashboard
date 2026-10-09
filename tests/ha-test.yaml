@@ -26,6 +26,11 @@ substitutions:
   # (nur der Wert Raumtemperatur bleibt leer), zwei Schreibweisen
   ha_pv8_power: none
   ha_hp_room: FALSE
+  # Faktor (Fall L): Vorzeichen drehen und W -> kW; die Probe schickt
+  # wb1_power in W
+  ha_meter_house_power_faktor: "-1"
+  ha_bat1_current_faktor: "-1"
+  ha_wb1_power_faktor: "0.001"
 
 packages:
   sim: !include ../pv-dashboard-sim.yaml
@@ -114,6 +119,7 @@ interval:
           j += ",\"v_bat2\":" + txt(id(v_bat2)) + ",\"v_bat3\":" + txt(id(v_bat3));
           j += ",\"hp_room\":" + txt(id(hp_room)) + ",\"hp_humidity\":" + txt(id(hp_humidity));
           j += ",\"v_wb1\":" + txt(id(v_wb1)) + ",\"lbl_alert\":" + txt(id(lbl_alert));
+          j += ",\"v_meter_house\":" + txt(id(v_meter_house));
           j += ",\"v_house\":" + txt(id(v_house)) + ",\"v_misc\":" + txt(id(v_misc)) + ",\"v_heatpump\":" + txt(id(v_heatpump));
           j += ",\"ht_c_total\":" + txt(id(ht_c_total)) + ",\"ht_out_total\":" + txt(id(ht_out_total)) + "}";
           // Kein Label irgendwo darf "inf" oder "nan" zeigen: alle Seiten und

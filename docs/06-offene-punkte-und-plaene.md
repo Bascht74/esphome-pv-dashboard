@@ -396,7 +396,9 @@ Offen am Datenweg:
       the device to perform Home Assistant actions“.
 - [ ] **Echte IDs eintragen** — die Standards sind Vorschläge (deutsche IDs, Platzhalter
       für Shelly-Gerät, DWD-Station und Warnzelle, evcc-Ladepunkte, Wechselrichter,
-      Nilan). Nach `.pv-dashboard_anlage.yaml`, nur die abweichenden.
+      Nilan). Nach `.pv-dashboard_anlage.yaml`, nur die abweichenden. Weicht Vorzeichen
+      oder Einheit ab, dort `ha_<name>_faktor` setzen (seit 09.10.2026, z. B. `"-1"`,
+      `"0.001"` für W → kW; Dokument 03, Datenweg) statt eines Helfers in Home Assistant.
 - [ ] **Annahmen prüfen:** Vorzeichen von `sensor.evcc_battery_power` (+ = Entladen) und
       der Zählerleistungen (+ = Einspeisung); Einheit der Ladedauer (Anzeige in min);
       `sun_duration` der DWD-Tagesprognose in Sekunden; „Sonstige“ = evcc-Hausverbrauch
@@ -635,7 +637,7 @@ Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Stand: 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
 Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc

@@ -30,6 +30,9 @@
 #     substitutions). Hat sie einen gueltigen Wert, ist das Geraet da; sonst
 #     verschwindet seine ganze Grafik (dev_present, dev_apply). dev_present
 #     startet leer und bleibt nicht ueber einen Neustart.
+#   - Faktor: Jeder Zahlensensor hat ha_<name>_faktor (Standard "1") als
+#     ersten Filter multiply -- Vorzeichen drehen ("-1") oder Einheit
+#     umrechnen ("0.001" W -> kW), ohne Helfer in Home Assistant.
 #   - Jede andere Entitaet, die nicht belegt (none/false/off/""), nicht
 #     verfuegbar oder 10 s nach dem Verbinden ohne Wert ist, zeigt ihren Wert
 #     leer statt mit Strichen (val_leer bzw. " "). Vor dem Verbinden: Striche.
@@ -268,6 +271,189 @@ substitutions:
   ha_wx_sun: sensor.dwd_station_sonnenscheindauer_heute  # s -> h, ab Werk aus
   ha_sun: sun.sun  # nur fuer die Attribute (Integration sun)
   ha_warn_level: sensor.dwd_warnzelle_aktuelle_warnstufe  # 0..4
+  # Faktor je Zahlenwert (auch Attribute), erster Filter multiply des
+  # Sensors: bringt den Wert auf Einheit und Vorzeichen oben (Hinweis).
+  # Eigene Faktoren in .pv-dashboard_anlage.yaml, z. B. "-1" (Vorzeichen),
+  # "0.001" (W -> kW), "0.0166667" (s -> min). NAN bleibt NAN.
+  ha_pv1_power_faktor: "1"
+  ha_pv1_energy_faktor: "1"
+  ha_pv2_power_faktor: "1"
+  ha_pv2_energy_faktor: "1"
+  ha_pv3_power_faktor: "1"
+  ha_pv3_energy_faktor: "1"
+  ha_pv4_power_faktor: "1"
+  ha_pv4_energy_faktor: "1"
+  ha_pv5_power_faktor: "1"
+  ha_pv5_energy_faktor: "1"
+  ha_pv6_power_faktor: "1"
+  ha_pv6_energy_faktor: "1"
+  ha_pv7_power_faktor: "1"
+  ha_pv7_energy_faktor: "1"
+  ha_pv8_power_faktor: "1"
+  ha_pv8_energy_faktor: "1"
+  ha_inv1_power_faktor: "1"
+  ha_inv1_energy_faktor: "1"
+  ha_inv1_temp_faktor: "1"
+  ha_inv2_power_faktor: "1"
+  ha_inv2_energy_faktor: "1"
+  ha_inv2_temp_faktor: "1"
+  ha_inv3_power_faktor: "1"
+  ha_inv3_energy_faktor: "1"
+  ha_inv3_temp_faktor: "1"
+  ha_inv4_power_faktor: "1"
+  ha_inv4_energy_faktor: "1"
+  ha_inv4_temp_faktor: "1"
+  ha_bat1_soc_faktor: "1"
+  ha_bat1_current_faktor: "1"
+  ha_bat1_voltage_faktor: "1"
+  ha_bat1_cell_min_faktor: "1"
+  ha_bat1_cell_max_faktor: "1"
+  ha_bat1_temp_min_faktor: "1"
+  ha_bat1_temp_max_faktor: "1"
+  ha_bat1_cycles_faktor: "1"
+  ha_bat1_power_faktor: "1"
+  ha_bat2_soc_faktor: "1"
+  ha_bat2_current_faktor: "1"
+  ha_bat2_voltage_faktor: "1"
+  ha_bat2_cell_min_faktor: "1"
+  ha_bat2_cell_max_faktor: "1"
+  ha_bat2_temp_min_faktor: "1"
+  ha_bat2_temp_max_faktor: "1"
+  ha_bat2_cycles_faktor: "1"
+  ha_bat2_power_faktor: "1"
+  ha_bat3_soc_faktor: "1"
+  ha_bat3_current_faktor: "1"
+  ha_bat3_voltage_faktor: "1"
+  ha_bat3_cell_min_faktor: "1"
+  ha_bat3_cell_max_faktor: "1"
+  ha_bat3_temp_min_faktor: "1"
+  ha_bat3_temp_max_faktor: "1"
+  ha_bat3_cycles_faktor: "1"
+  ha_bat3_power_faktor: "1"
+  ha_bat_charged_today_faktor: "1"
+  ha_bat_discharged_today_faktor: "1"
+  ha_site_pv_power_faktor: "1"
+  ha_site_battery_power_faktor: "1"
+  ha_site_grid_power_faktor: "1"
+  ha_home_power_faktor: "1"
+  ha_site_battery_soc_faktor: "1"
+  ha_tariff_grid_faktor: "1"
+  ha_tariff_home_faktor: "1"
+  ha_tariff_feedin_faktor: "1"
+  ha_wb1_power_faktor: "1"
+  ha_wb1_phases_faktor: "1"
+  ha_wb1_energy_faktor: "1"
+  ha_wb1_solar_faktor: "1"
+  ha_wb1_minutes_faktor: "1"
+  ha_wb1_soc_faktor: "1"
+  ha_wb1_range_faktor: "1"
+  ha_wb1_limit_faktor: "1"
+  ha_wb2_power_faktor: "1"
+  ha_wb2_phases_faktor: "1"
+  ha_wb2_energy_faktor: "1"
+  ha_wb2_solar_faktor: "1"
+  ha_wb2_minutes_faktor: "1"
+  ha_wb2_soc_faktor: "1"
+  ha_wb2_range_faktor: "1"
+  ha_wb2_limit_faktor: "1"
+  ha_wb_month_energy_faktor: "1"
+  ha_wb_month_solar_faktor: "1"
+  ha_wb_month_price_faktor: "1"
+  ha_hp_outdoor_faktor: "1"
+  ha_hp_room_faktor: "1"
+  ha_hp_humidity_faktor: "1"
+  ha_hp_dhw_faktor: "1"
+  ha_hp_fan_faktor: "1"
+  ha_hp_supply_faktor: "1"
+  ha_hp_exhaust_faktor: "1"
+  ha_hp_power_faktor: "1"
+  ha_hp_energy_faktor: "1"
+  ha_hp_alarm_faktor: "1"
+  ha_hp_room_set_faktor: "1"
+  ha_hp_dhw_set_faktor: "1"
+  ha_hp_fan_supply_faktor: "1"
+  ha_hp_fan_extract_faktor: "1"
+  ha_hp_filter_days_faktor: "1"
+  ha_dev1_power_faktor: "1"
+  ha_dev1_energy_faktor: "1"
+  ha_dev2_power_faktor: "1"
+  ha_dev2_energy_faktor: "1"
+  ha_dev3_power_faktor: "1"
+  ha_dev3_energy_faktor: "1"
+  ha_dev4_power_faktor: "1"
+  ha_dev4_energy_faktor: "1"
+  ha_dev5_power_faktor: "1"
+  ha_dev5_energy_faktor: "1"
+  ha_grid_power_faktor: "1"
+  ha_grid_freq_faktor: "1"
+  ha_grid_n_current_faktor: "1"
+  ha_grid_l1_voltage_faktor: "1"
+  ha_grid_l1_current_faktor: "1"
+  ha_grid_l1_power_faktor: "1"
+  ha_grid_l1_apparent_faktor: "1"
+  ha_grid_l1_pf_faktor: "1"
+  ha_grid_l2_voltage_faktor: "1"
+  ha_grid_l2_current_faktor: "1"
+  ha_grid_l2_power_faktor: "1"
+  ha_grid_l2_apparent_faktor: "1"
+  ha_grid_l2_pf_faktor: "1"
+  ha_grid_l3_voltage_faktor: "1"
+  ha_grid_l3_current_faktor: "1"
+  ha_grid_l3_power_faktor: "1"
+  ha_grid_l3_apparent_faktor: "1"
+  ha_grid_l3_pf_faktor: "1"
+  ha_meter0_total_faktor: "1"
+  ha_meter0_today_faktor: "1"
+  ha_meter1_total_faktor: "1"
+  ha_meter1_today_faktor: "1"
+  ha_meter2_total_faktor: "1"
+  ha_meter2_today_faktor: "1"
+  ha_meter3_total_faktor: "1"
+  ha_meter3_today_faktor: "1"
+  ha_meter4_total_faktor: "1"
+  ha_meter4_today_faktor: "1"
+  ha_meter_pv_power_faktor: "1"
+  ha_meter_house_power_faktor: "1"
+  ha_spot_price_faktor: "1"
+  ha_neg_quarters_faktor: "1"
+  ha_p14a_kw_faktor: "1"
+  ha_pv_energy_today_faktor: "1"
+  ha_home_energy_today_faktor: "1"
+  ha_selfuse_energy_today_faktor: "1"
+  ha_solcast_today_faktor: "1"
+  ha_solcast_today_p10_faktor: "1"
+  ha_solcast_today_p90_faktor: "1"
+  ha_solcast_remaining_faktor: "1"
+  ha_solcast_power_now_faktor: "1"
+  ha_solcast_next_hour_faktor: "1"
+  ha_solcast_peak_faktor: "1"
+  ha_solcast_api_used_faktor: "1"
+  ha_solcast_api_limit_faktor: "1"
+  ha_solcast_d2_faktor: "1"
+  ha_solcast_d2_p10_faktor: "1"
+  ha_solcast_d2_p90_faktor: "1"
+  ha_solcast_d3_faktor: "1"
+  ha_solcast_d3_p10_faktor: "1"
+  ha_solcast_d3_p90_faktor: "1"
+  ha_solcast_d4_faktor: "1"
+  ha_solcast_d4_p10_faktor: "1"
+  ha_solcast_d4_p90_faktor: "1"
+  ha_solcast_d5_faktor: "1"
+  ha_solcast_d5_p10_faktor: "1"
+  ha_solcast_d5_p90_faktor: "1"
+  ha_solcast_d6_faktor: "1"
+  ha_solcast_d6_p10_faktor: "1"
+  ha_solcast_d6_p90_faktor: "1"
+  ha_solcast_d7_faktor: "1"
+  ha_solcast_d7_p10_faktor: "1"
+  ha_solcast_d7_p90_faktor: "1"
+  ha_wx_temp_faktor: "1"
+  ha_wx_humidity_faktor: "1"
+  ha_wx_pressure_faktor: "1"
+  ha_wx_wind_faktor: "1"
+  ha_wx_bearing_faktor: "1"
+  ha_wx_sun_faktor: "1"
+  ha_warn_level_faktor: "1"
 
 globals:
   # Gruppen mit neuen Werten, ein Bit je Gruppe (Liste in
@@ -381,372 +567,496 @@ sensor:
     id: ha_pv1_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_power }"
     internal: true
+    filters:
+      - multiply: ${ha_pv1_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000001u;'
   - platform: homeassistant
     id: ha_pv1_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_pv1_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000001u;'
   - platform: homeassistant
     id: ha_pv2_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_power }"
     internal: true
+    filters:
+      - multiply: ${ha_pv2_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000002u;'
   - platform: homeassistant
     id: ha_pv2_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_pv2_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000002u;'
   - platform: homeassistant
     id: ha_pv3_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_power }"
     internal: true
+    filters:
+      - multiply: ${ha_pv3_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000004u;'
   - platform: homeassistant
     id: ha_pv3_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv3_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_pv3_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000004u;'
   - platform: homeassistant
     id: ha_pv4_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_power }"
     internal: true
+    filters:
+      - multiply: ${ha_pv4_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000008u;'
   - platform: homeassistant
     id: ha_pv4_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv4_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_pv4_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000008u;'
   - platform: homeassistant
     id: ha_pv5_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_power }"
     internal: true
+    filters:
+      - multiply: ${ha_pv5_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000010u;'
   - platform: homeassistant
     id: ha_pv5_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv5_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_pv5_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000010u;'
   - platform: homeassistant
     id: ha_pv6_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_power }"
     internal: true
+    filters:
+      - multiply: ${ha_pv6_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000020u;'
   - platform: homeassistant
     id: ha_pv6_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv6_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_pv6_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000020u;'
   - platform: homeassistant
     id: ha_pv7_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_power }"
     internal: true
+    filters:
+      - multiply: ${ha_pv7_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000040u;'
   - platform: homeassistant
     id: ha_pv7_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv7_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_pv7_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000040u;'
   - platform: homeassistant
     id: ha_pv8_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_power }"
     internal: true
+    filters:
+      - multiply: ${ha_pv8_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000080u;'
   - platform: homeassistant
     id: ha_pv8_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv8_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_pv8_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000080u;'
   - platform: homeassistant
     id: ha_inv1_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv1_power }"
     internal: true
+    filters:
+      - multiply: ${ha_inv1_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000100u;'
   - platform: homeassistant
     id: ha_inv1_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv1_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_inv1_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000100u;'
   - platform: homeassistant
     id: ha_inv1_temp
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv1_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv1_temp }"
     internal: true
+    filters:
+      - multiply: ${ha_inv1_temp_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000100u;'
   - platform: homeassistant
     id: ha_inv2_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv2_power }"
     internal: true
+    filters:
+      - multiply: ${ha_inv2_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000200u;'
   - platform: homeassistant
     id: ha_inv2_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv2_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_inv2_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000200u;'
   - platform: homeassistant
     id: ha_inv2_temp
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv2_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv2_temp }"
     internal: true
+    filters:
+      - multiply: ${ha_inv2_temp_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000200u;'
   - platform: homeassistant
     id: ha_inv3_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv3_power }"
     internal: true
+    filters:
+      - multiply: ${ha_inv3_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000400u;'
   - platform: homeassistant
     id: ha_inv3_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv3_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv3_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_inv3_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000400u;'
   - platform: homeassistant
     id: ha_inv3_temp
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv3_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv3_temp }"
     internal: true
+    filters:
+      - multiply: ${ha_inv3_temp_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000400u;'
   - platform: homeassistant
     id: ha_inv4_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv4_power }"
     internal: true
+    filters:
+      - multiply: ${ha_inv4_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000800u;'
   - platform: homeassistant
     id: ha_inv4_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv4_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv4_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_inv4_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000800u;'
   - platform: homeassistant
     id: ha_inv4_temp
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv4_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv4_temp }"
     internal: true
+    filters:
+      - multiply: ${ha_inv4_temp_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00000800u;'
   - platform: homeassistant
     id: ha_bat1_soc
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat1_soc | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat1_soc }"
     internal: true
+    filters:
+      - multiply: ${ha_bat1_soc_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00001000u;'
   - platform: homeassistant
     id: ha_bat1_current
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat1_current | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat1_current }"
     internal: true
+    filters:
+      - multiply: ${ha_bat1_current_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00001000u;'
   - platform: homeassistant
     id: ha_bat1_voltage
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat1_voltage | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat1_voltage }"
     internal: true
+    filters:
+      - multiply: ${ha_bat1_voltage_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00001000u;'
   - platform: homeassistant
     id: ha_bat1_cell_min
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat1_cell_min | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat1_cell_min }"
     internal: true
+    filters:
+      - multiply: ${ha_bat1_cell_min_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00001000u;'
   - platform: homeassistant
     id: ha_bat1_cell_max
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat1_cell_max | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat1_cell_max }"
     internal: true
+    filters:
+      - multiply: ${ha_bat1_cell_max_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00001000u;'
   - platform: homeassistant
     id: ha_bat1_temp_min
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat1_temp_min | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat1_temp_min }"
     internal: true
+    filters:
+      - multiply: ${ha_bat1_temp_min_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00001000u;'
   - platform: homeassistant
     id: ha_bat1_temp_max
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat1_temp_max | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat1_temp_max }"
     internal: true
+    filters:
+      - multiply: ${ha_bat1_temp_max_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00001000u;'
   - platform: homeassistant
     id: ha_bat1_cycles
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat1_cycles | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat1_cycles }"
     internal: true
+    filters:
+      - multiply: ${ha_bat1_cycles_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00001000u;'
   - platform: homeassistant
     id: ha_bat1_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat1_power }"
     internal: true
+    filters:
+      - multiply: ${ha_bat1_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00001000u;'
   - platform: homeassistant
     id: ha_bat2_soc
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat2_soc | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat2_soc }"
     internal: true
+    filters:
+      - multiply: ${ha_bat2_soc_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00002000u;'
   - platform: homeassistant
     id: ha_bat2_current
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat2_current | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat2_current }"
     internal: true
+    filters:
+      - multiply: ${ha_bat2_current_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00002000u;'
   - platform: homeassistant
     id: ha_bat2_voltage
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat2_voltage | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat2_voltage }"
     internal: true
+    filters:
+      - multiply: ${ha_bat2_voltage_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00002000u;'
   - platform: homeassistant
     id: ha_bat2_cell_min
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat2_cell_min | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat2_cell_min }"
     internal: true
+    filters:
+      - multiply: ${ha_bat2_cell_min_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00002000u;'
   - platform: homeassistant
     id: ha_bat2_cell_max
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat2_cell_max | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat2_cell_max }"
     internal: true
+    filters:
+      - multiply: ${ha_bat2_cell_max_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00002000u;'
   - platform: homeassistant
     id: ha_bat2_temp_min
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat2_temp_min | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat2_temp_min }"
     internal: true
+    filters:
+      - multiply: ${ha_bat2_temp_min_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00002000u;'
   - platform: homeassistant
     id: ha_bat2_temp_max
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat2_temp_max | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat2_temp_max }"
     internal: true
+    filters:
+      - multiply: ${ha_bat2_temp_max_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00002000u;'
   - platform: homeassistant
     id: ha_bat2_cycles
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat2_cycles | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat2_cycles }"
     internal: true
+    filters:
+      - multiply: ${ha_bat2_cycles_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00002000u;'
   - platform: homeassistant
     id: ha_bat2_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat2_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat2_power }"
     internal: true
+    filters:
+      - multiply: ${ha_bat2_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00002000u;'
   - platform: homeassistant
     id: ha_bat3_soc
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat3_soc | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat3_soc }"
     internal: true
+    filters:
+      - multiply: ${ha_bat3_soc_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00004000u;'
   - platform: homeassistant
     id: ha_bat3_current
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat3_current | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat3_current }"
     internal: true
+    filters:
+      - multiply: ${ha_bat3_current_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00004000u;'
   - platform: homeassistant
     id: ha_bat3_voltage
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat3_voltage | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat3_voltage }"
     internal: true
+    filters:
+      - multiply: ${ha_bat3_voltage_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00004000u;'
   - platform: homeassistant
     id: ha_bat3_cell_min
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat3_cell_min | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat3_cell_min }"
     internal: true
+    filters:
+      - multiply: ${ha_bat3_cell_min_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00004000u;'
   - platform: homeassistant
     id: ha_bat3_cell_max
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat3_cell_max | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat3_cell_max }"
     internal: true
+    filters:
+      - multiply: ${ha_bat3_cell_max_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00004000u;'
   - platform: homeassistant
     id: ha_bat3_temp_min
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat3_temp_min | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat3_temp_min }"
     internal: true
+    filters:
+      - multiply: ${ha_bat3_temp_min_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00004000u;'
   - platform: homeassistant
     id: ha_bat3_temp_max
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat3_temp_max | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat3_temp_max }"
     internal: true
+    filters:
+      - multiply: ${ha_bat3_temp_max_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00004000u;'
   - platform: homeassistant
     id: ha_bat3_cycles
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat3_cycles | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat3_cycles }"
     internal: true
+    filters:
+      - multiply: ${ha_bat3_cycles_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00004000u;'
   - platform: homeassistant
     id: ha_bat3_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat3_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat3_power }"
     internal: true
+    filters:
+      - multiply: ${ha_bat3_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00004000u;'
   - platform: homeassistant
     id: ha_bat_charged_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat_charged_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat_charged_today }"
     internal: true
+    filters:
+      - multiply: ${ha_bat_charged_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00008000u;'
   - platform: homeassistant
     id: ha_bat_discharged_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_bat_discharged_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_bat_discharged_today }"
     internal: true
+    filters:
+      - multiply: ${ha_bat_discharged_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00008000u;'
   - platform: homeassistant
     id: ha_site_pv_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_site_pv_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_site_pv_power }"
     internal: true
+    filters:
+      - multiply: ${ha_site_pv_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00200000u;'
   - platform: homeassistant
     id: ha_site_battery_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_site_battery_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_site_battery_power }"
     internal: true
+    filters:
+      - multiply: ${ha_site_battery_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00208000u;'
   - platform: homeassistant
     id: ha_site_grid_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_site_grid_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_site_grid_power }"
     internal: true
+    filters:
+      - multiply: ${ha_site_grid_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00200000u;'
   - platform: homeassistant
     id: ha_home_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_home_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_home_power }"
     internal: true
+    filters:
+      - multiply: ${ha_home_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00200000u;'
   - platform: homeassistant
     id: ha_site_battery_soc
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_site_battery_soc | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_site_battery_soc }"
     internal: true
+    filters:
+      - multiply: ${ha_site_battery_soc_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00200000u;'
   - platform: homeassistant
@@ -754,6 +1064,7 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_tariff_grid | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_tariff_grid }"
     internal: true
     filters:
+      - multiply: ${ha_tariff_grid_faktor}
       - multiply: 100
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00200000u;'
@@ -762,6 +1073,7 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_tariff_home | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_tariff_home }"
     internal: true
     filters:
+      - multiply: ${ha_tariff_home_faktor}
       - multiply: 100
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00200000u;'
@@ -770,6 +1082,7 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_tariff_feedin | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_tariff_feedin }"
     internal: true
     filters:
+      - multiply: ${ha_tariff_feedin_faktor}
       - multiply: 100
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00200000u;'
@@ -777,108 +1090,144 @@ sensor:
     id: ha_wb1_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_power }"
     internal: true
+    filters:
+      - multiply: ${ha_wb1_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00210000u;'
   - platform: homeassistant
     id: ha_wb1_phases
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_phases | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_phases }"
     internal: true
+    filters:
+      - multiply: ${ha_wb1_phases_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00010000u;'
   - platform: homeassistant
     id: ha_wb1_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_wb1_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00010000u;'
   - platform: homeassistant
     id: ha_wb1_solar
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_solar | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_solar }"
     internal: true
+    filters:
+      - multiply: ${ha_wb1_solar_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00010000u;'
   - platform: homeassistant
     id: ha_wb1_minutes
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_minutes | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_minutes }"
     internal: true
+    filters:
+      - multiply: ${ha_wb1_minutes_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00010000u;'
   - platform: homeassistant
     id: ha_wb1_soc
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_soc | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_soc }"
     internal: true
+    filters:
+      - multiply: ${ha_wb1_soc_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00010000u;'
   - platform: homeassistant
     id: ha_wb1_range
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_range | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_range }"
     internal: true
+    filters:
+      - multiply: ${ha_wb1_range_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00010000u;'
   - platform: homeassistant
     id: ha_wb1_limit
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb1_limit | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb1_limit }"
     internal: true
+    filters:
+      - multiply: ${ha_wb1_limit_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00010000u;'
   - platform: homeassistant
     id: ha_wb2_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_power }"
     internal: true
+    filters:
+      - multiply: ${ha_wb2_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00220000u;'
   - platform: homeassistant
     id: ha_wb2_phases
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_phases | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_phases }"
     internal: true
+    filters:
+      - multiply: ${ha_wb2_phases_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00020000u;'
   - platform: homeassistant
     id: ha_wb2_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_wb2_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00020000u;'
   - platform: homeassistant
     id: ha_wb2_solar
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_solar | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_solar }"
     internal: true
+    filters:
+      - multiply: ${ha_wb2_solar_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00020000u;'
   - platform: homeassistant
     id: ha_wb2_minutes
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_minutes | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_minutes }"
     internal: true
+    filters:
+      - multiply: ${ha_wb2_minutes_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00020000u;'
   - platform: homeassistant
     id: ha_wb2_soc
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_soc | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_soc }"
     internal: true
+    filters:
+      - multiply: ${ha_wb2_soc_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00020000u;'
   - platform: homeassistant
     id: ha_wb2_range
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_range | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_range }"
     internal: true
+    filters:
+      - multiply: ${ha_wb2_range_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00020000u;'
   - platform: homeassistant
     id: ha_wb2_limit
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb2_limit | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb2_limit }"
     internal: true
+    filters:
+      - multiply: ${ha_wb2_limit_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00020000u;'
   - platform: homeassistant
     id: ha_wb_month_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb_month_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb_month_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_wb_month_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00040000u;'
   - platform: homeassistant
     id: ha_wb_month_solar
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb_month_solar | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb_month_solar }"
     internal: true
+    filters:
+      - multiply: ${ha_wb_month_solar_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00040000u;'
   - platform: homeassistant
@@ -886,6 +1235,7 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wb_month_price | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wb_month_price }"
     internal: true
     filters:
+      - multiply: ${ha_wb_month_price_faktor}
       - multiply: 100
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00040000u;'
@@ -893,300 +1243,400 @@ sensor:
     id: ha_hp_outdoor
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_outdoor | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_outdoor }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_outdoor_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_room
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_room | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_room }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_room_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_humidity
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_humidity | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_humidity }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_humidity_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_dhw
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_dhw | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_dhw }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_dhw_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_fan
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_fan | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_fan }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_fan_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_supply
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_supply | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_supply }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_supply_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_exhaust
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_exhaust | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_exhaust }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_exhaust_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_power }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00280000u;'
   - platform: homeassistant
     id: ha_hp_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_alarm
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_alarm | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_alarm }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_alarm_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_room_set
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_room_set | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_room_set }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_room_set_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_dhw_set
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_dhw_set | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_dhw_set }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_dhw_set_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_fan_supply
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_fan_supply | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_fan_supply }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_fan_supply_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_fan_extract
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_fan_extract | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_fan_extract }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_fan_extract_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_hp_filter_days
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_filter_days | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_filter_days }"
     internal: true
+    filters:
+      - multiply: ${ha_hp_filter_days_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
     id: ha_dev1_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev1_power }"
     internal: true
+    filters:
+      - multiply: ${ha_dev1_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev1_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev1_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_dev1_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev2_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev2_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev2_power }"
     internal: true
+    filters:
+      - multiply: ${ha_dev2_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev2_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev2_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_dev2_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev3_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev3_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev3_power }"
     internal: true
+    filters:
+      - multiply: ${ha_dev3_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev3_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev3_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev3_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_dev3_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev4_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev4_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev4_power }"
     internal: true
+    filters:
+      - multiply: ${ha_dev4_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev4_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev4_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev4_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_dev4_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev5_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev5_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev5_power }"
     internal: true
+    filters:
+      - multiply: ${ha_dev5_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00300000u;'
   - platform: homeassistant
     id: ha_dev5_energy
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev5_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev5_energy }"
     internal: true
+    filters:
+      - multiply: ${ha_dev5_energy_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_grid_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_power }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_freq
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_freq | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_freq }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_freq_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_n_current
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_n_current | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_n_current }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_n_current_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l1_voltage
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l1_voltage | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l1_voltage }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l1_voltage_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l1_current
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l1_current | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l1_current }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l1_current_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l1_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l1_power }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l1_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l1_apparent
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l1_apparent | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l1_apparent }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l1_apparent_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l1_pf
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l1_pf | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l1_pf }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l1_pf_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l2_voltage
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l2_voltage | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l2_voltage }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l2_voltage_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l2_current
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l2_current | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l2_current }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l2_current_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l2_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l2_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l2_power }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l2_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l2_apparent
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l2_apparent | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l2_apparent }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l2_apparent_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l2_pf
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l2_pf | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l2_pf }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l2_pf_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l3_voltage
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l3_voltage | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l3_voltage }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l3_voltage_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l3_current
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l3_current | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l3_current }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l3_current_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l3_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l3_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l3_power }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l3_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l3_apparent
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l3_apparent | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l3_apparent }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l3_apparent_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_grid_l3_pf
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_grid_l3_pf | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_grid_l3_pf }"
     internal: true
+    filters:
+      - multiply: ${ha_grid_l3_pf_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_meter0_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter0_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter0_today }"
     internal: true
+    filters:
+      - multiply: ${ha_meter0_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02800000u;'
   - platform: homeassistant
     id: ha_meter1_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter1_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter1_today }"
     internal: true
+    filters:
+      - multiply: ${ha_meter1_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02800000u;'
   - platform: homeassistant
     id: ha_meter2_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter2_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter2_today }"
     internal: true
+    filters:
+      - multiply: ${ha_meter2_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02800000u;'
   - platform: homeassistant
     id: ha_meter3_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter3_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter3_today }"
     internal: true
+    filters:
+      - multiply: ${ha_meter3_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02800000u;'
   - platform: homeassistant
     id: ha_meter4_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter4_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter4_today }"
     internal: true
+    filters:
+      - multiply: ${ha_meter4_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02800000u;'
   - platform: homeassistant
     id: ha_meter_pv_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter_pv_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter_pv_power }"
     internal: true
+    filters:
+      - multiply: ${ha_meter_pv_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00800000u;'
   - platform: homeassistant
     id: ha_meter_house_power
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter_house_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter_house_power }"
     internal: true
+    filters:
+      - multiply: ${ha_meter_house_power_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00800000u;'
   - platform: homeassistant
@@ -1194,6 +1644,7 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_spot_price | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_spot_price }"
     internal: true
     filters:
+      - multiply: ${ha_spot_price_faktor}
       - multiply: 100
     on_value:
       - lambda: 'id(ha_dirty) |= 0x01000000u;'
@@ -1201,36 +1652,48 @@ sensor:
     id: ha_neg_quarters
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_neg_quarters | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_neg_quarters }"
     internal: true
+    filters:
+      - multiply: ${ha_neg_quarters_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x01000000u;'
   - platform: homeassistant
     id: ha_p14a_kw
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_p14a_kw | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_p14a_kw }"
     internal: true
+    filters:
+      - multiply: ${ha_p14a_kw_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x01000000u;'
   - platform: homeassistant
     id: ha_pv_energy_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv_energy_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv_energy_today }"
     internal: true
+    filters:
+      - multiply: ${ha_pv_energy_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02000000u;'
   - platform: homeassistant
     id: ha_home_energy_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_home_energy_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_home_energy_today }"
     internal: true
+    filters:
+      - multiply: ${ha_home_energy_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02200000u;'
   - platform: homeassistant
     id: ha_selfuse_energy_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_selfuse_energy_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_selfuse_energy_today }"
     internal: true
+    filters:
+      - multiply: ${ha_selfuse_energy_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02000000u;'
   - platform: homeassistant
     id: ha_solcast_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_today }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_today_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1238,6 +1701,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_today }"
     attribute: estimate10
     internal: true
+    filters:
+      - multiply: ${ha_solcast_today_p10_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1245,18 +1710,24 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_today }"
     attribute: estimate90
     internal: true
+    filters:
+      - multiply: ${ha_solcast_today_p90_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
     id: ha_solcast_remaining
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_remaining | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_remaining }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_remaining_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x06200000u;'
   - platform: homeassistant
     id: ha_solcast_power_now
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_power_now | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_power_now }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_power_now_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1264,6 +1735,7 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_next_hour | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_next_hour }"
     internal: true
     filters:
+      - multiply: ${ha_solcast_next_hour_faktor}
       - multiply: 0.001
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
@@ -1272,6 +1744,7 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_peak | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_peak }"
     internal: true
     filters:
+      - multiply: ${ha_solcast_peak_faktor}
       - multiply: 0.001
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
@@ -1279,18 +1752,24 @@ sensor:
     id: ha_solcast_api_used
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_api_used | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_api_used }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_api_used_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
     id: ha_solcast_api_limit
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_api_limit | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_api_limit }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_api_limit_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
     id: ha_solcast_d2
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d2 }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d2_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1298,6 +1777,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d2 }"
     attribute: estimate10
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d2_p10_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1305,12 +1786,16 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d2 }"
     attribute: estimate90
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d2_p90_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
     id: ha_solcast_d3
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d3 }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d3_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1318,6 +1803,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d3 }"
     attribute: estimate10
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d3_p10_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1325,12 +1812,16 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d3 }"
     attribute: estimate90
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d3_p90_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
     id: ha_solcast_d4
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d4 }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d4_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1338,6 +1829,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d4 }"
     attribute: estimate10
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d4_p10_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1345,12 +1838,16 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d4 }"
     attribute: estimate90
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d4_p90_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
     id: ha_solcast_d5
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d5 }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d5_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1358,6 +1855,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d5 }"
     attribute: estimate10
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d5_p10_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1365,12 +1864,16 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d5 }"
     attribute: estimate90
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d5_p90_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
     id: ha_solcast_d6
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d6 }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d6_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1378,6 +1881,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d6 }"
     attribute: estimate10
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d6_p10_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1385,12 +1890,16 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d6 }"
     attribute: estimate90
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d6_p90_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
     id: ha_solcast_d7
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d7 }"
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d7_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1398,6 +1907,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d7 }"
     attribute: estimate10
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d7_p10_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1405,6 +1916,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d7 }"
     attribute: estimate90
     internal: true
+    filters:
+      - multiply: ${ha_solcast_d7_p90_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x04000000u;'
   - platform: homeassistant
@@ -1412,6 +1925,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_weather | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_weather }"
     attribute: temperature
     internal: true
+    filters:
+      - multiply: ${ha_wx_temp_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x08000000u;'
   - platform: homeassistant
@@ -1419,6 +1934,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_weather | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_weather }"
     attribute: humidity
     internal: true
+    filters:
+      - multiply: ${ha_wx_humidity_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x08000000u;'
   - platform: homeassistant
@@ -1426,6 +1943,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_weather | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_weather }"
     attribute: pressure
     internal: true
+    filters:
+      - multiply: ${ha_wx_pressure_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x08000000u;'
   - platform: homeassistant
@@ -1433,6 +1952,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_weather | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_weather }"
     attribute: wind_speed
     internal: true
+    filters:
+      - multiply: ${ha_wx_wind_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x08000000u;'
   - platform: homeassistant
@@ -1440,6 +1961,8 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_weather | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_weather }"
     attribute: wind_bearing
     internal: true
+    filters:
+      - multiply: ${ha_wx_bearing_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x08000000u;'
   - platform: homeassistant
@@ -1447,6 +1970,7 @@ sensor:
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_wx_sun | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_wx_sun }"
     internal: true
     filters:
+      - multiply: ${ha_wx_sun_faktor}
       - multiply: 0.0002777777778
     on_value:
       - lambda: 'id(ha_dirty) |= 0x08000000u;'
@@ -1454,36 +1978,48 @@ sensor:
     id: ha_warn_level
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_warn_level | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_warn_level }"
     internal: true
+    filters:
+      - multiply: ${ha_warn_level_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x10000000u;'
   - platform: homeassistant
     id: ha_meter0_total
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter0_total | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter0_total }"
     internal: true
+    filters:
+      - multiply: ${ha_meter0_total_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00800000u;'
   - platform: homeassistant
     id: ha_meter1_total
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter1_total | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter1_total }"
     internal: true
+    filters:
+      - multiply: ${ha_meter1_total_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00800000u;'
   - platform: homeassistant
     id: ha_meter2_total
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter2_total | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter2_total }"
     internal: true
+    filters:
+      - multiply: ${ha_meter2_total_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00800000u;'
   - platform: homeassistant
     id: ha_meter3_total
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter3_total | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter3_total }"
     internal: true
+    filters:
+      - multiply: ${ha_meter3_total_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00800000u;'
   - platform: homeassistant
     id: ha_meter4_total
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter4_total }"
     internal: true
+    filters:
+      - multiply: ${ha_meter4_total_faktor}
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00800000u;'
 

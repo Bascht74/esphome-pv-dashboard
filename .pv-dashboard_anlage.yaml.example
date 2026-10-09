@@ -154,3 +154,15 @@ feed_limit_pct: "60"
 # ha_pv8_power: none                            # keine Flaeche 8
 # ha_bat3_soc: none                             # kein Speicher 3
 # ha_inv1_temp: none                            # WR 1 meldet keine Temperatur
+#
+# Faktor je Zahlenwert: ha_<name>_faktor, Standard "1" (Liste in
+# .pv-dashboard_ha.yaml unter substitutions). Er multipliziert den Wert
+# aus Home Assistant, bevor das Panel ihn nutzt, und bringt ihn auf die
+# Einheit und das Vorzeichen, die der Hinweis dort nennt -- ohne Helfer in
+# Home Assistant. Gilt auch fuer Attribute, nicht fuer Texte und an/aus.
+# Nicht verfuegbar bleibt leer, auch mit "-1". Beispiele:
+#
+# ha_meter_house_power_faktor: "-1"             # Vorzeichen drehen
+# ha_bat1_current_faktor: "-1"                  # + = Entladen -> + = Laden
+# ha_wb1_power_faktor: "0.001"                  # W -> kW
+# ha_wb1_minutes_faktor: "0.0166667"            # s -> min
