@@ -16,9 +16,10 @@
 #                  x_voltage, x_current, x_act_power, x_aprt_power, x_pf),
 #                  dazu der Strom im Neutralleiter (n_current)
 #   Zaehlerstaende fuenf Zaehlwerke mit Stand und Tageswert
-#   Netzvorgaben   Status der Grenze, Steuersignal § 14a EnWG, Smart Meter
-#                  (Boersenpreis und negative Preise am 10.10.2026 auf Wunsch
-#                  des Nutzers entfallen)
+#   Netzvorgaben   Status der Grenze, Smart Meter und Steuerbox
+#                  (Boersenpreis, negative Preise und Steuersignal nach
+#                  § 14a EnWG am 10.10.2026 auf Wunsch des Nutzers
+#                  entfallen: die Anlage nimmt an § 14a nicht teil)
 #
 # Rechtliches ist recherchiert (docs/06), nicht am Anschluss geprueft; was
 # fuer die eigene Anlage gilt, sagt der Netzbetreiber.
@@ -167,27 +168,17 @@ script:
   # Netzvorgaben:
   #   limit_active  true = Einspeisegrenze gilt (noch kein Smart Meter mit
   #                 Steuerbox und bestandenem Test)
-  #   p14a_active   true = Steuersignal nach § 14a EnWG liegt an
-  #   p14a_kw       vorgegebene Grenze in kW waehrend des Signals
   #   smart_meter   true = Smart Meter und Steuerbox eingebaut
   # ---------------------------------------------------------------------
   - id: grid_rules
     parameters:
       limit_active: bool
-      p14a_active: bool
-      p14a_kw: float
       smart_meter: bool
     then:
       - lambda: |-
-          auto &num = id(fmt_num);
           lv_label_set_text(id(gr_limit_state), limit_active ? "${feed_limit_pct} % aktiv" : "aufgehoben");
           lv_label_set_text(id(gr_rule_0), limit_active ? "${feed_limit_pct} % aktiv" : "aufgehoben");
-          if (p14a_active)
-            lv_label_set_text(id(gr_rule_1), ("aktiv · " + num(p14a_kw, "%.1f", "-,-") + " kW").c_str());
-          else
-            lv_label_set_text(id(gr_rule_1), "inaktiv");
-          lv_obj_set_style_text_color(id(gr_rule_1), p14a_active ? lv_color_hex($col_warn) : lv_color_hex($col_ink), 0);
-          lv_label_set_text(id(gr_rule_2), smart_meter ? "eingebaut" : "nicht eingebaut");
+          lv_label_set_text(id(gr_rule_1), smart_meter ? "eingebaut" : "nicht eingebaut");
 
 lvgl:
   pages:
@@ -314,13 +305,11 @@ lvgl:
             height: 344
             widgets:
               - label: { x: 0, y: 0, width: 400, height: 17, long_mode: DOT, styles: st_label, text: "NETZVORGABEN" }
-              # Drei Zeilen im Raster 96 ab 30, Inhalt mittig: Beschriftung
-              # +38..+58, Wert +37..+59, Linie +96 (126, 222)
-              - label: { x: 0, y: 68, width: 300, height: 20, long_mode: DOT, text: "Einspeisegrenze", text_font: f_text_s, text_color: $col_ink2 }
-              - label: { id: gr_rule_0, x: 310, y: 67, width: 300, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
-              - obj: { x: 0, y: 126, width: 610, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { x: 0, y: 164, width: 300, height: 20, long_mode: DOT, text: "Steuersignal § 14a", text_font: f_text_s, text_color: $col_ink2 }
-              - label: { id: gr_rule_1, x: 310, y: 163, width: 300, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
-              - obj: { x: 0, y: 222, width: 610, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { x: 0, y: 260, width: 300, height: 20, long_mode: DOT, text: "Smart Meter und Steuerbox", text_font: f_text_s, text_color: $col_ink2 }
-              - label: { id: gr_rule_2, x: 310, y: 259, width: 300, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
+              # Zwei Zeilen im Raster 144 ab 30 (bis 318 wie zuvor drei
+              # zu 96), Inhalt mittig: Beschriftung +62..+82, Wert
+              # +61..+83, Linie +144 (174)
+              - label: { x: 0, y: 92, width: 300, height: 20, long_mode: DOT, text: "Einspeisegrenze", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: gr_rule_0, x: 310, y: 91, width: 300, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
+              - obj: { x: 0, y: 174, width: 610, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 0, y: 236, width: 300, height: 20, long_mode: DOT, text: "Smart Meter und Steuerbox", text_font: f_text_s, text_color: $col_ink2 }
+              - label: { id: gr_rule_1, x: 310, y: 235, width: 300, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }

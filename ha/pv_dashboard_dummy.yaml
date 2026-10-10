@@ -66,9 +66,6 @@ input_boolean:
   pvd_hp_defrost:
     name: "PVD hp_defrost"
     initial: false
-  pvd_p14a_active:
-    name: "PVD p14a_active"
-    initial: false
   einspeisegrenze_aktiv:
     name: "einspeisegrenze_aktiv"
     initial: true
@@ -1141,14 +1138,6 @@ input_number:
     step: 0.01
     initial: 1
     mode: box
-  p14a_grenze_kw:
-    name: "p14a_grenze_kw"
-    min: -30
-    max: 30
-    step: 0.01
-    initial: 4.2
-    mode: box
-    unit_of_measurement: "kW"
 
 template:
   - binary_sensor:
@@ -1192,10 +1181,6 @@ template:
         unique_id: pvd_hp_defrost
         name: "nilan_enteisung"
         state: "{{ is_state('input_boolean.pvd_hp_defrost', 'on') }}"
-      - default_entity_id: binary_sensor.p14a_signal
-        unique_id: pvd_p14a_active
-        name: "p14a_signal"
-        state: "{{ is_state('input_boolean.pvd_p14a_active', 'on') }}"
   - sensor:
       - default_entity_id: sensor.wr1_pv1_leistung
         unique_id: pvd_pv1_power

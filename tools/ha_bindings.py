@@ -239,8 +239,7 @@ if (da(19))
 gruppe(24, 0, "Netzvorgaben", """
 // Grenze ohne Entitaet (nicht belegt): aus der Anlage, feed_limit_pct < 100
 // heisst aktiv (Wunsch des Nutzers, 10.10.2026: kein Helfer in HA)
-id(grid_rules).execute(B_rule_limit ? @rule_limit : (${feed_limit_pct} < 100), @p14a_active, @p14a_kw,
-                       @rule_smart_meter);""")
+id(grid_rules).execute(B_rule_limit ? @rule_limit : (${feed_limit_pct} < 100), @rule_smart_meter);""")
 gruppe(25, 0, "Tageswerte", """
 {
   // Volleinspeisung nur mit PV-Zaehler; ohne Hauszaehler ist der
@@ -454,8 +453,6 @@ z("meter_house_power", "n", "sensor.hauszaehler_leistung", ZW, "W", 5126, hin="W
 NV = [G["Netzvorgaben"]]
 z("rule_limit", "b", "input_boolean.einspeisegrenze_aktiv", NV, demo=True,
   hin="nicht belegt: aktiv, wenn feed_limit_pct < 100")
-z("p14a_active", "b", "binary_sensor.p14a_signal", NV, demo=False)
-z("p14a_kw", "n", "input_number.p14a_grenze_kw", NV, "kW", 4.2)
 z("rule_smart_meter", "b", "input_boolean.smart_meter_eingebaut", NV, demo=False)
 
 # --- Tageswerte und Zaehlerstaende fuer die Statistik -------------------------
