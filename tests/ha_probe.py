@@ -40,6 +40,17 @@ Entitaet weg -> nur der Wert weg):
      bleiben sinnvoll, Unbekanntes kommt unveraendert durch
   N  Einspeisegrenze ohne Entitaet (ha_rule_limit none, ha-test.yaml): aus
      feed_limit_pct der Anlage, 60 -> "60 % aktiv"
+  O  Tageswerte aus der Statistik (ha-test.yaml, ha_<ziel>: statistik):
+     Flaeche 1 aus dem Mittel ihrer Leistung (Stunden + 5 min), Wasch-
+     maschine aus ha_dev2_energy_total, Einspeisung heute aus meter1_total
+     (change); die Probe rechnet aus ihren eigenen Antworten nach
+  P  Summen ohne Entitaet: Erzeugung heute = Summe der Wechselrichter
+     (Wert aendert sich mit, unavailable -> leer), Eigenverbrauch = WR 2..4
+     - Ueberschuss (docs/01) in "Gespart"
+  Q  Stoerung aus dem Statustext (ha_inv3_fault none, inv_fault_hold_s 4):
+     "FAULT" -> Meldung und roter Text, "Normal" -> haelt 4 s, dann weg;
+     Schleife Fault <-> Normal innerhalb der Haltezeit -> eine Meldung,
+     Anzahl 1; "Standby" -> keine
   J  in keinem Label irgendwo "inf" oder "nan", ueber den ganzen Lauf
 
 Liest keine secrets.yaml und nicht .pv-dashboard_anlage.yaml. Ergebnis:
@@ -145,7 +156,13 @@ def zustaende():
     return state
 
 
+SCHRITT = {"5minute": dt.timedelta(minutes=5), "hour": dt.timedelta(hours=1), "day": dt.timedelta(days=1)}
+FAKTOR = {"5minute": 1 / 12, "hour": 1, "day": 24, "month": 600}
+
+
 def statistik(data):
+    """Wie recorder.get_statistics: je ID Zeilen mit start, end, mean (W) und
+    change (kWh) -- beides fuer jede ID, die Vorlage nimmt, was sie braucht."""
     start = as_datetime(data["start_time"])
     per = data["period"]
     out = {}
@@ -155,13 +172,13 @@ def statistik(data):
             if per == "month":
                 nxt = t.replace(month=t.month + 1) if t.month < 12 else t.replace(year=t.year + 1, month=1)
             else:
-                nxt = t + (dt.timedelta(hours=1) if per == "hour" else dt.timedelta(days=1))
+                nxt = t + SCHRITT[per]
             if nxt > now():
                 break
             reihe.append({"start": t.astimezone(dt.timezone.utc).isoformat(),
                           "end": nxt.astimezone(dt.timezone.utc).isoformat(),
-                          "change": round((3 + n) * (1 + (i % 5) * 0.3)
-                                          * (24 if per == "day" else (600 if per == "month" else 1)) / 10, 2)})
+                          "mean": round(400 + 100 * n + 80 * (i % 5), 1),
+                          "change": round((3 + n) * (1 + (i % 5) * 0.3) * FAKTOR[per] / 10, 3)})
             t, i = nxt, i + 1
         out[sid] = reihe
     return {"statistics": out}
@@ -177,6 +194,7 @@ class FakeHA:
         self.select = []           # (entity_id, option) je select.select_option
         self.select_folgt = True   # HA uebernimmt die Option sofort in den Zustand
         self.select_fehler = False  # HA lehnt ab (wie eine unbekannte Option)
+        self.stat_heute = {}       # period -> letzte Antwort auf den Tagesabruf (types mean)
 
     async def verbinden(self, frist=60):
         self.cli = APIClient("127.0.0.1", PORT, None)
@@ -200,6 +218,14 @@ class FakeHA:
         v = ATTR.get((ent, attr)) if attr else self.state.get(ent)
         if v is not None:
             self.cli.send_home_assistant_state(ent, attr, v if isinstance(v, str) else str(v))
+
+    def heute(self, sid, art):
+        """Tageswert, wie das Panel ihn aus den eigenen Antworten rechnen muss."""
+        h = self.stat_heute.get("hour", {}).get("statistics", {}).get(sid, [])
+        m = self.stat_heute.get("5minute", {}).get("statistics", {}).get(sid, [])
+        if art == "m":
+            return sum(e["mean"] for e in h) / 1000 + sum(e["mean"] for e in m) / 12000
+        return sum(e["change"] for e in h) + sum(e["change"] for e in m)
 
     def setzen(self, name, wert):
         self.state[E(name)] = wert
@@ -226,6 +252,8 @@ class FakeHA:
                 resp = {data["entity_id"]: {"forecast": self.stunde if data["type"] == "hourly" else self.tag}}
             elif c.service == "recorder.get_statistics":
                 resp = statistik(data)
+                if "mean" in data.get("types", []):
+                    self.stat_heute[data["period"]] = resp
             else:
                 raise Exception(f"Action {c.service} not found")
             r = parse(render(c.response_template, response=resp)) if c.response_template else resp
@@ -235,9 +263,12 @@ class FakeHA:
             self.aktionen.append((c.service, False))
             self.cli.send_homeassistant_action_response(c.call_id, False, str(ex), b"")
 
-    async def bild(self, name):
+    async def bild(self, name, seite=None):
         if self.cli is None:
             return
+        if seite:
+            await self.dienst("probe_page", {"page": seite})
+            await asyncio.sleep(1.5)
         # snapshot.take ueberschreibt nie: alte Datei vorher weg
         (SHOTS / name).unlink(missing_ok=True)
         await self.dienst("probe_shot", {"name": name})
@@ -313,6 +344,12 @@ class Panel:
 
 def bit(d, platz):
     return (d["dev"] >> dict(hb.PLAETZE)[platz]) & 1
+
+
+def zahl(text):
+    """Erste Zahl mit Dezimalkomma ("W · 6,0 kWh" -> 6.0), sonst None."""
+    m = re.search(r"-?\d+,\d+", text or "")
+    return float(m.group(0).replace(",", ".")) if m else None
 
 
 ERGEBNIS = []
@@ -492,6 +529,84 @@ async def ablauf(panel, ha, bilder):
     ha.select_folgt = True
     if bilder:
         await ha.bild("probe_4_wallbox.bmp")
+
+    # O: Tageswerte aus der Statistik -- erst Stunden, dann 5 min ab deren Ende
+    ende = time.monotonic() + 60
+    while "5minute" not in ha.stat_heute and time.monotonic() < ende:
+        await asyncio.sleep(0.5)
+    pruefe("O", "Tagesabruf: Stunden, dann 5 min (types mean, change)",
+           "hour" in ha.stat_heute and "5minute" in ha.stat_heute, list(ha.stat_heute))
+    await asyncio.sleep(2.5)
+    for name, sid, art, feld in [
+            ("Flaeche 1 aus Mittel der Leistung", E("pv1_power"), "m", "pv_sub1"),
+            ("Waschmaschine aus ha_dev2_energy_total", "sensor.waschmaschine_energie_gesamt", "c", "dev2_d"),
+            ("Einspeisung heute aus meter1_total", E("meter1_total"), "c", "meter1_today")]:
+        soll = ha.heute(sid, art)
+        ist = zahl(panel.letzte["txt"][feld])
+        pruefe("O", f"{name}: {soll:.2f} kWh", ist is not None and soll > 0 and abs(ist - soll) <= 0.051,
+               repr(panel.letzte["txt"][feld]))
+    # P: Erzeugung heute = Summe der Wechselrichter, Eigenverbrauch nach docs/01
+    t = panel.letzte["txt"]
+    inv = [hb.NAMEN[f"inv{k}_energy"]["demo"] for k in range(1, 5)]
+    pruefe("P", f"Erzeugung heute ohne Entitaet: Summe WR {sum(inv):.1f}", t["val_gen"] == f"{sum(inv):.1f}".replace(
+        ".", ","), repr(t["val_gen"]))
+    eigen = sum(inv[1:]) - hb.NAMEN["meter4_today"]["demo"]
+    gespart = f"+{eigen * 0.30:.2f} €".replace(".", ",")
+    pruefe("P", f"Eigenverbrauch = WR 2..4 - Ueberschuss = {eigen:.1f} kWh -> Gespart {gespart}",
+           gespart in t["money_split"], repr(t["money_split"]))
+    ha.setzen("inv1_energy", "40.0")
+    soll = f"{40.0 + sum(inv[1:]):.1f}".replace(".", ",")
+    d = await panel.warten(lambda d: d["txt"]["val_gen"] == soll, 5)
+    pruefe("P", f"WR 1 aendert sich -> Summe {soll}", d, panel.letzte["txt"]["val_gen"])
+    ha.setzen("inv4_energy", "unavailable")
+    d = await panel.warten(lambda d: d["txt"]["val_gen"] == "", 5)
+    pruefe("P", "Tageswert eines WR unavailable -> Summe leer", d, repr(panel.letzte["txt"]["val_gen"]))
+    ha.setzen("inv4_energy", str(inv[3]))
+    d = await panel.warten(lambda d: d["txt"]["val_gen"] == soll, 5)
+    pruefe("P", "Wert kommt wieder -> Summe wieder da", d, panel.letzte["txt"]["val_gen"])
+    if bilder:
+        await ha.bild("probe_5_pv.bmp", "pv")
+        await ha.bild("probe_6_haus.bmp", "house")
+        await ha.bild("probe_7_netz.bmp", "grid")
+        await ha.bild("probe_8_uebersicht.bmp", "overview")
+
+    # Q: Stoerung aus dem Statustext (WR 3)
+    def stoerung(d):
+        return [a for a in d["alerts"] if a[0].lower().endswith(": fault")]
+
+    pruefe("Q", "Ausgang Normal: keine Stoerung WR 3", not stoerung(panel.letzte), panel.letzte["alerts"])
+    ha.setzen("inv3_status", "FAULT")
+    d = await panel.warten(lambda d: stoerung(d) and d["txt"]["inv_sub3"] == "FAULT", 4)
+    pruefe("Q", "Text FAULT (Gross-/Kleinschreibung egal) -> Meldung, Zweitzeile FAULT", d,
+           (panel.letzte["alerts"], panel.letzte["txt"]["inv_sub3"]))
+    if bilder:
+        await ha.bild("probe_9_meldungen.bmp", "alerts")
+        await ha.bild("probe_10_pv_stoerung.bmp", "pv")
+        await ha.dienst("probe_page", {"page": "overview"})
+    ha.setzen("inv3_status", "Normal")
+    await asyncio.sleep(2)
+    pruefe("Q", "Normal: Meldung haelt (inv_fault_hold_s 4)", stoerung(panel.letzte), panel.letzte["alerts"])
+    d = await panel.warten(lambda d: not stoerung(d) and d["txt"]["inv_sub3"].startswith("W ·"), 8)
+    pruefe("Q", "nach der Haltezeit: Meldung weg, Zweitzeile wieder normal", d,
+           (panel.letzte["alerts"], panel.letzte["txt"]["inv_sub3"]))
+    ha.setzen("inv3_status", "Fault")
+    d = await panel.warten(lambda d: stoerung(d), 4)
+    n0 = len(panel.alle)
+    anzahl = stoerung(panel.letzte)[0][1] if d else -1
+    for _ in range(3):
+        ha.setzen("inv3_status", "Normal")
+        await asyncio.sleep(1.2)
+        ha.setzen("inv3_status", "Fault")
+        await asyncio.sleep(1.2)
+    zeilen = panel.alle[n0:]
+    pruefe("Q", f"Schleife Fault <-> Normal: Meldung durchgehend offen, Anzahl bleibt {anzahl}",
+           d and zeilen and all(len(stoerung(x)) == 1 and stoerung(x)[0][1] == anzahl for x in zeilen),
+           [x["alerts"] for x in zeilen[-2:]])
+    ha.setzen("inv3_status", "Standby")
+    d = await panel.warten(lambda d: not stoerung(d), 9)
+    pruefe("Q", "Standby (kein Stoerungstext): nach der Haltezeit weg", d, panel.letzte["alerts"])
+    await asyncio.sleep(2)
+    pruefe("Q", "Standby bleibt ohne Meldung", not stoerung(panel.letzte), panel.letzte["alerts"])
 
     # H
     await ha.trennen()

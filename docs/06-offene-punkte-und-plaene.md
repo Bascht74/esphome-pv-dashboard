@@ -408,6 +408,21 @@ Offen am Datenweg:
       PV, Speicher, Wallboxen, Wärmepumpe, Haus).
 - [ ] **Laufende Stunde** fehlt in `house_history` und `day_curve`, bis Home Assistant
       die Stundenstatistik geschrieben hat (Minute 2 der Folgestunde).
+- [x] **Fehlende Tageswerte ohne Helfer** (10.10.2026, Abgleich mit dem eigenen Home
+      Assistant): `ha_<ziel>: statistik` rechnet `ha_pv<N>_energy` aus dem Mittel von
+      `ha_pv<N>_power`, `ha_dev<N>_energy` aus `ha_dev<N>_energy_total` und
+      `ha_meter<N>_today` aus `ha_meter<N>_total` (Stunden ab 0 Uhr plus 5 min der
+      laufenden Stunde, alle 5 min, Verzug bis etwa 6 min); `ha_pv_energy_today` und
+      `ha_selfuse_energy_today` ergeben sich ohne Entität aus den Wechselrichtern
+      (Eigenverbrauch nach Dokument 01); `ha_inv<N>_fault` darf aus dem Statustext
+      kommen (`inv_fault_texts`, Haltezeit `inv_fault_hold_s`). Einzelheiten in
+      Dokument 03, „Datenweg“. Geprüft nur gegen das nachgebaute Home Assistant.
+- [ ] **Am echten Home Assistant prüfen:** Form der Statistik-Antwort (`start`/`end` als
+      Text, fehlt `change`/`mean` bei 0?), `period: 5minute` mit `start_time` aus dem
+      Panel, Größe der Antwort; Flächenwerte aus Stundenmitteln der MPPT-Leistung sind
+      DC und liegen um die Wandlungsverluste über dem AC-Tagesertrag des Wechselrichters.
+- [ ] **Summe mehrerer Statistik-IDs je Reihe** (für `ha_pv_energy_total`, falls es
+      keine einzelne Gesamt-Entität gibt) – nicht gebaut, Rückfrage offen.
 
 **Tagesreihe.** In `record_hour` steht eine einzige auskommentierte Quellzeile für die
 Erzeugung der abgelaufenen Stunde in kWh: `// kwh = id(<Erzeugungssensor>).state;`. Solange

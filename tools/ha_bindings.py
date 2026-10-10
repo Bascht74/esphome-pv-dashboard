@@ -90,6 +90,33 @@ SO LAEUFT EIN WERT (docs/03, Abschnitt "Datenweg"):
    staende laufen mit der Zeit hoch (fuer recorder.get_statistics), Texte
    und Zeitpunkte fest, dazu eine Template-Wetter-Entitaet mit Vorhersagen.
 
+7. TAGESWERTE OHNE ENTITAET (Wunsch des Nutzers, 10.10.2026: keine neuen
+   Helfer in Home Assistant).
+   a) Aus der Statistik (TAGES_STAT): ha_<ziel>: statistik statt einer ID
+      (Gross-/Kleinschreibung egal) fuer ha_pv<N>_energy (Mittel von
+      ha_pv<N>_power, W), ha_dev<N>_energy (Zuwachs von
+      ha_dev<N>_energy_total, Standard none) und ha_meter<N>_today
+      (Zuwachs von ha_meter<N>_total). Der Sensor des Ziels hoert dann auf
+      die Ersatz-ID; ha_fetch_today holt alle 5 min (ab Minute 1) die
+      vollen Stunden ab 0 Uhr (period hour) und danach die laufende Stunde
+      (period 5minute, ab dem Ende der letzten Stunde) und schreibt die
+      Summe mit publish_state in den Sensor -- durch dessen Faktor, mit
+      dessen Gruppenbit. Leistung: Summe mean / 1000 bzw. / 12000 = kWh.
+      Abgefragt werden nur die Quellen der Ziele auf statistik (zur
+      Compile-Zeit), die Antwort ist eine Zahl je Platz.
+   b) Gruppe Tageswerte: ha_pv_energy_today nicht belegt -> Summe der
+      belegten Wechselrichter, deren Geraet da ist (keiner -> leer);
+      ha_selfuse_energy_today nicht belegt -> nach docs/01
+      Hybrid-Erzeugung (WR 2..4) - Ueberschuss, ohne WR 2..4 Erzeugung -
+      Volleinspeisung - Ueberschuss, nie unter 0.
+
+8. STOERUNG AUS DEM STATUSTEXT: ha_inv<N>_fault nicht belegt und
+   ha_inv<N>_status belegt -> ein Text aus inv_fault_texts (Standard
+   "Fault,Alarm", ganzer Text, Gross-/Kleinschreibung egal) ist eine
+   Stoerung wie ein "an" der Entitaet (pv_status, Meldung). Sie haelt
+   inv_fault_hold_s (Standard 300 s) ueber den letzten Treffer hinaus:
+   Eine Schleife Normal <-> Fault bleibt eine Meldung.
+
 Kennzeichen in der Tabelle: [A] = Annahme bzw. Vorschlag (Name, Einheit oder
 Vorzeichen nicht am eigenen Home Assistant geprueft), Quelle der Vorschlaege:
 Recherche vom 25.09.2026 (datenweg/entitaeten.md im Claude-Projekt).
@@ -132,11 +159,46 @@ def frei(sub):
 
 
 def j_entity(sub):
+    if sub[3:] in STAT_ZIEL:
+        # Tageswert aus der Statistik: kein eigener Sensor in HA (Punkt 7)
+        return f"${{ '{ERSATZ_ID}' if {frei(sub)} or {stat(sub)} else {sub} }}"
     return f"${{ '{ERSATZ_ID}' if {frei(sub)} else {sub} }}"
 
 
 def j_belegt(sub):
     return f"${{ 'false' if {frei(sub)} else 'true' }}"
+
+
+# ---------------------------------------------------------------------------
+# Tageswerte aus der Statistik (Punkt 7). ha_<ziel>: statistik heisst: das
+# Panel rechnet den Tageswert aus recorder.get_statistics einer anderen
+# Entitaet -- m = Mittel einer Leistung in W (Summe der Stundenmittel / 1000),
+# c = Zuwachs eines Zaehlerstands in kWh. Reihenfolge = Platz in den Reihen.
+# ---------------------------------------------------------------------------
+STAT_WERT = "statistik"
+TAGES_STAT = ([(f"pv{i}_energy", f"pv{i}_power", "m") for i in range(1, 9)]
+              + [(f"dev{d}_energy", f"dev{d}_energy_total", "c") for d in range(1, 6)]
+              + [(f"meter{m}_today", f"meter{m}_total", "c") for m in range(5)])
+STAT_ZIEL = {z_ for z_, _, _ in TAGES_STAT}
+
+
+def stat(sub):
+    """Jinja-Bedingung: Substitution sub steht auf statistik."""
+    return f"({sub} | string | lower | trim) == '{STAT_WERT}'"
+
+
+def stat_an(ziel, quelle):
+    """Jinja-Bedingung: Ziel aus der Statistik, Quelle belegt."""
+    return f"({stat('ha_' + ziel)}) and not ({frei('ha_' + quelle)})"
+
+
+def j_stat_quelle(ziel, quelle):
+    """Statistik-ID der Quelle, wenn das Ziel aus der Statistik kommt, sonst ''."""
+    return f"${{ ha_{quelle} if {stat_an(ziel, quelle)} else '' }}"
+
+
+def j_stat_an(ziel, quelle):
+    return f"${{ 'true' if {stat_an(ziel, quelle)} else 'false' }}"
 
 # ---------------------------------------------------------------------------
 # Gruppen: Bit in ha_dirty, Geraetemaske (0 = immer), Name, C++-Aufruf.
@@ -168,7 +230,11 @@ for k in range(4):
     gruppe(8 + k, 1 << (8 + k), f"Wechselrichter {n}", f"""
 id(pv_update).execute({k}, -1, @inv{n}_power, @inv{n}_energy);
 id(ov_inverter).execute({k}, @inv{n}_power, @inv{n}_energy);
-id(pv_status).execute({k}, !@inv{n}_fault, @inv{n}_status, @inv{n}_temp);""")
+{{
+  // Stoerung: an/aus-Entitaet, sonst der Statustext (ha_inv_fault_txt, Punkt 8)
+  const bool f = B_inv{n}_fault ? @inv{n}_fault : ((id(ha_inv_fault_txt) >> {k}) & 1u);
+  id(pv_status).execute({k}, !f, (f && !B_inv{n}_fault) ? id(ha_inv_fault_msg)[{k}] : @inv{n}_status, @inv{n}_temp);
+}}""")
 for k in range(3):
     n = k + 1
     gruppe(12 + k, 1 << (12 + k), f"Speicher {n}", f"""
@@ -247,8 +313,45 @@ gruppe(25, 0, "Tageswerte", """
   const float full = da(18) ? @meter2_today : 0.0f;
   const float feed = @meter1_today;
   const float surplus = da(19) ? @meter4_today : sub(feed, full);
-  id(ov_totals).execute(@pv_energy_today, @home_energy_today, feed, @meter0_today, full, surplus, @solcast_remaining);
-  id(money_update).execute(full, surplus, @selfuse_energy_today, @meter0_today);
+  // Ohne eigene Entitaet (nicht belegt, Punkt 7): Erzeugung = Summe der
+  // belegten Wechselrichter, deren Geraet da ist (keiner -> leer);
+  // Eigenverbrauch nach docs/01 = Hybrid-Erzeugung - Ueberschuss; die
+  // Hybrid-Erzeugung ist die Summe der WR 2..4 (alles ausser der
+  // Volleinspeisung), ohne sie Erzeugung - Volleinspeisung
+  float gen = @pv_energy_today, hyb = NAN;
+  {
+    float s = NAN;
+    bool alle = false, haus = false;
+    if (B_inv1_energy && da(8)) {
+      s = add(s, @inv1_energy);
+      alle = true;
+    }
+    if (B_inv2_energy && da(9)) {
+      const float e = @inv2_energy;
+      s = add(s, e);
+      hyb = add(hyb, e);
+      alle = haus = true;
+    }
+    if (B_inv3_energy && da(10)) {
+      const float e = @inv3_energy;
+      s = add(s, e);
+      hyb = add(hyb, e);
+      alle = haus = true;
+    }
+    if (B_inv4_energy && da(11)) {
+      const float e = @inv4_energy;
+      s = add(s, e);
+      hyb = add(hyb, e);
+      alle = haus = true;
+    }
+    if (!B_pv_energy_today)
+      gen = alle ? s : LEER;
+    if (!haus)
+      hyb = sub(gen, full);
+  }
+  const float own = B_selfuse_energy_today ? @selfuse_energy_today : pos(sub(hyb, surplus));
+  id(ov_totals).execute(gen, @home_energy_today, feed, @meter0_today, full, surplus, @solcast_remaining);
+  id(money_update).execute(full, surplus, own, @meter0_today);
 }""")
 gruppe(26, 0, "Prognose", """
 {
@@ -301,13 +404,17 @@ for i in range(1, 9):
     w, m = (i - 1) // 2 + 1, (i - 1) % 2 + 1
     z(f"pv{i}_power", "n", f"sensor.wr{w}_pv{m}_leistung", [i - 1], "W", PV_DEMO[i - 1][0],
       hin="W, Flaeche/Modul am Wechselrichter %d, MPPT %d [A]" % (w, m))
-    z(f"pv{i}_energy", "n", f"sensor.wr{w}_pv{m}_ertrag_heute", [i - 1], "kWh", PV_DEMO[i - 1][1], hin="kWh heute [A]")
+    z(f"pv{i}_energy", "n", f"sensor.wr{w}_pv{m}_ertrag_heute", [i - 1], "kWh", PV_DEMO[i - 1][1],
+      hin="kWh heute [A]; statistik: aus pv%d_power" % i)
 INV_DEMO = [(6214, 38.5, 41.5), (588, 3.9, 38.0), (7835, 58.2, 39.2), (5231, 46.4, 40.1)]
 for k in range(1, 5):
     b = 7 + k
     z(f"inv{k}_power", "n", f"sensor.wr{k}_leistung", [b], "W", INV_DEMO[k - 1][0], hin="W [A]")
-    z(f"inv{k}_energy", "n", f"sensor.wr{k}_ertrag_heute", [b], "kWh", INV_DEMO[k - 1][1], hin="kWh heute [A]")
-    z(f"inv{k}_fault", "b", f"binary_sensor.wr{k}_stoerung", [b], demo=False, hin="an = Stoerung [A]")
+    # auch Tageswerte: Summe, wenn ha_pv_energy_today nicht belegt ist
+    z(f"inv{k}_energy", "n", f"sensor.wr{k}_ertrag_heute", [b, G["Tageswerte"]], "kWh", INV_DEMO[k - 1][1],
+      hin="kWh heute [A]")
+    z(f"inv{k}_fault", "b", f"binary_sensor.wr{k}_stoerung", [b], demo=False,
+      hin="an = Stoerung [A]; nicht belegt: Statustext, inv_fault_texts")
     z(f"inv{k}_status", "t", f"sensor.wr{k}_status", [b], demo="Normal", hin="Fehlertext [A]")
     z(f"inv{k}_temp", "n", f"sensor.wr{k}_temperatur", [b], "°C", INV_DEMO[k - 1][2], hin="[A]")
 
@@ -415,7 +522,11 @@ for d, (geraet, w, kwh) in enumerate(
         [("backofen", 0, 1.2), ("waschmaschine", 0, 0.8), ("spuelmaschine", 0, 1.1), ("trockner", 0, 0.0),
          ("grundlast", 312, 7.5)], start=1):
     z(f"dev{d}_power", "n", f"sensor.{geraet}_leistung", [VB] + ([HN] if d == 5 else []), "W", w, hin="[A]")
-    z(f"dev{d}_energy", "n", f"sensor.{geraet}_energie_heute", [VB], "kWh", kwh, hin="[A]")
+    z(f"dev{d}_energy", "n", f"sensor.{geraet}_energie_heute", [VB], "kWh", kwh,
+      hin="[A]; statistik: aus dev%d_energy_total" % d)
+for d in range(1, 6):
+    # Zaehlerstand nur fuer ha_dev<N>_energy: statistik (Punkt 7), Standard none
+    z(f"dev{d}_energy_total", "z", "none", [], "kWh", 0.1, hin="kWh, Zaehler fuer ha_dev%d_energy: statistik" % d)
 
 # --- Netz (Shelly Pro 3EM, Geraetename "hausanschluss" [A]) --------------------
 NZ = [G["Netz"]]
@@ -445,7 +556,8 @@ ZW_NAME = ["Hausanschluss Bezug", "Hausanschluss Einspeisung", "PV-Zaehler Einsp
            "Hauszaehler Einspeisung"]
 for m, (stand, heute, demo, rate) in enumerate(ZAEHLER):
     z(f"meter{m}_total", "z", stand, ZW, "kWh", rate, hin=f"kWh, {ZW_NAME[m]} [A]")
-    z(f"meter{m}_today", "n", heute, ZW + [TW], "kWh", demo, hin="utility_meter-Helfer [A]")
+    z(f"meter{m}_today", "n", heute, ZW + [TW], "kWh", demo,
+      hin="utility_meter-Helfer [A]; statistik: aus meter%d_total" % m)
 z("meter_pv_power", "n", "sensor.pv_zaehler_leistung", ZW, "W", 6214, hin="W, + = Einspeisung [A]")
 z("meter_house_power", "n", "sensor.hauszaehler_leistung", ZW, "W", 5126, hin="W, + = Einspeisung [A]")
 
@@ -648,6 +760,41 @@ def jinja_statistik(zr):
     return "\n".join(teile)
 
 
+def stat_ids():
+    """statistic_ids des Tagesabrufs: nur die Quellen der Ziele auf statistik."""
+    return "{{ [" + ", ".join(f"'{j_stat_quelle(z_, q)}'" for z_, q, _ in TAGES_STAT) + "] | select | list }}"
+
+
+def jinja_heute(teiler):
+    """Tageswerte aus der Statistik (Punkt 7): je Platz von TAGES_STAT die
+    Summe der Mittel (m, W -> kWh mit teiler) bzw. der Zuwaechse (c, kWh),
+    '' ohne Zeile; dazu das Ende der letzten Zeile (Start des 5-min-Abrufs)."""
+    q = ",\n".join(f"['{j_stat_quelle(z_, quelle)}', '{art}']" for z_, quelle, art in TAGES_STAT)
+    return "\n".join([
+        "{%- set q = [",
+        q,
+        "] -%}",
+        "{%- set o = namespace(v=[], end=today_at('00:00')) -%}",
+        "{%- for x in q -%}",
+        "{%- set ns = namespace(s=0, n=0) -%}",
+        "{%- for e in (response.statistics.get(x[0], []) if x[0] else []) -%}",
+        "{%- set w = e.get('mean') if x[1] == 'm' else e.get('change') -%}",
+        "{%- set ns.n = ns.n + 1 -%}",
+        "{%- if w is number -%}",
+        "{%- set ns.s = ns.s + w -%}",
+        "{%- endif -%}",
+        "{%- set t = e.get('end') -%}",
+        "{%- set t = as_datetime(t) if t is string else t -%}",
+        "{%- if t and t > o.end -%}",
+        "{%- set o.end = t -%}",
+        "{%- endif -%}",
+        "{%- endfor -%}",
+        f"{{%- set o.v = o.v + [(((ns.s / {teiler}) if x[1] == 'm' else ns.s) | round(3)) if ns.n else ''] -%}}",
+        "{%- endfor -%}",
+        "{{ {'v': o.v | join(','), 'end': o.end.isoformat()} | tojson }}",
+    ])
+
+
 STUNDEN_T0 = "now().replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)"
 JINJA_STUNDEN = "\n".join([
     f"{{%- set t0 = {STUNDEN_T0} -%}}",
@@ -821,6 +968,93 @@ if (!dc.empty() && jetzt.is_valid() && dc != id(day_curve).state) {
 }"""
 
 
+N_STAT = len(TAGES_STAT)
+
+# Stoerung aus dem Statustext (Punkt 8), im 1-s-Intervall vor der Drosselung
+STOERTEXT = einr("""// Stoerung aus dem Statustext: ha_inv<N>_fault nicht belegt, ha_inv<N>_status
+// belegt. Ein Text aus inv_fault_texts (ganzer Text, ohne Gross-/Klein-
+// schreibung) setzt das Bit sofort; es faellt erst, wenn inv_fault_hold_s
+// lang keiner kam. Aenderung -> Gruppe des Wechselrichters neu.
+{
+  constexpr bool AUS_TEXT[4] = {""" + ", ".join(f"!B_inv{n}_fault && B_inv{n}_status" for n in range(1, 5)) + """};
+  static std::vector<std::string> liste;
+  static uint32_t zuletzt[4] = {0, 0, 0, 0};
+  auto klein = [](const std::string &s) -> std::string {
+    const size_t a = s.find_first_not_of(" \\t"), b = s.find_last_not_of(" \\t");
+    std::string t = a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
+    for (auto &c : t)
+      c = tolower((unsigned char) c);
+    return t;
+  };
+  if (liste.empty()) {
+    for (const auto &x : id(ha_split)("${inv_fault_texts}"))
+      if (!klein(x).empty())
+        liste.push_back(klein(x));
+    if (liste.empty())
+      liste.push_back(std::string("\\x01"));  // leere Liste: nie ein Treffer
+  }
+  text_sensor::TextSensor *const st[4] = {""" + ", ".join(f"id(ha_inv{n}_status)" for n in range(1, 5)) + """};
+  const uint32_t ms = millis();
+  for (int k = 0; k < 4; k++) {
+    if (!AUS_TEXT[k])
+      continue;
+    const bool hit = T_ok(st[k]) && std::find(liste.begin(), liste.end(), klein(st[k]->state)) != liste.end();
+    if (hit) {
+      zuletzt[k] = ms | 1u;
+      id(ha_inv_fault_msg)[k] = st[k]->state;
+    }
+    const bool f = zuletzt[k] != 0 && (hit || ms - zuletzt[k] < (uint32_t) (${inv_fault_hold_s}) * 1000u);
+    if (!f)
+      zuletzt[k] = 0;
+    if (f != (bool) ((id(ha_inv_fault_txt) >> k) & 1u)) {
+      id(ha_inv_fault_txt) ^= 1u << k;
+      id(ha_dirty) |= 1u << (8 + k);
+    }
+  }
+}""", 10)
+
+ERFOLG_HEUTE_H = f"""
+// Volle Stunden ab 0 Uhr; dann die 5-min-Werte ab dem Ende der letzten Stunde
+const auto v = L(S("v"));
+for (size_t k = 0; k < {N_STAT}; k++)
+  id(ha_stat_h)[k] = F(v, k);
+id(ha_stat_end) = S("end");
+id(ha_fetch_today_5min).execute();"""
+
+ERFOLG_HEUTE_M = f"""
+const auto v = L(S("v"));
+for (size_t k = 0; k < {N_STAT}; k++)
+  id(ha_stat_m)[k] = F(v, k);
+id(ha_stat_today_set).execute();"""
+
+FEHLER_HEUTE_M = """- lambda: |-
+    ESP_LOGW("ha", "Tageswerte 5 min: %s", error.c_str());
+    id(ha_stat_m).fill(NAN);
+- script.execute: ha_stat_today_set"""
+
+
+def stat_setzen():
+    """Skript ha_stat_today_set: Stunden + 5 min in die Sensoren der Ziele."""
+    an = ", ".join(j_stat_an(z_, q) for z_, q, _ in TAGES_STAT)
+    ziele = ", ".join(f"id(ha_{z_})" for z_, _, _ in TAGES_STAT)
+    return f"""
+  # Tageswerte aus der Statistik in die Sensoren der Ziele (ha_<ziel>:
+  # statistik): volle Stunden + laufende Stunde; beide ohne Zeile -> NAN
+  # (leer). publish_state laeuft durch den Faktor des Ziels und setzt sein
+  # Gruppenbit wie ein Wert aus Home Assistant.
+  - id: ha_stat_today_set
+    then:
+      - lambda: |-
+          constexpr bool AN[{N_STAT}] = {{{an}}};
+          sensor::Sensor *const ZIEL[{N_STAT}] = {{{ziele}}};
+          for (size_t k = 0; k < {N_STAT}; k++) {{
+            if (!AN[k])
+              continue;
+            const float h = id(ha_stat_h)[k], m = id(ha_stat_m)[k];
+            ZIEL[k]->publish_state(std::isnan(h) ? m : (std::isnan(m) ? h : h + m));
+          }}"""
+
+
 MODUS_SET = '''
   # Modus-Schalter der Seite Wallboxen: wallbox_mode_set
   # (.pv-dashboard_page_wallbox.yaml) laesst den getippten Teil leuchten;
@@ -951,6 +1185,21 @@ def panel_bauen():
     for e in TABELLE:
         if mit_faktor(e):
             w(f'  {faktor_sub(e)}: "1"')
+    w("  # Tageswert aus der Statistik: ha_<ziel>: statistik statt einer ID\n"
+      "  # (Gross-/Kleinschreibung egal). Das Panel rechnet ihn dann aus\n"
+      "  # recorder.get_statistics, ab 0 Uhr, alle 5 min (Stand: letzte volle\n"
+      "  # 5 min); Faktor des Ziels gilt weiter. Ziel und Quelle:")
+    w("  #   ha_pv<N>_energy   Mittel von ha_pv<N>_power in W, Summe der\n"
+      "  #                     Stundenmittel / 1000 = kWh\n"
+      "  #   ha_dev<N>_energy  Zuwachs von ha_dev<N>_energy_total (Zaehlerstand)\n"
+      "  #   ha_meter<N>_today Zuwachs von ha_meter<N>_total")
+    w("  # Stoerung aus dem Statustext: Ist ha_inv<N>_fault nicht belegt und\n"
+      "  # ha_inv<N>_status belegt, gilt ein Text aus dieser Liste (kommagetrennt,\n"
+      "  # ganzer Text, Gross-/Kleinschreibung egal) als Stoerung. Sie endet erst,\n"
+      "  # wenn inv_fault_hold_s Sekunden lang keiner davon kam -- eine Schleife\n"
+      "  # Normal <-> Fault bleibt so eine Meldung.")
+    w('  inv_fault_texts: "Fault,Alarm"')
+    w('  inv_fault_hold_s: "300"')
     w("")
     # --- globals
     w("""globals:
@@ -982,6 +1231,27 @@ def panel_bauen():
     restore_value: false
   - id: ha_wx_stamp
     type: std::string
+    restore_value: false
+  # Tageswerte aus der Statistik (ha_<ziel>: statistik), Plaetze wie
+  # TAGES_STAT im Werkzeug: volle Stunden ab 0 Uhr, laufende Stunde aus
+  # 5-min-Werten, Ende der letzten vollen Stunde (Start des 5-min-Abrufs)
+  - id: ha_stat_h
+    type: std::array<float, @N_STAT@>
+    restore_value: false
+  - id: ha_stat_m
+    type: std::array<float, @N_STAT@>
+    restore_value: false
+  - id: ha_stat_end
+    type: std::string
+    restore_value: false
+  # Stoerung aus dem Statustext (ha_inv<N>_fault nicht belegt): Bit je
+  # Wechselrichter, gehalten fuer inv_fault_hold_s; letzter Stoerungstext
+  - id: ha_inv_fault_txt
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: ha_inv_fault_msg
+    type: std::array<std::string, 4>
     restore_value: false
   # "a,b,c" -> {"a", "b", "c"}
   - id: ha_split
@@ -1059,7 +1329,7 @@ def panel_bauen():
         snprintf(b, sizeof(b), "%s %02d.%02d.", TAG_NAME[(t.day_of_week + 6) % 7], t.day_of_month, t.month);
         return std::string(b);
       }
-""")
+""".replace("@N_STAT@", str(N_STAT)))
     # --- Sensoren
     teile = {"n": [], "z": [], "t": [], "b": []}
     for e in TABELLE:
@@ -1141,6 +1411,26 @@ def panel_bauen():
               ("start_time", "{{ (" + STUNDEN_T0 + ").isoformat() }}"),
               ("types", "{{ ['change'] }}"), ("units", "{{ {'energy': 'kWh'} }}")],
              JINJA_STUNDEN, ERFOLG_STUNDEN, "Statistik 24 h"))
+    w("""
+  # Tageswerte aus der Statistik (ha_<ziel>: statistik, Liste unter
+  # substitutions): erst die vollen Stunden ab 0 Uhr (Leistung: mean in W,
+  # Zaehler: change in kWh), dann ab dem Ende der letzten Stunde die
+  # 5-min-Werte der laufenden Stunde. Nur die Quellen der Ziele auf
+  # statistik werden abgefragt; die Antwort ist eine Zahl je Platz.
+  - id: ha_fetch_today
+    then:""")
+    daten = [("statistic_ids", stat_ids()), ("types", "{{ ['mean', 'change'] }}"),
+             ("units", "{{ {'energy': 'kWh', 'power': 'W'} }}")]
+    w(aktion("recorder.get_statistics", [("period", "hour")],
+             [daten[0], ("start_time", "{{ today_at('00:00').isoformat() }}")] + daten[1:],
+             jinja_heute(1000), ERFOLG_HEUTE_H, "Tageswerte Stunden"))
+    w("""
+  - id: ha_fetch_today_5min
+    then:""")
+    w(aktion("recorder.get_statistics",
+             [("period", "5minute"), ("start_time", "!lambda 'return id(ha_stat_end);'")],
+             daten, jinja_heute(12000), ERFOLG_HEUTE_M, "Tageswerte 5 min", fehler_extra=FEHLER_HEUTE_M))
+    w(stat_setzen())
     w(MODUS_SET % {"b1": j_belegt("ha_wb1_mode"), "b2": j_belegt("ha_wb2_mode"),
                    "dirty": (1 << G["Wallbox 1"]) | (1 << G["Wallbox 2"])})
     # --- Intervalle
@@ -1191,6 +1481,7 @@ def panel_bauen():
             id(dev_apply).execute();
             id(ha_dirty) = 0xFFFFFFFFu;
           }
+@STOERTEXT@
           const uint32_t d = id(ha_dirty);
           if (d == 0)
             return;
@@ -1217,7 +1508,7 @@ def panel_bauen():
           auto when = [](const std::string &s, bool mit_tag) -> std::string {
             return s == " " ? s : id(ha_when)(s, mit_tag);
           };
-          const ESPTime jetzt = id(dash_time).now();""")
+          const ESPTime jetzt = id(dash_time).now();""".replace("@STOERTEXT@", STOERTEXT))
     for g in GRUPPEN:
         mit = [e for e in TABELLE if g["bit"] in e["gr"]]
         if not mit:
@@ -1235,19 +1526,21 @@ def panel_bauen():
     w("""  # Abrufe: 20 s nach dem Verbinden die Prognosen, 30 s danach die
   # Statistik; dann Prognosen alle 30 min, Statistik zu jeder neuen Stunde
   # ab Minute 2 (Home Assistant schreibt die Stundenstatistik kurz nach der
-  # vollen Stunde). Beim Trennen beginnt alles von vorn.
+  # vollen Stunde), Tageswerte aus der Statistik alle 5 min ab Minute 1.
+  # Beim Trennen beginnt alles von vorn.
   - interval: 10s
     then:
       - lambda: |-
           static bool war = false;
           static uint32_t seit = 0, fc_zuletzt = 0;
-          static int stat_schluessel = -1;
+          static int stat_schluessel = -1, heute_schluessel = -1;
           const bool ist = api::global_api_server != nullptr && api::global_api_server->is_connected_with_state_subscription();
           if (ist != war) {
             war = ist;
             seit = millis();
             fc_zuletzt = 0;
             stat_schluessel = -1;
+            heute_schluessel = -1;
           }
           const bool bereit = ist && millis() - seit >= 10000;
           if (bereit != id(ha_ready)) {
@@ -1267,6 +1560,14 @@ def panel_bauen():
           if (schluessel != stat_schluessel && (stat_schluessel < 0 || !t.is_valid() || t.minute >= 2)) {
             stat_schluessel = schluessel;
             id(ha_fetch_stats).execute();
+          }
+          // Tageswerte aus der Statistik: alle 5 min ab Minute 1 (Home
+          // Assistant schreibt die 5-min-Statistik kurz nach dem Takt)
+          constexpr bool S_ANY = """ + " || ".join(j_stat_an(z_, q) for z_, q, _ in TAGES_STAT) + """;
+          const int k5 = t.is_valid() ? t.day_of_year * 288 + t.hour * 12 + t.minute / 5 : 0;
+          if (S_ANY && k5 != heute_schluessel && (heute_schluessel < 0 || !t.is_valid() || t.minute % 5 >= 1)) {
+            heute_schluessel = k5;
+            id(ha_fetch_today).execute();
           }""")
     return "\n".join(out) + "\n"
 
@@ -1304,6 +1605,8 @@ def dummy_bauen():
         if e["attr"]:
             continue
         ent = e["ent"]
+        if ent == "none":
+            continue  # Standard nicht belegt (ha_dev<N>_energy_total)
         dom, obj = ent.split(".", 1)
         uid = "pvd_" + e["name"]
         if dom in ("weather", "sun"):

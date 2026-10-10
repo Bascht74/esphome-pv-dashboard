@@ -66,7 +66,11 @@ Ladestand): Liefert sie keinen gültigen Wert, verschwindet die ganze Grafik des
 Geräts, die übrigen bleiben an ihrem Platz. Jede andere Entität, die fehlt oder
 nicht verfügbar ist, lässt nur ihren Wert leer. Was es nicht gibt, bekommt statt
 einer ID `none` (auch `false`, `off`, `""`); zusätzliche Entitäten braucht es
-nicht. Einzelheiten in `docs/03`
+nicht. Fehlt ein Tageswert in Home Assistant, rechnet das Panel ihn mit
+`statistik` statt einer ID aus der Statistik (Fläche aus ihrer Leistung,
+Verbraucher und Zähler aus dem Zählerstand); Erzeugung und Eigenverbrauch heute
+ergeben sich ohne Entität aus den Wechselrichtern, eine Störung auf Wunsch aus
+dem Statustext. Einzelheiten in `docs/03`
 („Datenweg von Home Assistant“), Offenes in `docs/06`.
 
 Beispielwerte gibt es nur im Screenshot-Lauf (`shots_run` in

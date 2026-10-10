@@ -479,6 +479,58 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   letzten 24 Stunden (`house_history`, dazu `day_curve` aus der Erzeugung
   heute). Den Ertrag der Statistik rechnet das Panel mit den Tarifen wie
   `money_update` [A].
+- **Tageswerte aus der Statistik** (seit 10.10.2026, Wunsch des Nutzers:
+  keine neuen Helfer in Home Assistant). Statt einer ID darf bei
+  `ha_pv<N>_energy`, `ha_dev<N>_energy` und `ha_meter<N>_today` das Wort
+  `statistik` stehen (Groß-/Kleinschreibung egal). Das Panel rechnet den
+  Tageswert dann selbst aus `recorder.get_statistics` einer anderen Entität:
+
+  | Ziel | Quelle | Rechnung |
+  | --- | --- | --- |
+  | `ha_pv<N>_energy` | `ha_pv<N>_power` (W, schon zugeordnet) | Σ `mean` der Stunden / 1000 = kWh |
+  | `ha_dev<N>_energy` | `ha_dev<N>_energy_total` (neu, Standard `none`), ein Zählerstand | Σ `change` |
+  | `ha_meter<N>_today` | `ha_meter<N>_total` (schon zugeordnet) | Σ `change` |
+
+  Ablauf (`ha_fetch_today`): 30 s nach dem Verbinden und dann alle 5 min
+  (ab Minute 1 des Takts) erst `period: hour` ab heute 0 Uhr
+  (`types: mean, change`, `units: W, kWh`), danach `period: 5minute` ab dem
+  Ende der letzten vollen Stunde für die laufende Stunde (Σ `mean` / 12000).
+  Abgefragt werden nur die Quellen der Ziele auf `statistik` – das steht
+  zur Compile-Zeit fest, ohne ein solches Ziel gibt es keinen Abruf. Die
+  Vorlage liefert je Platz eine Zahl (18 Plätze, `TAGES_STAT` im Werkzeug),
+  leer, wenn die Quelle keine Zeile hat. Das Panel schreibt die Summe mit
+  `publish_state` in den Sensor des Ziels; sein Faktor gilt also weiter, und
+  er setzt sein Gruppenbit wie ein Wert aus Home Assistant. Der Sensor selbst
+  hört auf die Ersatz-ID. **Verzug:** Home Assistant schreibt die
+  5-min-Statistik kurz nach jedem Takt, der Wert hinkt also bis zu etwa
+  6 min nach; nach dem Start ist er bis zum ersten Abruf leer, kurz nach
+  Mitternacht beginnt er bei 0. Die bestehende Statistik (Woche, Monat,
+  Jahr, 24 h) bleibt unverändert. Die Quelle braucht Langzeitstatistik:
+  Leistung mit `state_class: measurement`, Zähler mit `total` oder
+  `total_increasing`. Ein Tageszähler, der täglich auf 0 springt und
+  zwischendurch `unavailable` meldet, liefert falsche `change` – dann lieber
+  den laufenden Zählerstand nehmen.
+- **Summen ohne Entität** (Gruppe Tageswerte, seit 10.10.2026). Ist
+  `ha_pv_energy_today` nicht belegt, ist die Erzeugung heute die Summe der
+  belegten `ha_inv<N>_energy`, deren Wechselrichter da ist (`dev_present`);
+  keiner belegt → leer, ein belegter ohne Wert → leer. Ist
+  `ha_selfuse_energy_today` nicht belegt, rechnet das Panel nach Dokument 01
+  Hybrid-Erzeugung − Überschuss, nie unter 0: Hybrid-Erzeugung ist die Summe
+  der Wechselrichter 2 bis 4 (alles außer der Volleinspeisung), ohne sie
+  Erzeugung − Volleinspeisung; Überschuss wie bisher `ha_meter4_today` bzw.
+  ohne Hauszähler Einspeisung − Volleinspeisung. `ha_pv_energy_total` bleibt
+  eine einzelne Statistik-ID.
+- **Störung aus dem Statustext** (seit 10.10.2026). Ist `ha_inv<N>_fault`
+  nicht belegt und `ha_inv<N>_status` belegt, gilt ein Statustext aus
+  `inv_fault_texts` (Standard `"Fault,Alarm"`, kommagetrennt, ganzer Text,
+  Groß-/Kleinschreibung egal) als Störung – genau wie ein „an“ der
+  Entität: `pv_status` färbt den Kasten rot, zeigt den Text und meldet ihn
+  (`alert_push`). Die Störung hält `inv_fault_hold_s` (Standard `"300"`)
+  über den letzten passenden Text hinaus; eine Schleife Normal ↔ Fault alle
+  2 min bleibt so **eine** offene Meldung, ohne neue Zeilen und ohne
+  Hochzählen. Kommt so lange kein passender Text mehr, verschwindet die
+  Meldung (`alert_clear`, Regel der Meldungsseite). Ein belegtes
+  `ha_inv<N>_fault` hat Vorrang.
 - **Steuern** (seit 25.09.2026): Der Modus-Schalter der Seite Wallboxen
   ruft `wallbox_mode_set`; das Paket hängt daran (`!extend`)
   `select.select_option` auf `${ha_wb<N>_mode}` an – nur wenn die
@@ -494,7 +546,8 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   nach 10 s nichts Neues, zeichnet die Karte aus dem gemeldeten Zustand neu.
 - **Zeitplan.** Ein Intervall von 10 s erkennt das Verbinden: Prognosen
   20 s danach und dann alle 30 min, Statistik 30 s danach und dann zu
-  jeder neuen Stunde ab Minute 2 (damit auch beim Tageswechsel).
+  jeder neuen Stunde ab Minute 2 (damit auch beim Tageswechsel),
+  Tageswerte aus der Statistik 30 s danach und dann alle 5 min ab Minute 1.
 - **Voraussetzung in Home Assistant:** beim ESPHome-Gerät die Option
   **„Allow the device to perform Home Assistant actions“** einschalten.
   Ohne sie lehnt Home Assistant jede Aktion ab; Prognosen, Stundenwerte
@@ -552,7 +605,12 @@ Python-Umgebung von ESPHome (nichts nachzuinstallieren):
   dieselbe Platzliste in beiden Werkzeugen, keine Anker mehr, `dev_present`
   ohne NVS; jeder Zahlensensor (auch Attribute) mit `ha_<name>_faktor` =
   `"1"` als erstem Filter, Texte und An/aus ohne, eigener Faktor (`"-1"`,
-  `"0.001"`) läuft durch ESPHomes Substitution und wird eine Zahl; `none`, `FALSE`, `Off`, `""`, `null` … laufen durch ESPHomes eigene
+  `"0.001"`) läuft durch ESPHomes Substitution und wird eine Zahl;
+  `statistik` (auch `Statistik`) ergibt Ersatz-ID, `B_… = true` und die
+  Statistik-ID der Quelle nur, wenn die Quelle belegt ist; die Vorlage der
+  Tageswerte rechnet Σ `mean` / 1000 bzw. Σ `change`, leer ohne Zeile, und
+  liefert das Ende der letzten Zeile; Standards `inv_fault_texts` und
+  `inv_fault_hold_s`, Störung aus dem Text nur ohne `ha_inv<N>_fault`; `none`, `FALSE`, `Off`, `""`, `null` … laufen durch ESPHomes eigene
   Substitution und ergeben Ersatz-ID und `B_… = false`; jeder Kasten des
   Schemas hat einen Platz, jede Strecke einen Kanal oder schweigt, jede Leitung
   eine Sichtbarkeitsregel, jedes Gerät steuert mindestens eine Leitung.
@@ -577,9 +635,18 @@ Python-Umgebung von ESPHome (nichts nachzuinstallieren):
   bzw. 10 s ohne Meldung → zurück, fehlende Wallbox → kein Befehl;
   Faktor (`tests/ha-test.yaml`): −1 dreht Hauszähler und Strom von Speicher 1,
   0.001 macht aus 7400 W an Wallbox 1 „7,4“ kW, `unavailable` mit −1 bleibt
-  leer; Trennung → genau eine Sammelmeldung, Verbinden → weg; über den
+  leer; Tageswerte aus der Statistik (Fläche 1 aus dem Mittel ihrer
+  Leistung, Waschmaschine aus `ha_dev2_energy_total`, Einspeisung heute aus
+  `meter1_total`; erst Stunden, dann 5 min, nachgerechnet aus den eigenen
+  Antworten); Erzeugung heute ohne Entität = Summe der Wechselrichter (folgt
+  einer Änderung, `unavailable` → leer), Eigenverbrauch = WR 2 bis 4 −
+  Überschuss in „Gespart“; Störung aus dem Statustext von WR 3 („FAULT“ →
+  Meldung, „Normal“ hält 4 s, Schleife bleibt eine Meldung mit gleicher
+  Anzahl, „Standby“ → keine); Trennung → genau eine Sammelmeldung, Verbinden → weg; über den
   ganzen Lauf in keinem der rund 770 Labels aller Seiten „inf“ oder „nan“.
-  `--shots` legt dazu vier BMP nach `shots/ha_probe/` (vorher gelöscht, `snapshot.take` überschreibt nicht). Exit-Code 0 = alles
+  `--shots` legt dazu zehn BMP nach `shots/ha_probe/` (vorher gelöscht, `snapshot.take` überschreibt nicht);
+  `probe_page` (nur in der Testkonfiguration) zeigt dafür PV, Haus, Netz,
+  Übersicht und Meldungen. Exit-Code 0 = alles
   bestanden.
 
 ## Simulator und Screenshots

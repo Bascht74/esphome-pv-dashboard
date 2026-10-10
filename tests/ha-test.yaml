@@ -16,7 +16,8 @@
 # auf stdout -- dev_present, ausgeblendete Kaesten, Texte einzelner Labels,
 # offene Systemmeldungen, Prognose- und Statistikreihen. Die Probe liest
 # nur diese Zeilen. probe_shot(name) legt auf Wunsch ein Bild ab.
-# probe_tap(wb, seg) tippt einen Teil des Modus-Schalters an: Es schickt
+# probe_page(page) zeigt eine Seite (overview, pv, house, grid, alerts),
+# damit probe_shot sie aufnimmt. probe_tap(wb, seg) tippt einen Teil des Modus-Schalters an: Es schickt
 # LV_EVENT_CLICKED an wb<N>_seg<S>, also denselben Weg wie ein Finger
 # (on_click -> wallbox_mode_set); einen Touchscreen hat der Test nicht.
 ##############################################################################
@@ -33,6 +34,20 @@ substitutions:
   ha_meter_house_power_faktor: "-1"
   ha_bat1_current_faktor: "-1"
   ha_wb1_power_faktor: "0.001"
+  # Tageswerte aus der Statistik (Fall O): Flaeche 1 aus dem Mittel ihrer
+  # Leistung, Waschmaschine aus einem Zaehlerstand, Einspeisung heute aus
+  # dem Zaehlerstand Hausanschluss Einspeisung
+  ha_pv1_energy: statistik
+  ha_dev2_energy: Statistik
+  ha_dev2_energy_total: sensor.waschmaschine_energie_gesamt
+  ha_meter1_today: statistik
+  # Summen ohne Entitaet (Fall P): Erzeugung = Summe der Wechselrichter,
+  # Eigenverbrauch = Hybrid-Erzeugung - Ueberschuss (docs/01)
+  ha_pv_energy_today: none
+  ha_selfuse_energy_today: none
+  # Stoerung aus dem Statustext (Fall Q), kurze Haltezeit fuer den Test
+  ha_inv3_fault: none
+  inv_fault_hold_s: "4"
 
 packages:
   sim: !include ../pv-dashboard-sim.yaml
@@ -52,6 +67,35 @@ api:
         - snapshot.take:
             id: main_display
             filename: !lambda 'return name;'
+    - action: probe_page
+      variables:
+        page: string
+      then:
+        - if:
+            condition:
+              lambda: 'return page == "overview";'
+            then:
+              - lvgl.page.show: page_overview
+        - if:
+            condition:
+              lambda: 'return page == "pv";'
+            then:
+              - lvgl.page.show: page_pv
+        - if:
+            condition:
+              lambda: 'return page == "house";'
+            then:
+              - lvgl.page.show: page_house
+        - if:
+            condition:
+              lambda: 'return page == "grid";'
+            then:
+              - lvgl.page.show: page_grid
+        - if:
+            condition:
+              lambda: 'return page == "alerts";'
+            then:
+              - lvgl.page.show: page_alerts
     - action: probe_tap
       variables:
         wb: int
@@ -97,18 +141,23 @@ interval:
           // ungekuerzt im Label (nur hier, nicht im Geraet)
           static bool clip = false;
           if (!clip) {
-            for (lv_obj_t *l : {id(hp_season), id(hp_bypass), id(hp_compressor), id(gr_rule_0)})
+            for (lv_obj_t *l : {id(hp_season), id(hp_bypass), id(hp_compressor), id(gr_rule_0), id(pv_str_sub_1),
+                                id(pv_inv_sub_3), id(ht_c3_d), id(gm_today_2)})
               lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_CLIP);
             clip = true;
           }
           // offene Systemmeldungen (USER_1 = freie Zeile, USER_4 = behoben)
           int sys_open = 0, link = 0;
+          std::string alerts;   // offene Meldungen: ["Quelle: Text", Anzahl]
           lv_obj_t *list = id(alert_list);
           for (uint32_t i = 0; i < lv_obj_get_child_count(list); i++) {
             lv_obj_t *e = lv_obj_get_child(list, i);
             if (lv_obj_has_flag(e, LV_OBJ_FLAG_USER_1) || lv_obj_has_flag(e, LV_OBJ_FLAG_USER_4))
               continue;
             const char *k = lv_label_get_text(lv_obj_get_child(e, 5));
+            unsigned cnt = 1;
+            sscanf(lv_label_get_text(lv_obj_get_child(e, 6)), "%u", &cnt);
+            alerts += std::string(alerts.empty() ? "" : ",") + "[\"" + esc(k) + "\"," + std::to_string(cnt) + "]";
             if (strncmp(k, "System: ", 8) != 0)
               continue;
             sys_open++;
@@ -134,7 +183,11 @@ interval:
           j += ",\"hp_season\":" + txt(id(hp_season)) + ",\"hp_bypass\":" + txt(id(hp_bypass));
           j += ",\"hp_compressor\":" + txt(id(hp_compressor)) + ",\"gr_rule_0\":" + txt(id(gr_rule_0));
           j += ",\"v_house\":" + txt(id(v_house)) + ",\"v_misc\":" + txt(id(v_misc)) + ",\"v_heatpump\":" + txt(id(v_heatpump));
-          j += ",\"ht_c_total\":" + txt(id(ht_c_total)) + ",\"ht_out_total\":" + txt(id(ht_out_total)) + "}";
+          j += ",\"ht_c_total\":" + txt(id(ht_c_total)) + ",\"ht_out_total\":" + txt(id(ht_out_total));
+          j += ",\"pv_sub1\":" + txt(id(pv_str_sub_1)) + ",\"inv_sub3\":" + txt(id(pv_inv_sub_3));
+          j += ",\"dev2_d\":" + txt(id(ht_c3_d)) + ",\"meter1_today\":" + txt(id(gm_today_2));
+          j += ",\"val_gen\":" + txt(id(val_gen)) + ",\"money_split\":" + txt(id(money_split)) + "}";
+          j += ",\"alerts\":[" + alerts + "]";
           // Kein Label irgendwo darf "inf" oder "nan" zeigen: alle Seiten und
           // die oberste Ebene rekursiv, Wort mit Nicht-Buchstaben daneben
           // ("Infos", "Finanz" zaehlen nicht)
