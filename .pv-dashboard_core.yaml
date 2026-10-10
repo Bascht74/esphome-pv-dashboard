@@ -12,8 +12,7 @@
 #
 # Zugangsdaten stehen hier ABSICHTLICH nicht. pv-dashboard.yaml legt sie oben
 # als substitutions an und holt sie dort mit !secret aus der secrets.yaml;
-# hier steht nur ${wifi_ssid}, ${wifi_password}, ${ap_password}, ${api_key}
-# und ${ota_password}. Damit bleibt diese Datei frei von Geheimnissen -- das
+# hier steht nur ${wifi_ssid}, ${wifi_password} und ${api_key}. Damit bleibt diese Datei frei von Geheimnissen -- das
 # Geraet laedt sie aus dem GitHub-Repo nach (packages: in pv-dashboard.yaml),
 # waehrend pv-dashboard.yaml und secrets.yaml auf dem Rechner bleiben.
 #
@@ -118,11 +117,8 @@ update:
 wifi:
   ssid: ${wifi_ssid}
   password: ${wifi_password}
-  ap:
-    ssid: "${upper_devicename} Fallback"
-    password: ${ap_password}
-
-captive_portal:
+  # Bewusst ohne eigenen Access Point (Fallback-Hotspot) und ohne
+  # captive_portal (Wunsch 10.10.2026): Ohne WLAN wird seriell geflasht.
 
 logger:
   # I2C-Scan-Ergebnisse (ESP_LOGCONFIG) erscheinen erst ab level: CONFIG
@@ -152,15 +148,11 @@ globals:
 
 ota:
   - platform: esphome
-    # Umstieg auf Noise-Verschluesselung in zwei Schritten:
-    #   1. Jetzt: 'password' bleibt. Den Upload prueft die Firmware, die
-    #      gerade auf dem Geraet laeuft -- die alte kennt nur das Passwort
-    #      und wuerde ein verschluesseltes Update abweisen.
-    #   2. Erst NACH der ersten erfolgreichen OTA-Installation mit 2026.9:
-    #      'password' durch 'encryption: {}' ersetzen (nutzt den API-Schluessel).
-    # Beides zusammen geht nicht, die Optionen schliessen sich aus. Die
-    # 9.0-Warnung zum Passwort (~3,5 KB Flash) ist fuer Schritt 1 in Kauf genommen.
-    password: ${ota_password}
+    # Updates ueber das Netz mit Noise-Verschluesselung; nutzt den
+    # API-Schluessel, ein eigenes OTA-Passwort gibt es nicht (10.10.2026).
+    # Ein Geraet, auf dem noch eine Firmware mit OTA-Passwort laeuft, nimmt
+    # das verschluesselte Update nicht an -- dann einmal seriell flashen.
+    encryption: {}
     # WICHTIG zum Verstaendnis der Blockstruktur unten:
     #
     # ESPHome laedt die Firmware in EINER blockierenden Schleife innerhalb
