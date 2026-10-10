@@ -66,17 +66,11 @@ input_boolean:
   pvd_hp_defrost:
     name: "PVD hp_defrost"
     initial: false
-  pvd_hp_legionella:
-    name: "PVD hp_legionella"
-    initial: false
   pvd_p14a_active:
     name: "PVD p14a_active"
     initial: false
   einspeisegrenze_aktiv:
     name: "einspeisegrenze_aktiv"
-    initial: true
-  neg_preis_verguetet:
-    name: "neg_preis_verguetet"
     initial: true
   smart_meter_eingebaut:
     name: "smart_meter_eingebaut"
@@ -1021,20 +1015,6 @@ input_number:
     step: 1
     initial: 5126
     mode: box
-  pvd_spot_price:
-    name: "PVD spot_price"
-    min: -1
-    max: 2
-    step: 0.001
-    initial: 0.087
-    mode: box
-  pvd_neg_quarters:
-    name: "PVD neg_quarters"
-    min: -100000
-    max: 100000
-    step: 0.01
-    initial: 0
-    mode: box
   pvd_pv_energy_today:
     name: "PVD pv_energy_today"
     min: 0
@@ -1212,10 +1192,6 @@ template:
         unique_id: pvd_hp_defrost
         name: "nilan_enteisung"
         state: "{{ is_state('input_boolean.pvd_hp_defrost', 'on') }}"
-      - default_entity_id: binary_sensor.nilan_legionellenschutz
-        unique_id: pvd_hp_legionella
-        name: "nilan_legionellenschutz"
-        state: "{{ is_state('input_boolean.pvd_hp_legionella', 'on') }}"
       - default_entity_id: binary_sensor.p14a_signal
         unique_id: pvd_p14a_active
         name: "p14a_signal"
@@ -1881,15 +1857,6 @@ template:
         name: "hauszaehler_leistung"
         unit_of_measurement: "W"
         state: "{{ states('input_number.pvd_meter_house_power') | float(0) }}"
-      - default_entity_id: sensor.boersenstrompreis
-        unique_id: pvd_spot_price
-        name: "boersenstrompreis"
-        unit_of_measurement: "€/kWh"
-        state: "{{ states('input_number.pvd_spot_price') | float(0) }}"
-      - default_entity_id: sensor.negative_viertelstunden_heute
-        unique_id: pvd_neg_quarters
-        name: "negative_viertelstunden_heute"
-        state: "{{ states('input_number.pvd_neg_quarters') | float(0) }}"
       - default_entity_id: sensor.pv_erzeugung_heute
         unique_id: pvd_pv_energy_today
         name: "pv_erzeugung_heute"

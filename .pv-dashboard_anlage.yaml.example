@@ -125,7 +125,9 @@ tarif_bezug_ct: "30.0"            # Strombezug
 # Hausanschluss haengen und innerhalb von zwoelf Monaten in Betrieb gehen
 # (§ 9 Abs. 3 EEG). feed_limit_pct: Grenze in %; 60 fuer eine
 # Inbetriebnahme 2026 ohne Smart Meter und Steuerbox (§ 9 Abs. 2 EEG,
-# docs/06). Demo-Werte.
+# docs/06). Demo-Werte. Ohne Entitaet fuer "Einspeisegrenze aktiv"
+# (ha_rule_limit: none, unten) gilt die Grenze als aktiv, solange
+# feed_limit_pct unter 100 liegt; eine belegte Entitaet hat Vorrang.
 pv_kwp: "30.0"
 feed_limit_pct: "60"
 
@@ -154,6 +156,7 @@ feed_limit_pct: "60"
 # ha_pv8_power: none                            # keine Flaeche 8
 # ha_bat3_soc: none                             # kein Speicher 3
 # ha_inv1_temp: none                            # WR 1 meldet keine Temperatur
+# ha_rule_limit: none                           # Grenze aus feed_limit_pct
 #
 # Faktor je Zahlenwert: ha_<name>_faktor, Standard "1" (Liste in
 # .pv-dashboard_ha.yaml unter substitutions). Er multipliziert den Wert

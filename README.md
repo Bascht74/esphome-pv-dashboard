@@ -38,7 +38,7 @@ Uhr und Systemsymbolen (WLAN, Home Assistant, Daten aktuell) und eine Meldungsze
 | Wallboxen | im Stil von evcc: je Wallbox Modus, Leistung mit Phasen, Geladen, Sonnenanteil, Ladedauer, Fahrzeug mit Ladestand, Ladeplan und Limit; Monatswerte |
 | Wärmepumpe | grafisch im Aufbau des Nilan-Touch-Bedienteils (Compact P, Werte aus dem klassischen CTS700): außen, Raum, Feuchte, CO2, Warmwasser, Lüftungsstufe mit Ventilatoren; Betriebsart, Bypass, Kompressor, Zu-/Fortluft, Filter, Strom |
 | Haus | im Stil von evcc: Energiefluss-Balken, Tabelle In / Out / Verbraucher, Verbrauch jetzt mit Herkunft, Verbrauch der letzten 24 Stunden |
-| Netz | Hausanschluss mit Einspeisegrenze, Phasen L1 bis L3 (Shelly Pro 3EM), Zählerstände, Netzvorgaben (Börsenpreis, negative Preise, § 14a) |
+| Netz | Hausanschluss mit Einspeisegrenze, Phasen L1 bis L3 (Shelly Pro 3EM), Zählerstände, Netzvorgaben (Einspeisegrenze, § 14a, Smart Meter) |
 | Statistik | Woche, Monat, Jahr: Erzeugung gegen Verbrauch, Autarkie, Eigenverbrauch, Ertrag |
 | Meldungen | Bestehende Meldungen, neueste oben; gleiche zusammengefasst („×3 seit 08:12“), Zähler je Schweregrad als Filter, Quittieren per Antippen; oben die schwerste in ihrer Farbe |
 

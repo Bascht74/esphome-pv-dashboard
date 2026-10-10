@@ -44,7 +44,7 @@
 #     Technik           353..498  Luefter Mitte 330: Kreis 353..425, Stufe,
 #                                 Zu- und Abluft 433..488; Warmwasser Mitte
 #                                 570: Kachel 353..473, Beschriftung 481..498
-#     Hinweise          554..574  Enteisung, Legionellenschutz
+#     Hinweise          554..574  Enteisung
 #     Stand             600..617
 #   Info-Kachel  x 772, 504 x 432, innen 482 x 410: Titel 0..17, acht
 #                Zeilen im Raster 47 ab 30 (Wert f_val_m 25), letzte
@@ -69,9 +69,14 @@ script:
   #   eheat      true = elektrische Zusatzheizung im Warmwasser aktiv
   #   fan        Lueftungsstufe 0..4 (0 = aus), < 0 = unbekannt
   #   vent_mode  Betriebsart Lueftung, z. B. "Auto"
-  #   season     "Sommer" / "Winter"
-  #   bypass     z. B. "Offen" / "Geschlossen"
-  #   compressor Kompressorbetrieb, z. B. "Warmwasser", "Aus"
+  #   season     "Sommer" / "Winter", roh auch on / off (binary_sensor)
+  #   bypass     "offen" / "zu", roh auch on / off, Offen / Geschlossen
+  #   compressor Kompressorbetrieb, roh auch englisch wie
+  #              sensor.nilan_control_mode: Standby, Heating, Hot water,
+  #              Heating + hot water
+  #   season, bypass und compressor uebersetzt das Skript ins Deutsche
+  #   (Wunsch des Nutzers, 10.10.2026: nicht in HA); Gross-/Kleinschreibung
+  #   egal, Unbekanntes bleibt, wie es kommt
   #   supply     Zulufttemperatur in °C
   #   exhaust    Fortlufttemperatur in °C
   #   power      elektrische Leistungsaufnahme in kW
@@ -125,9 +130,29 @@ script:
           else
             lv_label_set_text_fmt(id(hp_fan), "Stufe %d", fan);
           lv_label_set_text(id(hp_vent_mode), txt(vent_mode));
-          lv_label_set_text(id(hp_season), txt(season));
-          lv_label_set_text(id(hp_bypass), txt(bypass));
-          lv_label_set_text(id(hp_compressor), txt(compressor));
+          // Rohtext aus HA -> Deutsch: Vergleich ohne Gross-/Kleinschreibung
+          // und Rand-Leerzeichen, sonst unveraendert (auch " " = leer)
+          using Paar = std::pair<const char *, const char *>;
+          auto de = [](const std::string &s, std::initializer_list<Paar> tab) -> std::string {
+            const size_t a = s.find_first_not_of(' '), b = s.find_last_not_of(' ');
+            std::string k = a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
+            for (auto &c : k)
+              c = tolower((unsigned char) c);
+            for (const auto &p : tab)
+              if (k == p.first)
+                return p.second;
+            return s;
+          };
+          const std::string sea = de(season, {{"on", "Sommer"}, {"off", "Winter"}, {"sommer", "Sommer"}, {"winter", "Winter"}});
+          const std::string byp = de(bypass, {{"on", "offen"}, {"off", "zu"}, {"open", "offen"}, {"closed", "zu"},
+                                              {"offen", "offen"}, {"geschlossen", "zu"}, {"zu", "zu"}});
+          const std::string cmp = de(compressor, {{"standby", "Bereit"}, {"heating", "Heizen"}, {"hot water", "Warmwasser"},
+                                                  {"heating + hot water", "Heizen + Warmwasser"}, {"bereit", "Bereit"},
+                                                  {"heizen", "Heizen"}, {"warmwasser", "Warmwasser"},
+                                                  {"heizen + warmwasser", "Heizen + Warmwasser"}});
+          lv_label_set_text(id(hp_season), txt(sea));
+          lv_label_set_text(id(hp_bypass), txt(byp));
+          lv_label_set_text(id(hp_compressor), txt(cmp));
           lv_label_set_text(id(hp_supply), fmt(supply, "%.1f", "--,-").c_str());
           lv_label_set_text(id(hp_exhaust), fmt(exhaust, "%.1f", "--,-").c_str());
           lv_label_set_text(id(hp_power), fmt(power, "%.2f", "-,--").c_str());
@@ -148,7 +173,6 @@ script:
   #   fan_extract  Abluftventilator in %
   #   filter_days  Tage bis zum Filterwechsel, < 0 = unbekannt
   #   defrost      true = Enteisung laeuft (Waermetauscher oder -pumpe)
-  #   legionella   true = Legionellenschutz laeuft
   #   NAN = kein Wert (Striche)
   # ---------------------------------------------------------------------
   - id: heatpump_extra
@@ -159,7 +183,6 @@ script:
       fan_extract: float
       filter_days: int
       defrost: bool
-      legionella: bool
     then:
       - lambda: |-
           auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
@@ -173,16 +196,10 @@ script:
           else
             lv_label_set_text_fmt(id(hp_filter), "%d", filter_days);
           lv_obj_set_style_text_color(id(hp_filter), filter_days >= 0 && filter_days <= 7 ? lv_color_hex($col_warn) : lv_color_hex($col_ink), 0);
-          std::string f;
           if (defrost)
-            f = "Enteisung aktiv";
-          if (legionella)
-            f += f.empty() ? "Legionellenschutz aktiv" : " · Legionellenschutz aktiv";
-          lv_label_set_text(id(hp_flags), f.c_str());
-          if (f.empty())
-            lv_obj_add_flag(id(hp_flags), LV_OBJ_FLAG_HIDDEN);
-          else
             lv_obj_clear_flag(id(hp_flags), LV_OBJ_FLAG_HIDDEN);
+          else
+            lv_obj_add_flag(id(hp_flags), LV_OBJ_FLAG_HIDDEN);
 
 lvgl:
   pages:
@@ -354,9 +371,9 @@ lvgl:
                     - obj: { id: hp_dhw_dot, x: 94, y: 50, width: 10, height: 10, radius: 5, bg_color: $col_crit, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false, hidden: true }
               - label: { id: hp_dhw_label, x: 498, y: 481, width: 144, height: 17, long_mode: DOT, text_align: CENTER, text: "Warmwasser", text_font: f_unit, text_color: $col_ink }
 
-              # Enteisung und Legionellenschutz unter dem Haus (heatpump_extra),
-              # 554..574 mittig auf 450, nur wenn eins davon laeuft
-              - label: { id: hp_flags, x: 178, y: 554, width: 544, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_warn, hidden: true }
+              # Enteisung unter dem Haus (heatpump_extra), 554..574 mittig
+              # auf 450, nur solange sie laeuft
+              - label: { id: hp_flags, x: 178, y: 554, width: 544, height: 20, long_mode: DOT, text_align: CENTER, text: "Enteisung aktiv", text_font: f_text_s, text_color: $col_warn, hidden: true }
 
               - label: { id: hp_stand, x: 178, y: 600, width: 544, height: 17, long_mode: DOT, text_align: CENTER, text: "Stand --:--", styles: st_unit }
 
