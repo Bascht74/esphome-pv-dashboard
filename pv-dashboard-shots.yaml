@@ -206,9 +206,10 @@ script:
           eheat: true
           fan: 2
           vent_mode: "Auto"
-          season: "Winter"
-          bypass: "Geschlossen"
-          compressor: "Warmwasser"
+          # roh wie aus HA, das Skript uebersetzt (Winter, zu, laengster Text)
+          season: "off"
+          bypass: "off"
+          compressor: "Heating + hot water"
           supply: 19.8
           exhaust: 9.1
           power: 0.62
@@ -221,8 +222,7 @@ script:
           fan_supply: 45
           fan_extract: 48
           filter_days: 23
-          defrost: false
-          legionella: true
+          defrost: true
       # Haus: Energiefluss wie evcc. Wallbox 1 laedt mit 7,4 kW, PV
       # reicht nicht, der Speicher gibt dazu, der Rest kommt aus dem Netz:
       # In 6400 + 2000 + 450 = Out 1450 + 7400 = 8850 W.
@@ -276,7 +276,7 @@ script:
       - script.wait: grid_meter
       - script.execute: { id: grid_meter, meter: 4, total: 6410.2, today: 30.6 }
       - script.wait: grid_meter
-      - script.execute: { id: grid_rules, limit_active: true, spot_ct: -0.8, neg_quarters: 6, neg_paid: true, p14a_active: false, p14a_kw: 4.2, smart_meter: false }
+      - script.execute: { id: grid_rules, limit_active: true, p14a_active: false, p14a_kw: 4.2, smart_meter: false }
       # Statistik: Woche, Monat, Jahr; gezeigt wird die Woche.
       - script.execute:
           id: stats_update

@@ -199,7 +199,6 @@ substitutions:
   ha_hp_fan_extract: sensor.nilan_abluftventilator  # [A]
   ha_hp_filter_days: sensor.nilan_filter_tage  # [A]
   ha_hp_defrost: binary_sensor.nilan_enteisung  # [A]
-  ha_hp_legionella: binary_sensor.nilan_legionellenschutz  # [A]
   ha_dev1_power: sensor.backofen_leistung  # [A]
   ha_dev1_energy: sensor.backofen_energie_heute  # [A]
   ha_dev2_power: sensor.waschmaschine_leistung  # [A]
@@ -240,10 +239,7 @@ substitutions:
   ha_meter4_today: sensor.hauszaehler_einspeisung_heute  # utility_meter-Helfer [A]
   ha_meter_pv_power: sensor.pv_zaehler_leistung  # W, + = Einspeisung [A]
   ha_meter_house_power: sensor.hauszaehler_leistung  # W, + = Einspeisung [A]
-  ha_rule_limit: input_boolean.einspeisegrenze_aktiv
-  ha_spot_price: sensor.boersenstrompreis  # EUR/kWh -> ct [A]
-  ha_neg_quarters: sensor.negative_viertelstunden_heute
-  ha_rule_neg_paid: input_boolean.neg_preis_verguetet
+  ha_rule_limit: input_boolean.einspeisegrenze_aktiv  # nicht belegt: aktiv, wenn feed_limit_pct < 100
   ha_p14a_active: binary_sensor.p14a_signal
   ha_p14a_kw: input_number.p14a_grenze_kw
   ha_rule_smart_meter: input_boolean.smart_meter_eingebaut
@@ -414,8 +410,6 @@ substitutions:
   ha_meter4_today_faktor: "1"
   ha_meter_pv_power_faktor: "1"
   ha_meter_house_power_faktor: "1"
-  ha_spot_price_faktor: "1"
-  ha_neg_quarters_faktor: "1"
   ha_p14a_kw_faktor: "1"
   ha_pv_energy_today_faktor: "1"
   ha_home_energy_today_faktor: "1"
@@ -1640,23 +1634,6 @@ sensor:
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00800000u;'
   - platform: homeassistant
-    id: ha_spot_price
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_spot_price | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_spot_price }"
-    internal: true
-    filters:
-      - multiply: ${ha_spot_price_faktor}
-      - multiply: 100
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x01000000u;'
-  - platform: homeassistant
-    id: ha_neg_quarters
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_neg_quarters | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_neg_quarters }"
-    internal: true
-    filters:
-      - multiply: ${ha_neg_quarters_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x01000000u;'
-  - platform: homeassistant
     id: ha_p14a_kw
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_p14a_kw | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_p14a_kw }"
     internal: true
@@ -2234,22 +2211,8 @@ binary_sensor:
     on_state:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
-    id: ha_hp_legionella
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_hp_legionella | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_hp_legionella }"
-    internal: true
-    trigger_on_initial_state: true
-    on_state:
-      - lambda: 'id(ha_dirty) |= 0x00080000u;'
-  - platform: homeassistant
     id: ha_rule_limit
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_rule_limit | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_rule_limit }"
-    internal: true
-    trigger_on_initial_state: true
-    on_state:
-      - lambda: 'id(ha_dirty) |= 0x01000000u;'
-  - platform: homeassistant
-    id: ha_rule_neg_paid
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_rule_neg_paid | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_rule_neg_paid }"
     internal: true
     trigger_on_initial_state: true
     on_state:
@@ -3007,7 +2970,6 @@ interval:
           constexpr bool B_meter4_total = ${ 'false' if (ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_meter_house_power = ${ 'false' if (ha_meter_house_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_meter_pv_power = ${ 'false' if (ha_meter_pv_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_neg_quarters = ${ 'false' if (ha_neg_quarters | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_p14a_kw = ${ 'false' if (ha_p14a_kw | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_pv1_energy = ${ 'false' if (ha_pv1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_pv1_power = ${ 'false' if (ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
@@ -3026,6 +2988,7 @@ interval:
           constexpr bool B_pv8_energy = ${ 'false' if (ha_pv8_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_pv8_power = ${ 'false' if (ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_pv_energy_today = ${ 'false' if (ha_pv_energy_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
+          constexpr bool B_rule_limit = ${ 'false' if (ha_rule_limit | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_selfuse_energy_today = ${ 'false' if (ha_selfuse_energy_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_site_battery_power = ${ 'false' if (ha_site_battery_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_site_battery_soc = ${ 'false' if (ha_site_battery_soc | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
@@ -3046,7 +3009,6 @@ interval:
           constexpr bool B_solcast_power_now = ${ 'false' if (ha_solcast_power_now | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_solcast_remaining = ${ 'false' if (ha_solcast_remaining | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_solcast_today = ${ 'false' if (ha_solcast_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_spot_price = ${ 'false' if (ha_spot_price | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_sun = ${ 'false' if (ha_sun | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_tariff_feedin = ${ 'false' if (ha_tariff_feedin | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_tariff_grid = ${ 'false' if (ha_tariff_grid | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
@@ -3336,15 +3298,14 @@ interval:
                id(ha_hp_compressor).has_state() || id(ha_hp_supply).has_state() || id(ha_hp_exhaust).has_state() ||
                id(ha_hp_power).has_state() || id(ha_hp_energy).has_state() || id(ha_hp_alarm).has_state() ||
                id(ha_hp_room_set).has_state() || id(ha_hp_dhw_set).has_state() || id(ha_hp_fan_supply).has_state() ||
-               id(ha_hp_fan_extract).has_state() || id(ha_hp_filter_days).has_state() || id(ha_hp_defrost).has_state() ||
-               id(ha_hp_legionella).has_state())) {
+               id(ha_hp_fan_extract).has_state() || id(ha_hp_filter_days).has_state() || id(ha_hp_defrost).has_state())) {
             {
               const float kw = V(id(ha_hp_power), B_hp_power);
               id(heatpump_update).execute(V(id(ha_hp_outdoor), B_hp_outdoor), V(id(ha_hp_room), B_hp_room), V(id(ha_hp_humidity), B_hp_humidity), NAN, V(id(ha_hp_dhw), B_hp_dhw), id(ha_hp_eheat).state, I(V(id(ha_hp_fan), B_hp_fan), -1),
                                           T(id(ha_hp_vent_mode), B_hp_vent_mode), T(id(ha_hp_season), B_hp_season), T(id(ha_hp_bypass), B_hp_bypass), T(id(ha_hp_compressor), B_hp_compressor), V(id(ha_hp_supply), B_hp_supply), V(id(ha_hp_exhaust), B_hp_exhaust),
                                           kw, V(id(ha_hp_energy), B_hp_energy), I(V(id(ha_hp_alarm), B_hp_alarm), 0));
               id(heatpump_extra).execute(V(id(ha_hp_room_set), B_hp_room_set), V(id(ha_hp_dhw_set), B_hp_dhw_set), V(id(ha_hp_fan_supply), B_hp_fan_supply), V(id(ha_hp_fan_extract), B_hp_fan_extract), I(V(id(ha_hp_filter_days), B_hp_filter_days), -1),
-                                         id(ha_hp_defrost).state, id(ha_hp_legionella).state);
+                                         id(ha_hp_defrost).state);
               id(ov_consumer).execute(0, mul(kw, 1000.0f), "WW " + num(V(id(ha_hp_dhw), B_hp_dhw), "%.0f", "--") + "°C");
               id(house_update).execute(0, mul(kw, 1000.0f), V(id(ha_hp_energy), B_hp_energy));
             }
@@ -3416,10 +3377,11 @@ interval:
           }
           // 24 Netzvorgaben
           if ((d & (1u << 24)) &&
-              (ready || id(ha_rule_limit).has_state() || id(ha_spot_price).has_state() || id(ha_neg_quarters).has_state() ||
-               id(ha_rule_neg_paid).has_state() || id(ha_p14a_active).has_state() || id(ha_p14a_kw).has_state() ||
+              (ready || id(ha_rule_limit).has_state() || id(ha_p14a_active).has_state() || id(ha_p14a_kw).has_state() ||
                id(ha_rule_smart_meter).has_state())) {
-            id(grid_rules).execute(id(ha_rule_limit).state, V(id(ha_spot_price), B_spot_price), I(V(id(ha_neg_quarters), B_neg_quarters), -1), id(ha_rule_neg_paid).state, id(ha_p14a_active).state, V(id(ha_p14a_kw), B_p14a_kw),
+            // Grenze ohne Entitaet (nicht belegt): aus der Anlage, feed_limit_pct < 100
+            // heisst aktiv (Wunsch des Nutzers, 10.10.2026: kein Helfer in HA)
+            id(grid_rules).execute(B_rule_limit ? id(ha_rule_limit).state : (${feed_limit_pct} < 100), id(ha_p14a_active).state, V(id(ha_p14a_kw), B_p14a_kw),
                                    id(ha_rule_smart_meter).state);
           }
           // 25 Tageswerte

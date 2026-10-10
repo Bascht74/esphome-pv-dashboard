@@ -147,7 +147,7 @@ oder ändern kann:
   2402, Regelmodus 5432, Softwarestand 5065. **Nicht in dieser Quelle belegt**
   und deshalb offen, bis jemand am Gerät liest: Zuluft-, Abluft- und
   Fortlufttemperatur (in der Recherche vom 24.09.2026 als 5153 bis 5155
-  notiert), Enteisung (5450), Legionellenschutz (4748) und die
+  notiert), Enteisung (5450), Legionellenschutz (4748, seit 10.10.2026 nicht mehr angezeigt) und die
   Sommer/Winter-Umschalttemperatur (2406); Bypass, Kompressor und
   Zusatzheizung sind gar nicht gefunden. **CO2, eine Jahreszeit und ein
   Alarmregister gibt es in diesem Satz nicht**: Die CO2-Gruppe bleibt ohne Wert
@@ -280,7 +280,7 @@ kann der Shelly auch, dort ist die Adresszählung (ab 0 oder 1) in den Quellen
 nicht eindeutig.
 
 **Rechtslage (Recherche 25.09.2026, keine Rechtsberatung; was gilt, sagt der
-Netzbetreiber).** Quellen: EEG 2023 §§ 9, 51, 51a und EnWG § 14a auf
+Netzbetreiber).** Quellen: EEG 2023 § 9 und EnWG § 14a auf
 gesetze-im-internet.de, Stand der Änderungen durch das „Solarspitzengesetz“
 vom Februar 2025.
 
@@ -288,12 +288,11 @@ vom Februar 2025.
   100 kW mit Einspeisevergütung, die ohne intelligentes Messsystem und
   Steuerbox in Betrieb gehen, dürfen höchstens 60 % der installierten Leistung
   einspeisen, **bis** Messsystem und Steuerung eingebaut und getestet sind.
-  Danach fällt die Grenze. `feed_limit_pct` steht deshalb auf 60.
-- **Negative Preise:** Neue Anlagen bekommen für Viertelstunden mit negativem
-  Börsenpreis keine Vergütung (§ 51); die ausgefallenen Zeiten werden nach
-  § 51a am Ende des Förderzeitraums angehängt. Kleine Anlagen ohne
-  intelligentes Messsystem sind davon ausgenommen **bis zum Ende des Jahres,
-  in dem es eingebaut wird** (Übergang, deshalb `neg_paid`).
+  Danach fällt die Grenze. `feed_limit_pct` steht deshalb auf 60. Ohne
+  Entität für „Einspeisegrenze aktiv“ (`ha_rule_limit: none`) leitet das Panel
+  den Zustand daraus ab: aktiv, solange `feed_limit_pct` unter 100 liegt
+  (Wunsch des Nutzers, 10.10.2026, kein Helfer in Home Assistant); eine
+  belegte Entität hat Vorrang.
 - **§ 14a EnWG:** Steuerbar sind Wallboxen, Wärmepumpen und netzladende
   Speicher über 4,2 kW; im Signal darf der Netzbetreiber auf mindestens 4,2 kW
   je Gerät drosseln (bei einem Energiemanagement für mehrere Geräte nach
@@ -313,6 +312,8 @@ rechnet die Seite). Anders nur, wenn ein Kreis mehr als zwölf Monate früher in
 Betrieb ging (dann zählt er nicht mit) oder einen eigenen Netzanschluss hat.
 Ab zusammen 25 kW verlangt § 9 Abs. 2 Nr. 2 zusätzlich eine Einrichtung, mit
 der der Netzbetreiber die Einspeisung fernsteuern kann. Keine Rechtsberatung.
+
+**Börsenpreis und negative Preise:** Die Zeilen „Börsenstrompreis“, „Negative Viertelstunden heute“ und „Vergütung bei negativem Preis“ sind am 10.10.2026 auf Wunsch des Nutzers entfallen, samt Skriptparametern und Zuordnung. Die Kachel Netzvorgaben zeigt noch Einspeisegrenze, Steuersignal § 14a und Smart Meter.
 
 **Abgeregelte Energie:** Die Zeile „abgeregelt heute“ ist am 26.09.2026 auf Wunsch des Nutzers entfallen. Abgeregelte Energie wird nicht erzeugt und deshalb nirgends gemessen; sie ließe sich nur schätzen (etwa Prognose minus Erzeugung, solange die Einspeisung an der Grenze liegt). Die Kachel zeigt nur Gemessenes.
 

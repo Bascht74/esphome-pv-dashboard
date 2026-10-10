@@ -202,7 +202,7 @@ gruppe(19, 1 << 17, "Waermepumpe", """
                               @hp_vent_mode, @hp_season, @hp_bypass, @hp_compressor, @hp_supply, @hp_exhaust,
                               kw, @hp_energy, I(@hp_alarm, 0));
   id(heatpump_extra).execute(@hp_room_set, @hp_dhw_set, @hp_fan_supply, @hp_fan_extract, I(@hp_filter_days, -1),
-                             @hp_defrost, @hp_legionella);
+                             @hp_defrost);
   id(ov_consumer).execute(0, mul(kw, 1000.0f), "WW " + num(@hp_dhw, "%.0f", "--") + "°C");
   id(house_update).execute(0, mul(kw, 1000.0f), @hp_energy);
 }""")
@@ -237,7 +237,9 @@ if (da(18))
 if (da(19))
   id(ov_meter).execute(1, @meter_house_power, @meter4_today);""")
 gruppe(24, 0, "Netzvorgaben", """
-id(grid_rules).execute(@rule_limit, @spot_price, I(@neg_quarters, -1), @rule_neg_paid, @p14a_active, @p14a_kw,
+// Grenze ohne Entitaet (nicht belegt): aus der Anlage, feed_limit_pct < 100
+// heisst aktiv (Wunsch des Nutzers, 10.10.2026: kein Helfer in HA)
+id(grid_rules).execute(B_rule_limit ? @rule_limit : (${feed_limit_pct} < 100), @p14a_active, @p14a_kw,
                        @rule_smart_meter);""")
 gruppe(25, 0, "Tageswerte", """
 {
@@ -379,6 +381,9 @@ z("wb_month_solar", "n", "sensor.evcc_stat30_solar_percentage", WM, "%", 71)
 z("wb_month_price", "n", "sensor.evcc_stat30_avg_price", WM, "€/kWh", 0.214, mul=100, hin="EUR/kWh -> ct")
 
 # --- Waermepumpe (Nilan Compact P, eigene Modbus-Sensoren [A]) ----------------
+# Jahreszeit, Bypass und Kompressor duerfen roh kommen (on/off eines
+# binary_sensor, englische Texte von sensor.nilan_control_mode); ins Deutsche
+# uebersetzt das Panel (heatpump_update, Wunsch des Nutzers, 10.10.2026).
 WP = [G["Waermepumpe"]]
 for name, art, ent, einh, demo in [
     ("hp_outdoor", "n", "sensor.nilan_aussentemperatur", "°C", 12.4),
@@ -402,7 +407,6 @@ for name, art, ent, einh, demo in [
     ("hp_fan_extract", "n", "sensor.nilan_abluftventilator", "%", 47),
     ("hp_filter_days", "n", "sensor.nilan_filter_tage", "d", 63),
     ("hp_defrost", "b", "binary_sensor.nilan_enteisung", "", False),
-    ("hp_legionella", "b", "binary_sensor.nilan_legionellenschutz", "", False),
 ]:
     z(name, art, ent, WP + ([HN] if name == "hp_power" else []), einh, demo, hin="[A]")
 
@@ -448,10 +452,8 @@ z("meter_house_power", "n", "sensor.hauszaehler_leistung", ZW, "W", 5126, hin="W
 
 # --- Netzvorgaben (Helfer [A]) ------------------------------------------------
 NV = [G["Netzvorgaben"]]
-z("rule_limit", "b", "input_boolean.einspeisegrenze_aktiv", NV, demo=True)
-z("spot_price", "n", "sensor.boersenstrompreis", NV, "€/kWh", 0.087, mul=100, hin="EUR/kWh -> ct [A]")
-z("neg_quarters", "n", "sensor.negative_viertelstunden_heute", NV, "", 0)
-z("rule_neg_paid", "b", "input_boolean.neg_preis_verguetet", NV, demo=True)
+z("rule_limit", "b", "input_boolean.einspeisegrenze_aktiv", NV, demo=True,
+  hin="nicht belegt: aktiv, wenn feed_limit_pct < 100")
 z("p14a_active", "b", "binary_sensor.p14a_signal", NV, demo=False)
 z("p14a_kw", "n", "input_number.p14a_grenze_kw", NV, "kW", 4.2)
 z("rule_smart_meter", "b", "input_boolean.smart_meter_eingebaut", NV, demo=False)
@@ -690,8 +692,10 @@ def c_code(code):
 
 
 def belegt_namen(code):
-    """Basisnamen, deren B_-Konstante ein Aufruf braucht."""
-    return {basis(NAMEN[n]) for n in re.findall(r"@([a-z0-9_]+)", code) if NAMEN[n]["art"] != "b"}
+    """Basisnamen, deren B_-Konstante ein Aufruf braucht (auch ausdrueckliche
+    B_<name> im Aufruf, etwa fuer an/aus mit Ersatzwert)."""
+    return ({basis(NAMEN[n]) for n in re.findall(r"@([a-z0-9_]+)", code) if NAMEN[n]["art"] != "b"}
+            | {n for n in re.findall(r"\bB_([a-z0-9_]+)", code) if n in NAMEN})
 
 
 def einr(text, n):

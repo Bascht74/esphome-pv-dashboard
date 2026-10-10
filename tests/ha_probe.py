@@ -34,6 +34,12 @@ Entitaet weg -> nur der Wert weg):
      -1 dreht das Vorzeichen (Hauszaehler, Strom Speicher 1), 0.001 macht
      W -> kW (Wallbox 1, die Probe schickt W); unavailable bleibt mit -1
      leer (NAN * -1 = NAN, val_leer erst hinter dem Filter)
+  M  Texte der Waermepumpe (Wunsch des Nutzers, 10.10.2026): Rohwerte aus HA
+     werden uebersetzt (Jahreszeit on/off -> Sommer/Winter, Bypass on/off
+     -> offen/zu, Kompressor englisch -> deutsch), deutsche Formen der Demo
+     bleiben sinnvoll, Unbekanntes kommt unveraendert durch
+  N  Einspeisegrenze ohne Entitaet (ha_rule_limit none, ha-test.yaml): aus
+     feed_limit_pct der Anlage, 60 -> "60 % aktiv"
   J  in keinem Label irgendwo "inf" oder "nan", ueber den ganzen Lauf
 
 Liest keine secrets.yaml und nicht .pv-dashboard_anlage.yaml. Ergebnis:
@@ -354,8 +360,30 @@ async def ablauf(panel, ha, bilder):
     pruefe("L", "Faktor -1: Strom Speicher 1 12,4 A -> -12 A", "· -12 A ·" in d["txt"]["d_bat1"],
            repr(d["txt"]["d_bat1"]))
     pruefe("L", "Faktor 0.001: Wallbox 1 7400 W -> 7,4 kW", t["v_wb1"] == "7,4", repr(t["v_wb1"]))
+    # M: Ausgangslage aus der Tabelle (deutsche Demo-Formen)
+    pruefe("M", "Demo Sommer / Geschlossen / Warmwasser -> Sommer / zu / Warmwasser",
+           (t["hp_season"], t["hp_bypass"], t["hp_compressor"]) == ("Sommer", "zu", "Warmwasser"),
+           (t["hp_season"], t["hp_bypass"], t["hp_compressor"]))
+    # N
+    pruefe("N", "Einspeisegrenze nicht belegt: aus feed_limit_pct 60 -> aktiv", t["gr_rule_0"] == "60 % aktiv",
+           repr(t["gr_rule_0"]))
     if bilder:
         await ha.bild("probe_1_start.bmp")
+
+    # M: Rohwerte aus HA
+    for season, bypass, comp, soll in [
+            ("on", "off", "Heating + hot water", ("Sommer", "zu", "Heizen + Warmwasser")),
+            ("off", "on", "Standby", ("Winter", "offen", "Bereit")),
+            ("OFF", "On", "hot water", ("Winter", "offen", "Warmwasser")),
+            ("on", "off", "Heating", ("Sommer", "zu", "Heizen")),
+            ("unknown_x", "teilweise", "Abtauen", ("unknown_x", "teilweise", "Abtauen"))]:
+        ha.setzen("hp_season", season)
+        ha.setzen("hp_bypass", bypass)
+        ha.setzen("hp_compressor", comp)
+        d = await panel.warten(lambda d: (d["txt"]["hp_season"], d["txt"]["hp_bypass"], d["txt"]["hp_compressor"])
+                               == soll, 5)
+        pruefe("M", f"{season} / {bypass} / {comp} -> {' / '.join(soll)}", d,
+               panel.letzte and tuple(panel.letzte["txt"][k] for k in ("hp_season", "hp_bypass", "hp_compressor")))
 
     # E
     ha.setzen("bat3_soc", "64")

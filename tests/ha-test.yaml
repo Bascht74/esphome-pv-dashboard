@@ -26,6 +26,8 @@ substitutions:
   # (nur der Wert Raumtemperatur bleibt leer), zwei Schreibweisen
   ha_pv8_power: none
   ha_hp_room: FALSE
+  # Einspeisegrenze ohne Entitaet (Fall N): aus feed_limit_pct (60 -> aktiv)
+  ha_rule_limit: none
   # Faktor (Fall L): Vorzeichen drehen und W -> kW; die Probe schickt
   # wb1_power in W
   ha_meter_house_power_faktor: "-1"
@@ -90,6 +92,15 @@ interval:
           auto box = [](lv_obj_t *l) { return lv_obj_get_parent(l); };
           auto hid = [](lv_obj_t *o) { return (o != nullptr && lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) ? "1" : "0"; };
           auto txt = [&](lv_obj_t *l) { return "\"" + esc(lv_label_get_text(l)) + "\""; };
+          // Texte auf nicht gezeigten Seiten kuerzt LONG_DOT zu "..." (Seite
+          // ohne Layout); fuer die Probe einmal auf CLIP, dann steht der Text
+          // ungekuerzt im Label (nur hier, nicht im Geraet)
+          static bool clip = false;
+          if (!clip) {
+            for (lv_obj_t *l : {id(hp_season), id(hp_bypass), id(hp_compressor), id(gr_rule_0)})
+              lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_CLIP);
+            clip = true;
+          }
           // offene Systemmeldungen (USER_1 = freie Zeile, USER_4 = behoben)
           int sys_open = 0, link = 0;
           lv_obj_t *list = id(alert_list);
@@ -120,6 +131,8 @@ interval:
           j += ",\"hp_room\":" + txt(id(hp_room)) + ",\"hp_humidity\":" + txt(id(hp_humidity));
           j += ",\"v_wb1\":" + txt(id(v_wb1)) + ",\"lbl_alert\":" + txt(id(lbl_alert));
           j += ",\"v_meter_house\":" + txt(id(v_meter_house));
+          j += ",\"hp_season\":" + txt(id(hp_season)) + ",\"hp_bypass\":" + txt(id(hp_bypass));
+          j += ",\"hp_compressor\":" + txt(id(hp_compressor)) + ",\"gr_rule_0\":" + txt(id(gr_rule_0));
           j += ",\"v_house\":" + txt(id(v_house)) + ",\"v_misc\":" + txt(id(v_misc)) + ",\"v_heatpump\":" + txt(id(v_heatpump));
           j += ",\"ht_c_total\":" + txt(id(ht_c_total)) + ",\"ht_out_total\":" + txt(id(ht_out_total)) + "}";
           // Kein Label irgendwo darf "inf" oder "nan" zeigen: alle Seiten und
