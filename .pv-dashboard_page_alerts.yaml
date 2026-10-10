@@ -277,7 +277,7 @@ script:
             lv_obj_add_state(entry, LV_STATE_CHECKED);
             for (uint32_t k = 0; k < lv_obj_get_child_count(entry); k++)
               lv_obj_add_state(lv_obj_get_child(entry, k), LV_STATE_CHECKED);
-            lv_label_set_text(lv_obj_get_child(entry, 4), hint);  // Hinweis
+            id(lbl_set)(lv_obj_get_child(entry, 4), hint);  // Hinweis
           }
       - script.execute: alert_refresh
 
@@ -381,7 +381,7 @@ script:
             }
             lv_obj_t *lbl_time = lv_obj_get_child(entry, 1);
             if (strcmp(lv_label_get_text(lbl_time), buf) != 0)
-              lv_label_set_text(lbl_time, buf);
+              id(lbl_set)(lbl_time, buf);
             if (lv_obj_has_state(entry, LV_STATE_CHECKED))
               continue;  // Hinweis "Quittiert hh:mm" bleibt stehen
             open[sev]++;
@@ -413,7 +413,7 @@ script:
             }
             lv_obj_t *lbl_hint = lv_obj_get_child(entry, 4);
             if (strcmp(lv_label_get_text(lbl_hint), hint) != 0)
-              lv_label_set_text(lbl_hint, hint);
+              id(lbl_set)(lbl_hint, hint);
           }
           // Drei Zaehler der Kopfkachel: bestehende Meldungen je Schweregrad
           // (auch quittierte). Farbig nur, wenn es welche gibt.
@@ -448,12 +448,12 @@ script:
             top = "Keine offenen Meldungen";
           else
             top += std::string(" · ") + lv_label_get_text(lv_obj_get_child(worst, 5));
-          lv_label_set_text(id(lbl_alert), top.c_str());
+          id(lbl_set)(id(lbl_alert), top.c_str());
           lv_obj_set_style_bg_color(id(bar_alert), lv_color_hex(worst_sev >= 0 ? COL[worst_sev] : $col_line), 0);
           lv_obj_set_style_bg_opa(id(bar_alert), worst_sev == 2 ? 56 : worst_sev >= 0 ? 24 : 12, 0);
           lv_obj_set_style_text_color(id(lbl_alert), lv_color_hex(worst ? $col_ink : $col_ink2), 0);
           if (shown == 0) {
-            lv_label_set_text(id(lbl_alerts_empty), n == 0 ? "Keine Meldungen" : "Keine Meldungen dieser Art");
+            id(lbl_set)(id(lbl_alerts_empty), n == 0 ? "Keine Meldungen" : "Keine Meldungen dieser Art");
             lv_obj_remove_flag(id(lbl_alerts_empty), LV_OBJ_FLAG_HIDDEN);
           } else {
             lv_obj_add_flag(id(lbl_alerts_empty), LV_OBJ_FLAG_HIDDEN);

@@ -335,8 +335,8 @@ script:
             return v;
           };
           const float sc = rund(top > 0.0f ? top * 1.04f : 1.0f), dsc = rund(dtop > 0.0f ? dtop * 1.04f : 1.0f);
-          lv_label_set_text(id(fc_scale_h), ("Skala " + num(sc, "%g", "--") + " kW").c_str());
-          lv_label_set_text(id(fc_scale_v), ("Skala " + num(dsc, "%g", "--") + " kWh").c_str());
+          id(lbl_set)(id(fc_scale_h), ("Skala " + num(sc, "%g", "--") + " kW").c_str());
+          id(lbl_set)(id(fc_scale_v), ("Skala " + num(dsc, "%g", "--") + " kWh").c_str());
           if (vor) {
             lv_obj_add_flag(id(fc_leg_h), LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(id(fc_leg_v), LV_OBJ_FLAG_HIDDEN);
@@ -385,7 +385,7 @@ script:
             lv_obj_set_width(name, W / 2 - 4);
             lv_obj_set_x(val, W / 2);
             lv_obj_set_width(val, W - W / 2);
-            lv_label_set_text(name, NAME[k]);
+            id(lbl_set)(name, NAME[k]);
             lv_obj_set_size(ch, W, H);
             lv_obj_set_size(cv, W, H);
             show(ch, !vor);
@@ -443,7 +443,7 @@ script:
               lv_obj_set_pos(lab, std::max(0, std::min(cx - 16, W - 32)), B + 6);
               char b[4];
               snprintf(b, sizeof(b), "%02d", h % 24);
-              lv_label_set_text(lab, b);
+              id(lbl_set)(lab, b);
               show(lab, true);
             }
             for (; li < 7; li++)
@@ -484,13 +484,13 @@ script:
               lv_obj_set_width(vl, cw);
               // ab 100 kWh ohne Nachkommastelle, sonst wird die Spalte zu eng.
               // Tag ohne Wert (nicht belegt oder nicht verfuegbar): leer
-              lv_label_set_text(vl, std::isfinite(v) ? num(v, v >= 99.95f ? "%.0f" : "%.1f", "").c_str() : "");
+              id(lbl_set)(vl, std::isfinite(v) ? num(v, v >= 99.95f ? "%.0f" : "%.1f", "").c_str() : "");
               lv_obj_set_pos(dl, x, B2 + 4);
               lv_obj_set_width(dl, cw);
-              lv_label_set_text(dl, tag[d + 1].c_str());
+              id(lbl_set)(dl, tag[d + 1].c_str());
               lv_obj_set_pos(pl, x, B2 + 26);
               lv_obj_set_width(pl, cw);
-              lv_label_set_text(pl, std::isfinite(q) ? ("P10 " + num(q, q >= 99.95f ? "%.0f" : "%.1f", "")).c_str() : "");
+              id(lbl_set)(pl, std::isfinite(q) ? ("P10 " + num(q, q >= 99.95f ? "%.0f" : "%.1f", "")).c_str() : "");
             }
           }
       - script.execute: fc_text
@@ -561,7 +561,7 @@ script:
             add(six10_s, six10);
             const std::string v = vor ? "6 Tage " + num(six, "%.1f", "--,-") + " kWh"
                                       : num(done, "%.1f", "--,-") + " / " + num(prog, "%.1f", "--,-") + " kWh";
-            lv_label_set_text(lv_obj_get_child(T[t], 1), v.c_str());
+            id(lbl_set)(lv_obj_get_child(T[t], 1), v.c_str());
           }
           std::string s;
           if (n == 0)
@@ -572,7 +572,7 @@ script:
           else
             s = "bisher " + num(done_s, "%.1f", "--,-") + " / Prognose " + num(prog_s, "%.1f", "--,-") + " kWh · Rest " +
                 num(rest_s, "%.1f", "--,-") + " kWh · jetzt " + num(now_s, "%.1f", "--,-") + " kW";
-          lv_label_set_text(id(fc_total), s.c_str());
+          id(lbl_set)(id(fc_total), s.c_str());
 
 interval:
   - interval: 60s

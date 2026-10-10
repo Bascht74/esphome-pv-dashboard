@@ -36,11 +36,16 @@ SO LAEUFT EIN WERT (docs/03, Abschnitt "Datenweg"):
    es also nicht zu +inf drehen.
 
 2. DROSSELUNG. Ein neuer Wert ruft KEIN Seitenskript auf, er setzt nur das
-   Bit seiner Gruppe(n) in ha_dirty. Ein Intervall von 1 s ruft je
-   gesetztem Bit die Skripte der Gruppe einmal auf -- mit allen Werten der
-   Gruppe. Damit zeichnet jede Gruppe hoechstens einmal je Sekunde neu,
-   egal wie oft Home Assistant sendet (Shelly jede Sekunde, evcc alle paar
-   Sekunden, zwanzig Werte auf einmal nach dem Verbinden).
+   Bit seiner Gruppe(n) in ha_dirty. Ein Intervall von 100 ms ruft je
+   gesetztem Bit die Skripte der Gruppe auf -- mit allen Werten der
+   Gruppe --, jede Gruppe hoechstens einmal je Sekunde und je Takt
+   hoechstens GRUPPEN_JE_TAKT Gruppen. Damit zeichnet jede Gruppe
+   hoechstens einmal je Sekunde neu, egal wie oft Home Assistant sendet
+   (Shelly jede Sekunde, evcc alle paar Sekunden, zwanzig Werte auf einmal
+   nach dem Verbinden), und die Neuzeichnung verteilt sich auf mehrere
+   kleine Bilder statt eines grossen je Sekunde: Am Panel kostete das
+   grosse Bild (bis 190.000 px) 60..140 ms, in denen loop() stand und die
+   Kugeln der Uebersicht mit (Diagnose 10.10.2026).
    Uebersprungen wird eine Gruppe, deren Geraet laut dev_present fehlt, und
    eine, von der noch kein einziger Wert da ist (sonst stempelte sie
    data_seen, ohne dass Daten kamen).
@@ -577,8 +582,10 @@ z("rule_smart_meter", "b", "input_boolean.smart_meter_eingebaut", NV, demo=False
 z("pv_energy_today", "n", "sensor.pv_erzeugung_heute", [TW], "kWh", 147.0, hin="Summe beider Kreise [A]")
 z("home_energy_today", "n", "sensor.hausverbrauch_heute", [TW, HN], "kWh", 21.3, hin="[A]")
 z("selfuse_energy_today", "n", "sensor.eigenverbrauch_heute", [TW], "kWh", 19.9, hin="[A]")
-z("pv_energy_total", "z", "sensor.pv_erzeugung_gesamt", [], "kWh", 6.1, hin="nur Statistik [A]")
-z("home_energy_total", "z", "sensor.hausverbrauch_gesamt", [], "kWh", 0.9, hin="nur Statistik [A]")
+z("pv_energy_total", "z", "sensor.pv_erzeugung_gesamt", [], "kWh", 6.1,
+  hin="nur Statistik [A]; auch Liste, kommagetrennt, z. B. die Gesamtzaehler der Wechselrichter")
+z("home_energy_total", "z", "sensor.hausverbrauch_gesamt", [], "kWh", 0.9,
+  hin="nur Statistik [A]; auch Liste, kommagetrennt")
 
 # --- Prognose (Solcast, deutsche IDs) -----------------------------------------
 # Nur noch zwei Werte fuer die ganze Anlage: Tagesprognose heute (ihr Attribut
@@ -744,15 +751,26 @@ ZEITRAEUME = [
 
 
 def jinja_reihe(schluessel, sid, idx, n="n"):
+    """Reihe aus der Statistik-Antwort. sid darf eine kommagetrennte Liste
+    sein (ha_pv_energy_total, ha_home_energy_total): je Platz die Summe der
+    Zuwaechse aller IDs, etwa die Gesamtzaehler mehrerer Wechselrichter."""
     return f"""
 {{%- set o_{schluessel} = namespace(l=[0] * {n}) -%}}
-{{%- for e in response.statistics.get('{sid}', []) -%}}
+{{%- for q in '{sid}'.split(',') | map('trim') | select -%}}
+{{%- for e in response.statistics.get(q, []) -%}}
 {{%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}}
 {{%- set i = {idx} -%}}
 {{%- if 0 <= i < {n} and e.change is number -%}}
-{{%- set o_{schluessel}.l = o_{schluessel}.l[:i] + [e.change | round(2)] + o_{schluessel}.l[i + 1:] -%}}
+{{%- set o_{schluessel}.l = o_{schluessel}.l[:i] + [(o_{schluessel}.l[i] + e.change) | round(2)] + o_{schluessel}.l[i + 1:] -%}}
 {{%- endif -%}}
+{{%- endfor -%}}
 {{%- endfor -%}}""".strip("\n")
+
+
+def j_stat_liste(sids):
+    """statistic_ids fuer recorder.get_statistics aus Substitutionen, die
+    jeweils eine ID oder eine kommagetrennte Liste sein duerfen."""
+    return "{{ (" + " ~ ',' ~ ".join(f"'{x}'" for x in sids) + ").split(',') | map('trim') | select | list }}"
 
 
 def jinja_statistik(zr):
@@ -964,8 +982,10 @@ auto F = [](const std::vector<std::string> &v, size_t i) -> float {{
 }};"""
 
 
-def aktion(action, data, data_template, template, erfolg, was, fehler_extra=None, tief=6):
-    """Ein homeassistant.action-Block als YAML (Einrueckung tief)."""
+def aktion(action, data, data_template, template, erfolg, was, fehler_extra=None, tief=6, zaehler=None):
+    """Ein homeassistant.action-Block als YAML (Einrueckung tief). zaehler:
+    Platz in ha_offen; jede Antwort, ob Erfolg oder Fehler, zaehlt ihn herunter."""
+    ab = "" if zaehler is None else f"if (id(ha_offen)[{zaehler}] > 0) id(ha_offen)[{zaehler}]--;\n"
     z_ = [f"- homeassistant.action:", f"    action: {action}"]
     if data:
         z_.append("    data:")
@@ -978,8 +998,10 @@ def aktion(action, data, data_template, template, erfolg, was, fehler_extra=None
     z_.append(einr(template, 6))
     z_.append("    on_success:")
     z_.append("      - lambda: |-")
-    z_.append(einr(antwort_kopf(was) + "\n" + erfolg.strip("\n"), 10))
+    z_.append(einr(ab + antwort_kopf(was) + "\n" + erfolg.strip("\n"), 10))
     z_.append("    on_error:")
+    if ab:
+        z_.append(f"      - lambda: '{ab.strip()}'")
     if fehler_extra:
         z_.append(einr(fehler_extra, 6))
     else:
@@ -1100,6 +1122,27 @@ if (!dc.empty() && jetzt.is_valid() && dc != id(day_curve).state) {
 
 
 N_STAT = len(TAGES_STAT)
+
+# Verteilen der Gruppen auf Takte (Punkt 2): je Takt von 100 ms hoechstens
+# GRUPPEN_JE_TAKT Gruppen, jede hoechstens einmal je Sekunde. 3 x 10 = 30
+# Gruppenaufrufe je Sekunde reichen fuer alle Gruppen.
+GRUPPEN_JE_TAKT = 3
+VERTEILEN = """          // Je Takt hoechstens %(je_takt)d Gruppen, jede hoechstens einmal je
+          // Sekunde: verteilt die Neuzeichnung auf mehrere kleine Bilder.
+          static uint32_t gruppe_zuletzt[32] = {0};
+          const uint32_t takt_ms = millis();
+          const uint32_t offen = id(ha_dirty) & 0x%(maske)08Xu;
+          uint32_t d = 0;
+          for (int b = 0, n = 0; b < 32 && n < %(je_takt)d; b++) {
+            if (!((offen >> b) & 1u) || takt_ms - gruppe_zuletzt[b] < 1000u)
+              continue;
+            d |= 1u << b;
+            gruppe_zuletzt[b] = takt_ms;
+            n++;
+          }
+          if (d == 0)
+            return;
+          id(ha_dirty) &= ~d;"""
 
 # Stoerung aus dem Statustext (Punkt 8), im 1-s-Intervall vor der Drosselung
 STOERTEXT = einr("""// Stoerung aus dem Statustext: ha_inv<N>_fault nicht belegt, ha_inv<N>_status
@@ -1362,6 +1405,24 @@ def panel_bauen():
     type: bool
     restore_value: false
     initial_value: 'false'
+  # Ausstehende Antworten je Abruf (0 Prognosen ha_fetch_fc, 1 Statistik
+  # ha_fetch_stats), Startzeit des Abrufs und Zahl der Wiederholungen. Eine
+  # Anfrage, die das Panel wegen vollen Sendepuffers verwirft ("Action
+  # request dropped, TCP buffer full"), bekommt nie eine Antwort, auch kein
+  # on_error. Fehlt 30 s nach dem Abruf noch eine, fragt das Intervall den
+  # ganzen Abruf neu ab, hoechstens zweimal (Geraet, 10.10.2026).
+  - id: ha_offen
+    type: std::array<uint8_t, 2>
+    restore_value: false
+    initial_value: '{0, 0}'
+  - id: ha_offen_seit
+    type: std::array<uint32_t, 2>
+    restore_value: false
+    initial_value: '{0, 0}'
+  - id: ha_nochmal
+    type: std::array<uint8_t, 2>
+    restore_value: false
+    initial_value: '{0, 0}'
   # Aus den Vorhersagen (weather.get_forecasts): heute Hoechst, Tiefst,
   # Regen; naechste Stunde Boeen, Bewoelkung; Uhrzeit des Abrufs
   - id: ha_wx_today
@@ -1541,11 +1602,12 @@ def panel_bauen():
   # Solcast je Dach. Die vier Aktionen laufen nebeneinander, jede Antwort
   # kommt fuer sich.
   - id: ha_fetch_fc
-    then:""")
+    then:
+      - lambda: 'id(ha_offen)[0] = 4; id(ha_offen_seit)[0] = millis();'""")
     w(aktion("weather.get_forecasts", [("entity_id", "${ha_weather}"), ("type", "hourly")], [],
-             JINJA_STUNDE, ERFOLG_STUNDE, "weather.get_forecasts hourly"))
+             JINJA_STUNDE, ERFOLG_STUNDE, "weather.get_forecasts hourly", zaehler=0))
     w(aktion("weather.get_forecasts", [("entity_id", "${ha_weather}"), ("type", "daily")], [],
-             JINJA_TAG, ERFOLG_TAG, "weather.get_forecasts daily"))
+             JINJA_TAG, ERFOLG_TAG, "weather.get_forecasts daily", zaehler=0))
     w("      # Solcast: Aktion der Integration; scheitert sie (Integration fehlt,\n"
       "      # z. B. mit dem Dummy), liest ha_fetch_solcast_attr das Attribut")
     w(aktion("solcast_solar.query_forecast_data", [],
@@ -1553,12 +1615,12 @@ def panel_bauen():
               ("end_date_time", "{{ (today_at('00:00') + timedelta(days=1)).isoformat() }}")],
              JINJA_SOLCAST, ERFOLG_SOLCAST, "solcast_solar.query_forecast_data",
              fehler_extra="- lambda: 'ESP_LOGD(\"ha\", \"solcast_solar.query_forecast_data: %s -- lese "
-                          "detailedForecast\", error.c_str());'\n- script.execute: ha_fetch_solcast_attr"))
+                          "detailedForecast\", error.c_str());'\n- script.execute: ha_fetch_solcast_attr", zaehler=0))
     w("      # Prognose je Dach (Seite Prognose): Zustand, estimate10 und\n"
       "      # detailedForecast von ha_pv<N>_fc_d1..7 -- die Vorlage liest sie selbst,\n"
       "      # weather.get_forecasts ist nur der Traeger einer Antwort")
     w(aktion("weather.get_forecasts", [("entity_id", "${ha_weather}"), ("type", "daily")], [],
-             jinja_dach(), ERFOLG_DACH, "Prognose je Dach"))
+             jinja_dach(), ERFOLG_DACH, "Prognose je Dach", zaehler=0))
     w("""
   # Ersatzweg fuer die Solcast-Halbstunden: das Attribut detailedForecast der
   # Tagesprognose. Die Vorlage braucht irgendeine Aktion mit Antwort --
@@ -1573,8 +1635,9 @@ def panel_bauen():
   # Haus und die Tagesreihe Erzeugung. Zaehlerstaende mit state_class
   # total_increasing, types change = Zuwachs je Platz in kWh.
   - id: ha_fetch_stats
-    then:""")
-    ids = "{{ [" + ", ".join(f"'{sid}'" for _, sid in STAT_REIHEN) + "] }}"
+    then:
+      - lambda: 'id(ha_offen)[1] = %d; id(ha_offen_seit)[1] = millis();'""" % (len(ZEITRAEUME) + 1))
+    ids = j_stat_liste([sid for _, sid in STAT_REIHEN])
     for zr in ZEITRAEUME:
         # Abstand zwischen den Abfragen: alle auf einmal liefen beim Start
         # in "Action request dropped, TCP buffer full" (Geraet, 10.10.2026)
@@ -1584,15 +1647,15 @@ def panel_bauen():
         w(aktion("recorder.get_statistics", [("period", zr["period"])],
                  [("statistic_ids", ids), ("start_time", "{{ (" + zr["t0"] + ").isoformat() }}"),
                   ("types", "{{ ['change'] }}"), ("units", "{{ {'energy': 'kWh'} }}")],
-                 jinja_statistik(zr), erfolg_statistik(zr["range"]), f"Statistik {zr['name']}"))
+                 jinja_statistik(zr), erfolg_statistik(zr["range"]), f"Statistik {zr['name']}", zaehler=1))
     w("      - delay: 2s")
     w("      # 24 Stunden: Hausverbrauch, Netzbezug (solar = Verbrauch - Bezug [A]),\n"
       "      # Erzeugung heute 06..22 Uhr fuer day_curve")
     w(aktion("recorder.get_statistics", [("period", "hour")],
-             [("statistic_ids", "{{ ['${ha_home_energy_total}', '${ha_meter0_total}', '${ha_pv_energy_total}'] }}"),
+             [("statistic_ids", j_stat_liste(["${ha_home_energy_total}", "${ha_meter0_total}", "${ha_pv_energy_total}"])),
               ("start_time", "{{ (" + STUNDEN_T0 + ").isoformat() }}"),
               ("types", "{{ ['change'] }}"), ("units", "{{ {'energy': 'kWh'} }}")],
-             JINJA_STUNDEN, ERFOLG_STUNDEN, "Statistik 24 h"))
+             JINJA_STUNDEN, ERFOLG_STUNDEN, "Statistik 24 h", zaehler=1))
     w("""
   # Tageswerte aus der Statistik (ha_<ziel>: statistik, Liste unter
   # substitutions): erst die vollen Stunden ab 0 Uhr (Leistung: mean in W,
@@ -1619,8 +1682,9 @@ def panel_bauen():
                    "dirty": (1 << G["Wallbox 1"]) | (1 << G["Wallbox 2"])})
     # --- Intervalle
     w("""interval:
-  # Drosselung: je Gruppe hoechstens ein Aufruf der Seitenskripte je Sekunde
-  - interval: 1s
+  # Drosselung: je Gruppe hoechstens ein Aufruf der Seitenskripte je
+  # Sekunde, verteilt auf Takte von 100 ms (Punkt 2 in tools/ha_bindings.py)
+  - interval: 100ms
     then:
       - lambda: |-""")
     # belegt ja/nein je Substitution (Jinja zur Compile-Zeit)
@@ -1666,10 +1730,7 @@ def panel_bauen():
             id(ha_dirty) = 0xFFFFFFFFu;
           }
 @STOERTEXT@
-          const uint32_t d = id(ha_dirty);
-          if (d == 0)
-            return;
-          id(ha_dirty) = 0;
+@VERTEILEN@
           const uint32_t dev = id(dev_present);
           auto da = [dev](int b) -> bool { return (dev >> b) & 1u; };
           // Rechnen nur ueber diese Hilfen: leer (val_leer, -inf) bleibt leer
@@ -1692,7 +1753,9 @@ def panel_bauen():
           auto when = [](const std::string &s, bool mit_tag) -> std::string {
             return s == " " ? s : id(ha_when)(s, mit_tag);
           };
-          const ESPTime jetzt = id(dash_time).now();""".replace("@STOERTEXT@", STOERTEXT))
+          const ESPTime jetzt = id(dash_time).now();""".replace("@STOERTEXT@", STOERTEXT)
+      .replace("@VERTEILEN@", VERTEILEN % {"je_takt": GRUPPEN_JE_TAKT,
+                                           "maske": sum(1 << g["bit"] for g in GRUPPEN)}))
     for g in GRUPPEN:
         mit = [e for e in TABELLE if g["bit"] in e["gr"]]
         if not mit:
@@ -1725,6 +1788,7 @@ def panel_bauen():
             fc_zuletzt = 0;
             stat_schluessel = -1;
             heute_schluessel = -1;
+            id(ha_offen) = {0, 0};
           }
           const bool bereit = ist && millis() - seit >= 10000;
           if (bereit != id(ha_ready)) {
@@ -1735,7 +1799,26 @@ def panel_bauen():
             return;
           if (fc_zuletzt == 0 || millis() - fc_zuletzt >= 30u * 60u * 1000u) {
             fc_zuletzt = millis() | 1u;
+            id(ha_nochmal)[0] = 0;
             id(ha_fetch_fc).execute();
+          }
+          // Verlorene Anfragen (globals ha_offen): Abruf neu, hoechstens zweimal
+          for (int k = 0; k < 2; k++) {
+            if (id(ha_offen)[k] == 0 || millis() - id(ha_offen_seit)[k] < 30000)
+              continue;
+            if (id(ha_nochmal)[k] >= 2) {
+              ESP_LOGW("ha", "%s: %u Antworten fehlen auch nach zwei Wiederholungen", k ? "Statistik" : "Prognosen",
+                       (unsigned) id(ha_offen)[k]);
+              id(ha_offen)[k] = 0;
+              continue;
+            }
+            id(ha_nochmal)[k]++;
+            ESP_LOGW("ha", "%s: %u Antworten fehlen, frage erneut", k ? "Statistik" : "Prognosen",
+                     (unsigned) id(ha_offen)[k]);
+            if (k)
+              id(ha_fetch_stats).execute();
+            else
+              id(ha_fetch_fc).execute();
           }
           if (millis() - seit < 30000)
             return;
@@ -1743,6 +1826,7 @@ def panel_bauen():
           const int schluessel = t.is_valid() ? t.day_of_year * 24 + t.hour : 0;
           if (schluessel != stat_schluessel && (stat_schluessel < 0 || !t.is_valid() || t.minute >= 2)) {
             stat_schluessel = schluessel;
+            id(ha_nochmal)[1] = 0;
             id(ha_fetch_stats).execute();
           }
           // Tageswerte aus der Statistik und Stundenbalken der Seite

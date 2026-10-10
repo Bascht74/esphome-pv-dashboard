@@ -250,6 +250,7 @@ def ha_jinja(vorlage, json_text=True, states=None, attrs=None, **kw):
         today_at=lambda s="00:00": dt.datetime(2026, 10, 10, *map(int, s.split(":")), tzinfo=tz),
         now=lambda: dt.datetime(2026, 10, 10, 13, 20, tzinfo=tz),
         as_local=lambda d: d.astimezone(tz),
+        timedelta=dt.timedelta,
         states=lambda e: (states or {}).get(e, "unknown"),
         state_attr=lambda e, a: (attrs or {}).get((e, a)),
         as_datetime=lambda v: v if isinstance(v, dt.datetime) else dt.datetime.fromisoformat(v))
@@ -340,6 +341,38 @@ class TagesStatistik(unittest.TestCase):
         self.assertIn("constexpr bool S_ANY = ", self.text)
         self.assertIn("id(ha_fetch_stats).execute();", self.text)
         self.assertEqual(self.text.count("action: recorder.get_statistics"), len(hb.ZEITRAEUME) + 1 + 2)
+
+
+class StatistikListe(unittest.TestCase):
+    """ha_pv_energy_total / ha_home_energy_total als Liste (11.10.2026): Summe
+    der Zuwaechse aller IDs je Platz."""
+
+    def setUp(self):
+        try:
+            import esphome  # noqa: F401
+        except ImportError:
+            self.skipTest("esphome nicht importierbar -- mit der ESPHome-Umgebung starten")
+
+    def test_liste_summiert(self):
+        subs = {f"ha_{n}": e["ent"] for n, e in hb.NAMEN.items() if not e["attr"]}
+        subs.update({"ha_pv_energy_total": "sensor.wr1_gesamt, sensor.wr2_gesamt",
+                     "ha_home_energy_total": "sensor.haus_gesamt"})
+        x = esphome_substitution(subs, {"s": hb.JINJA_STUNDEN,
+                                        "ids": hb.j_stat_liste(["${ha_pv_energy_total}", "${ha_home_energy_total}"])})
+        self.assertEqual(ha_jinja(x["ids"], json_text=False),
+                         "['sensor.wr1_gesamt', 'sensor.wr2_gesamt', 'sensor.haus_gesamt']")
+        zeile = lambda h, c: dict(start=f"2026-10-10T{h:02d}:00:00+02:00", change=c)  # noqa: E731
+        resp = {"statistics": {
+            "sensor.wr1_gesamt": [zeile(9, 1.25), zeile(10, 2.0)],
+            "sensor.wr2_gesamt": [zeile(10, 0.5), zeile(11, None)],
+            "sensor.haus_gesamt": [zeile(10, 0.75)],
+        }}
+        r = ha_jinja(x["s"], response=resp)
+        dc = [float(v) for v in r["dc"].split(",")]
+        self.assertEqual(dc[3], 1.25)               # 09 Uhr nur WR 1
+        self.assertEqual(dc[4], 2.5)                # 10 Uhr WR 1 + WR 2
+        self.assertEqual(dc[5], 0.0)                # ohne change zaehlt nichts
+        self.assertIn("0.75", r["home"])
 
 
 class PrognoseJeDach(unittest.TestCase):

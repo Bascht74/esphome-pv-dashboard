@@ -251,8 +251,8 @@ substitutions:
   ha_pv_energy_today: sensor.pv_erzeugung_heute  # Summe beider Kreise [A]
   ha_home_energy_today: sensor.hausverbrauch_heute  # [A]
   ha_selfuse_energy_today: sensor.eigenverbrauch_heute  # [A]
-  ha_pv_energy_total: sensor.pv_erzeugung_gesamt  # nur Statistik [A]
-  ha_home_energy_total: sensor.hausverbrauch_gesamt  # nur Statistik [A]
+  ha_pv_energy_total: sensor.pv_erzeugung_gesamt  # nur Statistik [A]; auch Liste, kommagetrennt, z. B. die Gesamtzaehler der Wechselrichter
+  ha_home_energy_total: sensor.hausverbrauch_gesamt  # nur Statistik [A]; auch Liste, kommagetrennt
   ha_solcast_today: sensor.solcast_pv_forecast_prognose_heute  # nur Attribut detailedForecast (forecast_curve)
   ha_solcast_remaining: sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute
   ha_pv1_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
@@ -498,6 +498,24 @@ globals:
     type: bool
     restore_value: false
     initial_value: 'false'
+  # Ausstehende Antworten je Abruf (0 Prognosen ha_fetch_fc, 1 Statistik
+  # ha_fetch_stats), Startzeit des Abrufs und Zahl der Wiederholungen. Eine
+  # Anfrage, die das Panel wegen vollen Sendepuffers verwirft ("Action
+  # request dropped, TCP buffer full"), bekommt nie eine Antwort, auch kein
+  # on_error. Fehlt 30 s nach dem Abruf noch eine, fragt das Intervall den
+  # ganzen Abruf neu ab, hoechstens zweimal (Geraet, 10.10.2026).
+  - id: ha_offen
+    type: std::array<uint8_t, 2>
+    restore_value: false
+    initial_value: '{0, 0}'
+  - id: ha_offen_seit
+    type: std::array<uint32_t, 2>
+    restore_value: false
+    initial_value: '{0, 0}'
+  - id: ha_nochmal
+    type: std::array<uint8_t, 2>
+    restore_value: false
+    initial_value: '{0, 0}'
   # Aus den Vorhersagen (weather.get_forecasts): heute Hoechst, Tiefst,
   # Regen; naechste Stunde Boeen, Bewoelkung; Uhrzeit des Abrufs
   - id: ha_wx_today
@@ -2068,6 +2086,7 @@ script:
   # kommt fuer sich.
   - id: ha_fetch_fc
     then:
+      - lambda: 'id(ha_offen)[0] = 4; id(ha_offen_seit)[0] = millis();'
       - homeassistant.action:
           action: weather.get_forecasts
           data:
@@ -2098,6 +2117,7 @@ script:
             {{ {'h': o.h | join(','), 'c': o.c | join(','), 't': o.t | join(','), 'r': o.r | join(','), 'p': o.p | join(','), 'g': (((f.get('wind_gust_speed')) | round(1)) if (f.get('wind_gust_speed')) is number else 'nan') | string, 'w': (((f.get('cloud_coverage')) | round(0)) if (f.get('cloud_coverage')) is number else 'nan') | string} | tojson }}
           on_success:
             - lambda: |-
+                if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;
                 const bool txt = response["response"].is<const char *>();
                 JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
                 JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
@@ -2124,6 +2144,7 @@ script:
                 id(ha_wx_hour0)[1] = strtof(S("w").c_str(), nullptr);
                 id(ha_dirty) |= 1u << 27;
           on_error:
+            - lambda: 'if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;'
             - lambda: 'ESP_LOGW("ha", "weather.get_forecasts hourly: %s", error.c_str());'
       - homeassistant.action:
           action: weather.get_forecasts
@@ -2149,6 +2170,7 @@ script:
             {{ {'d': o.d | join(','), 'c': o.c | join(','), 'hi': o.hi | join(','), 'lo': o.lo | join(','), 'r': o.r | join(','), 'p': o.p | join(','), 's': o.s | join(','), 'w': o.w | join(',')} | tojson }}
           on_success:
             - lambda: |-
+                if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;
                 const bool txt = response["response"].is<const char *>();
                 JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
                 JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
@@ -2181,6 +2203,7 @@ script:
                 id(ha_wx_stamp) = jetzt.is_valid() ? jetzt.strftime("%H:%M") : std::string();
                 id(ha_dirty) |= 1u << 27;
           on_error:
+            - lambda: 'if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;'
             - lambda: 'ESP_LOGW("ha", "weather.get_forecasts daily: %s", error.c_str());'
       # Solcast: Aktion der Integration; scheitert sie (Integration fehlt,
       # z. B. mit dem Dummy), liest ha_fetch_solcast_attr das Attribut
@@ -2205,6 +2228,7 @@ script:
             {{ {'a': o.a | join(',')} | tojson }}
           on_success:
             - lambda: |-
+                if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;
                 const bool txt = response["response"].is<const char *>();
                 JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
                 JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
@@ -2238,6 +2262,7 @@ script:
                     id(forecast_curve).make_call().set_value(buf).perform();
                 }
           on_error:
+            - lambda: 'if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;'
             - lambda: 'ESP_LOGD("ha", "solcast_solar.query_forecast_data: %s -- lese detailedForecast", error.c_str());'
             - script.execute: ha_fetch_solcast_attr
       # Prognose je Dach (Seite Prognose): Zustand, estimate10 und
@@ -2290,6 +2315,7 @@ script:
             {{ dict(o.l) | tojson }}
           on_success:
             - lambda: |-
+                if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;
                 const bool txt = response["response"].is<const char *>();
                 JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
                 JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
@@ -2339,6 +2365,7 @@ script:
                     id(forecast_curve).make_call().set_value(buf).perform();
                 }
           on_error:
+            - lambda: 'if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;'
             - lambda: 'ESP_LOGW("ha", "Prognose je Dach: %s", error.c_str());'
 
   # Ersatzweg fuer die Solcast-Halbstunden: das Attribut detailedForecast der
@@ -2408,13 +2435,14 @@ script:
   # total_increasing, types change = Zuwachs je Platz in kWh.
   - id: ha_fetch_stats
     then:
+      - lambda: 'id(ha_offen)[1] = 4; id(ha_offen_seit)[1] = millis();'
       # Woche
       - homeassistant.action:
           action: recorder.get_statistics
           data:
             period: day
           data_template:
-            statistic_ids: "{{ ['${ha_pv_energy_total}', '${ha_home_energy_total}', '${ha_meter0_total}', '${ha_meter1_total}', '${ha_meter2_total}'] }}"
+            statistic_ids: "{{ ('${ha_pv_energy_total}' ~ ',' ~ '${ha_home_energy_total}' ~ ',' ~ '${ha_meter0_total}' ~ ',' ~ '${ha_meter1_total}' ~ ',' ~ '${ha_meter2_total}').split(',') | map('trim') | select | list }}"
             start_time: "{{ (today_at('00:00') - timedelta(days=now().weekday())).isoformat() }}"
             types: "{{ ['change'] }}"
             units: "{{ {'energy': 'kWh'} }}"
@@ -2423,48 +2451,59 @@ script:
             {%- set t0 = today_at('00:00') - timedelta(days=now().weekday()) -%}
             {%- set n = 7 -%}
             {%- set o_p = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_pv_energy_total}', []) -%}
+            {%- for q in '${ha_pv_energy_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = (s.date() - t0.date()).days -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_p.l = o_p.l[:i] + [e.change | round(2)] + o_p.l[i + 1:] -%}
+            {%- set o_p.l = o_p.l[:i] + [(o_p.l[i] + e.change) | round(2)] + o_p.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_c = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_home_energy_total}', []) -%}
+            {%- for q in '${ha_home_energy_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = (s.date() - t0.date()).days -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_c.l = o_c.l[:i] + [e.change | round(2)] + o_c.l[i + 1:] -%}
+            {%- set o_c.l = o_c.l[:i] + [(o_c.l[i] + e.change) | round(2)] + o_c.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_i = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter0_total}', []) -%}
+            {%- for q in '${ha_meter0_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = (s.date() - t0.date()).days -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_i.l = o_i.l[:i] + [e.change | round(2)] + o_i.l[i + 1:] -%}
+            {%- set o_i.l = o_i.l[:i] + [(o_i.l[i] + e.change) | round(2)] + o_i.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_e = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter1_total}', []) -%}
+            {%- for q in '${ha_meter1_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = (s.date() - t0.date()).days -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_e.l = o_e.l[:i] + [e.change | round(2)] + o_e.l[i + 1:] -%}
+            {%- set o_e.l = o_e.l[:i] + [(o_e.l[i] + e.change) | round(2)] + o_e.l[i + 1:] -%}
             {%- endif -%}
             {%- endfor -%}
+            {%- endfor -%}
             {%- set o_f = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter2_total}', []) -%}
+            {%- for q in '${ha_meter2_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = (s.date() - t0.date()).days -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_f.l = o_f.l[:i] + [e.change | round(2)] + o_f.l[i + 1:] -%}
+            {%- set o_f.l = o_f.l[:i] + [(o_f.l[i] + e.change) | round(2)] + o_f.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {{ {'per': t0.strftime('%d.%m.') ~ ' bis ' ~ (t0 + timedelta(days=6)).strftime('%d.%m.%Y'), 'lab': 'Mo,Di,Mi,Do,Fr,Sa,So', 'p': o_p.l | join(','), 'c': o_c.l | join(','), 'i': o_i.l | join(','), 'e': o_e.l | join(','), 'f': o_f.l | join(',')} | tojson }}
           on_success:
             - lambda: |-
+                if (id(ha_offen)[1] > 0) id(ha_offen)[1]--;
                 const bool txt = response["response"].is<const char *>();
                 JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
                 JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
@@ -2496,6 +2535,7 @@ script:
                                      (p - e) * ${tarif_bezug_ct} - i * ${tarif_bezug_ct}) / 100.0f;
                 id(stats_update).execute(0, S("per"), S("lab"), P, C, I, E, money);
           on_error:
+            - lambda: 'if (id(ha_offen)[1] > 0) id(ha_offen)[1]--;'
             - lambda: 'ESP_LOGW("ha", "Statistik Woche: %s", error.c_str());'
       - delay: 2s
       # Monat
@@ -2504,7 +2544,7 @@ script:
           data:
             period: day
           data_template:
-            statistic_ids: "{{ ['${ha_pv_energy_total}', '${ha_home_energy_total}', '${ha_meter0_total}', '${ha_meter1_total}', '${ha_meter2_total}'] }}"
+            statistic_ids: "{{ ('${ha_pv_energy_total}' ~ ',' ~ '${ha_home_energy_total}' ~ ',' ~ '${ha_meter0_total}' ~ ',' ~ '${ha_meter1_total}' ~ ',' ~ '${ha_meter2_total}').split(',') | map('trim') | select | list }}"
             start_time: "{{ (today_at('00:00').replace(day=1)).isoformat() }}"
             types: "{{ ['change'] }}"
             units: "{{ {'energy': 'kWh'} }}"
@@ -2513,48 +2553,59 @@ script:
             {%- set t0 = today_at('00:00').replace(day=1) -%}
             {%- set n = ((t0.replace(day=28) + timedelta(days=4)).replace(day=1) - t0).days -%}
             {%- set o_p = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_pv_energy_total}', []) -%}
+            {%- for q in '${ha_pv_energy_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.day - 1 if s.month == t0.month else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_p.l = o_p.l[:i] + [e.change | round(2)] + o_p.l[i + 1:] -%}
+            {%- set o_p.l = o_p.l[:i] + [(o_p.l[i] + e.change) | round(2)] + o_p.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_c = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_home_energy_total}', []) -%}
+            {%- for q in '${ha_home_energy_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.day - 1 if s.month == t0.month else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_c.l = o_c.l[:i] + [e.change | round(2)] + o_c.l[i + 1:] -%}
+            {%- set o_c.l = o_c.l[:i] + [(o_c.l[i] + e.change) | round(2)] + o_c.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_i = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter0_total}', []) -%}
+            {%- for q in '${ha_meter0_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.day - 1 if s.month == t0.month else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_i.l = o_i.l[:i] + [e.change | round(2)] + o_i.l[i + 1:] -%}
+            {%- set o_i.l = o_i.l[:i] + [(o_i.l[i] + e.change) | round(2)] + o_i.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_e = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter1_total}', []) -%}
+            {%- for q in '${ha_meter1_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.day - 1 if s.month == t0.month else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_e.l = o_e.l[:i] + [e.change | round(2)] + o_e.l[i + 1:] -%}
+            {%- set o_e.l = o_e.l[:i] + [(o_e.l[i] + e.change) | round(2)] + o_e.l[i + 1:] -%}
             {%- endif -%}
             {%- endfor -%}
+            {%- endfor -%}
             {%- set o_f = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter2_total}', []) -%}
+            {%- for q in '${ha_meter2_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.day - 1 if s.month == t0.month else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_f.l = o_f.l[:i] + [e.change | round(2)] + o_f.l[i + 1:] -%}
+            {%- set o_f.l = o_f.l[:i] + [(o_f.l[i] + e.change) | round(2)] + o_f.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {{ {'per': ['Januar', 'Februar', 'Maerz', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'][t0.month - 1] ~ ' ' ~ t0.year, 'lab': range(1, n + 1) | join(','), 'p': o_p.l | join(','), 'c': o_c.l | join(','), 'i': o_i.l | join(','), 'e': o_e.l | join(','), 'f': o_f.l | join(',')} | tojson }}
           on_success:
             - lambda: |-
+                if (id(ha_offen)[1] > 0) id(ha_offen)[1]--;
                 const bool txt = response["response"].is<const char *>();
                 JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
                 JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
@@ -2586,6 +2637,7 @@ script:
                                      (p - e) * ${tarif_bezug_ct} - i * ${tarif_bezug_ct}) / 100.0f;
                 id(stats_update).execute(1, S("per"), S("lab"), P, C, I, E, money);
           on_error:
+            - lambda: 'if (id(ha_offen)[1] > 0) id(ha_offen)[1]--;'
             - lambda: 'ESP_LOGW("ha", "Statistik Monat: %s", error.c_str());'
       - delay: 2s
       # Jahr
@@ -2594,7 +2646,7 @@ script:
           data:
             period: month
           data_template:
-            statistic_ids: "{{ ['${ha_pv_energy_total}', '${ha_home_energy_total}', '${ha_meter0_total}', '${ha_meter1_total}', '${ha_meter2_total}'] }}"
+            statistic_ids: "{{ ('${ha_pv_energy_total}' ~ ',' ~ '${ha_home_energy_total}' ~ ',' ~ '${ha_meter0_total}' ~ ',' ~ '${ha_meter1_total}' ~ ',' ~ '${ha_meter2_total}').split(',') | map('trim') | select | list }}"
             start_time: "{{ (today_at('00:00').replace(month=1, day=1)).isoformat() }}"
             types: "{{ ['change'] }}"
             units: "{{ {'energy': 'kWh'} }}"
@@ -2603,48 +2655,59 @@ script:
             {%- set t0 = today_at('00:00').replace(month=1, day=1) -%}
             {%- set n = 12 -%}
             {%- set o_p = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_pv_energy_total}', []) -%}
+            {%- for q in '${ha_pv_energy_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.month - 1 if s.year == t0.year else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_p.l = o_p.l[:i] + [e.change | round(2)] + o_p.l[i + 1:] -%}
+            {%- set o_p.l = o_p.l[:i] + [(o_p.l[i] + e.change) | round(2)] + o_p.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_c = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_home_energy_total}', []) -%}
+            {%- for q in '${ha_home_energy_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.month - 1 if s.year == t0.year else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_c.l = o_c.l[:i] + [e.change | round(2)] + o_c.l[i + 1:] -%}
+            {%- set o_c.l = o_c.l[:i] + [(o_c.l[i] + e.change) | round(2)] + o_c.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_i = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter0_total}', []) -%}
+            {%- for q in '${ha_meter0_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.month - 1 if s.year == t0.year else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_i.l = o_i.l[:i] + [e.change | round(2)] + o_i.l[i + 1:] -%}
+            {%- set o_i.l = o_i.l[:i] + [(o_i.l[i] + e.change) | round(2)] + o_i.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_e = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter1_total}', []) -%}
+            {%- for q in '${ha_meter1_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.month - 1 if s.year == t0.year else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_e.l = o_e.l[:i] + [e.change | round(2)] + o_e.l[i + 1:] -%}
+            {%- set o_e.l = o_e.l[:i] + [(o_e.l[i] + e.change) | round(2)] + o_e.l[i + 1:] -%}
             {%- endif -%}
             {%- endfor -%}
+            {%- endfor -%}
             {%- set o_f = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter2_total}', []) -%}
+            {%- for q in '${ha_meter2_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.month - 1 if s.year == t0.year else -1 -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_f.l = o_f.l[:i] + [e.change | round(2)] + o_f.l[i + 1:] -%}
+            {%- set o_f.l = o_f.l[:i] + [(o_f.l[i] + e.change) | round(2)] + o_f.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {{ {'per': t0.year | string, 'lab': 'J,F,M,A,M,J,J,A,S,O,N,D', 'p': o_p.l | join(','), 'c': o_c.l | join(','), 'i': o_i.l | join(','), 'e': o_e.l | join(','), 'f': o_f.l | join(',')} | tojson }}
           on_success:
             - lambda: |-
+                if (id(ha_offen)[1] > 0) id(ha_offen)[1]--;
                 const bool txt = response["response"].is<const char *>();
                 JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
                 JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
@@ -2676,6 +2739,7 @@ script:
                                      (p - e) * ${tarif_bezug_ct} - i * ${tarif_bezug_ct}) / 100.0f;
                 id(stats_update).execute(2, S("per"), S("lab"), P, C, I, E, money);
           on_error:
+            - lambda: 'if (id(ha_offen)[1] > 0) id(ha_offen)[1]--;'
             - lambda: 'ESP_LOGW("ha", "Statistik Jahr: %s", error.c_str());'
       - delay: 2s
       # 24 Stunden: Hausverbrauch, Netzbezug (solar = Verbrauch - Bezug [A]),
@@ -2685,7 +2749,7 @@ script:
           data:
             period: hour
           data_template:
-            statistic_ids: "{{ ['${ha_home_energy_total}', '${ha_meter0_total}', '${ha_pv_energy_total}'] }}"
+            statistic_ids: "{{ ('${ha_home_energy_total}' ~ ',' ~ '${ha_meter0_total}' ~ ',' ~ '${ha_pv_energy_total}').split(',') | map('trim') | select | list }}"
             start_time: "{{ (now().replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)).isoformat() }}"
             types: "{{ ['change'] }}"
             units: "{{ {'energy': 'kWh'} }}"
@@ -2694,28 +2758,34 @@ script:
             {%- set t0 = now().replace(minute=0, second=0, microsecond=0) - timedelta(hours=23) -%}
             {%- set n = 24 -%}
             {%- set o_h = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_home_energy_total}', []) -%}
+            {%- for q in '${ha_home_energy_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = ((s - t0).total_seconds() // 3600) | int -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_h.l = o_h.l[:i] + [e.change | round(2)] + o_h.l[i + 1:] -%}
+            {%- set o_h.l = o_h.l[:i] + [(o_h.l[i] + e.change) | round(2)] + o_h.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set o_i = namespace(l=[0] * n) -%}
-            {%- for e in response.statistics.get('${ha_meter0_total}', []) -%}
+            {%- for q in '${ha_meter0_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = ((s - t0).total_seconds() // 3600) | int -%}
             {%- if 0 <= i < n and e.change is number -%}
-            {%- set o_i.l = o_i.l[:i] + [e.change | round(2)] + o_i.l[i + 1:] -%}
+            {%- set o_i.l = o_i.l[:i] + [(o_i.l[i] + e.change) | round(2)] + o_i.l[i + 1:] -%}
             {%- endif -%}
             {%- endfor -%}
+            {%- endfor -%}
             {%- set o_v = namespace(l=[0] * 16) -%}
-            {%- for e in response.statistics.get('${ha_pv_energy_total}', []) -%}
+            {%- for q in '${ha_pv_energy_total}'.split(',') | map('trim') | select -%}
+            {%- for e in response.statistics.get(q, []) -%}
             {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
             {%- set i = s.hour - 6 if s.date() == now().date() else -1 -%}
             {%- if 0 <= i < 16 and e.change is number -%}
-            {%- set o_v.l = o_v.l[:i] + [e.change | round(2)] + o_v.l[i + 1:] -%}
+            {%- set o_v.l = o_v.l[:i] + [(o_v.l[i] + e.change) | round(2)] + o_v.l[i + 1:] -%}
             {%- endif -%}
+            {%- endfor -%}
             {%- endfor -%}
             {%- set sol = namespace(l=[]) -%}
             {%- for k in range(24) -%}
@@ -2724,6 +2794,7 @@ script:
             {{ {'home': o_h.l | join(','), 'solar': sol.l | join(','), 'hour': now().hour, 'dc': o_v.l | join(',')} | tojson }}
           on_success:
             - lambda: |-
+                if (id(ha_offen)[1] > 0) id(ha_offen)[1]--;
                 const bool txt = response["response"].is<const char *>();
                 JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
                 JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
@@ -2750,6 +2821,7 @@ script:
                   id(day_curve).make_call().set_value(dc).perform();
                 }
           on_error:
+            - lambda: 'if (id(ha_offen)[1] > 0) id(ha_offen)[1]--;'
             - lambda: 'ESP_LOGW("ha", "Statistik 24 h: %s", error.c_str());'
 
   # Tageswerte aus der Statistik (ha_<ziel>: statistik, Liste unter
@@ -3027,8 +3099,9 @@ script:
             - lambda: 'id(ha_dirty) |= 0x00030000u;'
 
 interval:
-  # Drosselung: je Gruppe hoechstens ein Aufruf der Seitenskripte je Sekunde
-  - interval: 1s
+  # Drosselung: je Gruppe hoechstens ein Aufruf der Seitenskripte je
+  # Sekunde, verteilt auf Takte von 100 ms (Punkt 2 in tools/ha_bindings.py)
+  - interval: 100ms
     then:
       - lambda: |-
           constexpr bool B_bat1_cell_max = ${ 'false' if (ha_bat1_cell_max | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
@@ -3306,10 +3379,22 @@ interval:
               }
             }
           }
-          const uint32_t d = id(ha_dirty);
+          // Je Takt hoechstens 3 Gruppen, jede hoechstens einmal je
+          // Sekunde: verteilt die Neuzeichnung auf mehrere kleine Bilder.
+          static uint32_t gruppe_zuletzt[32] = {0};
+          const uint32_t takt_ms = millis();
+          const uint32_t offen = id(ha_dirty) & 0x1BFFFFFFu;
+          uint32_t d = 0;
+          for (int b = 0, n = 0; b < 32 && n < 3; b++) {
+            if (!((offen >> b) & 1u) || takt_ms - gruppe_zuletzt[b] < 1000u)
+              continue;
+            d |= 1u << b;
+            gruppe_zuletzt[b] = takt_ms;
+            n++;
+          }
           if (d == 0)
             return;
-          id(ha_dirty) = 0;
+          id(ha_dirty) &= ~d;
           const uint32_t dev = id(dev_present);
           auto da = [dev](int b) -> bool { return (dev >> b) & 1u; };
           // Rechnen nur ueber diese Hilfen: leer (val_leer, -inf) bleibt leer
@@ -3694,6 +3779,7 @@ interval:
             fc_zuletzt = 0;
             stat_schluessel = -1;
             heute_schluessel = -1;
+            id(ha_offen) = {0, 0};
           }
           const bool bereit = ist && millis() - seit >= 10000;
           if (bereit != id(ha_ready)) {
@@ -3704,7 +3790,26 @@ interval:
             return;
           if (fc_zuletzt == 0 || millis() - fc_zuletzt >= 30u * 60u * 1000u) {
             fc_zuletzt = millis() | 1u;
+            id(ha_nochmal)[0] = 0;
             id(ha_fetch_fc).execute();
+          }
+          // Verlorene Anfragen (globals ha_offen): Abruf neu, hoechstens zweimal
+          for (int k = 0; k < 2; k++) {
+            if (id(ha_offen)[k] == 0 || millis() - id(ha_offen_seit)[k] < 30000)
+              continue;
+            if (id(ha_nochmal)[k] >= 2) {
+              ESP_LOGW("ha", "%s: %u Antworten fehlen auch nach zwei Wiederholungen", k ? "Statistik" : "Prognosen",
+                       (unsigned) id(ha_offen)[k]);
+              id(ha_offen)[k] = 0;
+              continue;
+            }
+            id(ha_nochmal)[k]++;
+            ESP_LOGW("ha", "%s: %u Antworten fehlen, frage erneut", k ? "Statistik" : "Prognosen",
+                     (unsigned) id(ha_offen)[k]);
+            if (k)
+              id(ha_fetch_stats).execute();
+            else
+              id(ha_fetch_fc).execute();
           }
           if (millis() - seit < 30000)
             return;
@@ -3712,6 +3817,7 @@ interval:
           const int schluessel = t.is_valid() ? t.day_of_year * 24 + t.hour : 0;
           if (schluessel != stat_schluessel && (stat_schluessel < 0 || !t.is_valid() || t.minute >= 2)) {
             stat_schluessel = schluessel;
+            id(ha_nochmal)[1] = 0;
             id(ha_fetch_stats).execute();
           }
           // Tageswerte aus der Statistik und Stundenbalken der Seite

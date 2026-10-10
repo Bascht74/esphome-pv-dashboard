@@ -99,7 +99,7 @@ script:
           lv_obj_t *const values[3] = {id(ring_val_1), id(ring_val_2), id(ring_val_3)};
           const float v = !std::isfinite(soc) ? 0.0f : std::clamp(soc, 0.0f, 100.0f);
           lv_arc_set_value(covers[bat], (int32_t) lroundf(100.0f - v));
-          lv_label_set_text(values[bat], cell[0].c_str());
+          id(lbl_set)(values[bat], cell[0].c_str());
 
           id(storage_soc)[bat] = soc;
           auto now = id(dash_time).now();
@@ -124,7 +124,7 @@ script:
               known++;
             }
           }
-          lv_label_set_text(id(val_storage_mean), (need > 0 && known == need) ? id(fmt_num)(sum / known, "%.0f", "--").c_str() : "--");
+          id(lbl_set)(id(val_storage_mean), (need > 0 && known == need) ? id(fmt_num)(sum / known, "%.0f", "--").c_str() : "--");
 
 lvgl:
   pages:

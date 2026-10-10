@@ -128,26 +128,26 @@ script:
       - lambda: |-
           auto &num = id(fmt_num);
           const auto c = id(wx_cond)(cond);
-          lv_label_set_text(id(wx_icon), std::get<0>(c));
+          id(lbl_set)(id(wx_icon), std::get<0>(c));
           lv_obj_set_style_text_color(id(wx_icon), lv_color_hex(std::get<1>(c)), 0);
-          lv_label_set_text(id(wx_temp), num(temp, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(wx_unit), (std::string("°C · ") + std::get<2>(c)).c_str());
+          id(lbl_set)(id(wx_temp), num(temp, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(wx_unit), (std::string("°C · ") + std::get<2>(c)).c_str());
           const std::string mm = "Höchst " + num(tmax, "%.0f", "--") + "° · Tiefst " + num(tmin, "%.0f", "--") + "°";
-          lv_label_set_text(id(wx_minmax), mm.c_str());
+          id(lbl_set)(id(wx_minmax), mm.c_str());
           static const char *const DIR[8] = {"N", "NO", "O", "SO", "S", "SW", "W", "NW"};
           std::string ws = num(wind, "%.0f", "--");
           if (std::isfinite(wind) && std::isfinite(bearing))
             ws += std::string(" ") + DIR[((int) lroundf(fmodf(fmodf(bearing, 360.0f) + 360.0f, 360.0f) / 45.0f)) % 8];
-          lv_label_set_text(id(wx_wind), ws.c_str());
-          lv_label_set_text(id(wx_gust), num(gust, "%.0f", "--").c_str());
-          lv_label_set_text(id(wx_hum), num(humidity, "%.0f", "--").c_str());
-          lv_label_set_text(id(wx_press), num(pressure, "%.0f", "----").c_str());
-          lv_label_set_text(id(wx_cloud), num(clouds, "%.0f", "--").c_str());
-          lv_label_set_text(id(wx_rain), num(rain, "%.1f", "-,-").c_str());
-          lv_label_set_text(id(wx_sunrise), sunrise.empty() ? "--:--" : sunrise.c_str());
-          lv_label_set_text(id(wx_sunset), sunset.empty() ? "--:--" : sunset.c_str());
-          lv_label_set_text(id(wx_sunh), ("Sonne heute " + num(sun_h, "%.1f", "-,-") + " h").c_str());
-          lv_label_set_text(id(wx_stand), updated.empty() ? "DWD" : ("DWD · Stand " + updated).c_str());
+          id(lbl_set)(id(wx_wind), ws.c_str());
+          id(lbl_set)(id(wx_gust), num(gust, "%.0f", "--").c_str());
+          id(lbl_set)(id(wx_hum), num(humidity, "%.0f", "--").c_str());
+          id(lbl_set)(id(wx_press), num(pressure, "%.0f", "----").c_str());
+          id(lbl_set)(id(wx_cloud), num(clouds, "%.0f", "--").c_str());
+          id(lbl_set)(id(wx_rain), num(rain, "%.1f", "-,-").c_str());
+          id(lbl_set)(id(wx_sunrise), sunrise.empty() ? "--:--" : sunrise.c_str());
+          id(lbl_set)(id(wx_sunset), sunset.empty() ? "--:--" : sunset.c_str());
+          id(lbl_set)(id(wx_sunh), ("Sonne heute " + num(sun_h, "%.1f", "-,-") + " h").c_str());
+          id(lbl_set)(id(wx_stand), updated.empty() ? "DWD" : ("DWD · Stand " + updated).c_str());
           id(data_seen)[7] = millis();
 
   # ---------------------------------------------------------------------
@@ -177,12 +177,12 @@ script:
           if (hour >= 0 && hour < 24)
             lv_label_set_text_fmt(hl[slot], "%02d Uhr", hour);
           else
-            lv_label_set_text(hl[slot], "--");
+            id(lbl_set)(hl[slot], "--");
           const auto c = id(wx_cond)(cond);
-          lv_label_set_text(ic[slot], std::get<0>(c));
+          id(lbl_set)(ic[slot], std::get<0>(c));
           lv_obj_set_style_text_color(ic[slot], lv_color_hex(std::get<1>(c)), 0);
-          lv_label_set_text(tp[slot], (num(temp, "%.0f", "--") + "°").c_str());
-          lv_label_set_text(pr[slot], (num(prob, "%.0f", "--") + " %").c_str());
+          id(lbl_set)(tp[slot], (num(temp, "%.0f", "--") + "°").c_str());
+          id(lbl_set)(pr[slot], (num(prob, "%.0f", "--") + " %").c_str());
           id(wx_hour_temp)[slot] = temp;
           id(wx_hour_rain)[slot] = rain;
           id(wx_hour_seen) |= 1 << slot;
@@ -219,16 +219,16 @@ script:
           lv_obj_t *const r2[7] = {id(wx_ds_0), id(wx_ds_1), id(wx_ds_2), id(wx_ds_3), id(wx_ds_4), id(wx_ds_5), id(wx_ds_6)};
           lv_obj_t *const r3[7] = {id(wx_dw_0), id(wx_dw_1), id(wx_dw_2), id(wx_dw_3), id(wx_dw_4), id(wx_dw_5), id(wx_dw_6)};
           auto &num = id(fmt_num);
-          lv_label_set_text(lb[day], label.c_str());
+          id(lbl_set)(lb[day], label.c_str());
           const auto c = id(wx_cond)(cond);
-          lv_label_set_text(ic[day], std::get<0>(c));
+          id(lbl_set)(ic[day], std::get<0>(c));
           lv_obj_set_style_text_color(ic[day], lv_color_hex(std::get<1>(c)), 0);
-          lv_label_set_text(cd[day], std::get<2>(c));
-          lv_label_set_text(hi[day], (num(tmax, "%.0f", "--") + "°").c_str());
-          lv_label_set_text(lo[day], (num(tmin, "%.0f", "--") + "°").c_str());
-          lv_label_set_text(r1[day], ("Regen " + num(rain, "%.1f", "-,-") + " mm · " + num(prob, "%.0f", "--") + " %").c_str());
-          lv_label_set_text(r2[day], ("Sonne " + num(sun_h, "%.1f", "-,-") + " h").c_str());
-          lv_label_set_text(r3[day], ("Wind " + num(wind, "%.0f", "--") + " km/h").c_str());
+          id(lbl_set)(cd[day], std::get<2>(c));
+          id(lbl_set)(hi[day], (num(tmax, "%.0f", "--") + "°").c_str());
+          id(lbl_set)(lo[day], (num(tmin, "%.0f", "--") + "°").c_str());
+          id(lbl_set)(r1[day], ("Regen " + num(rain, "%.1f", "-,-") + " mm · " + num(prob, "%.0f", "--") + " %").c_str());
+          id(lbl_set)(r2[day], ("Sonne " + num(sun_h, "%.1f", "-,-") + " h").c_str());
+          id(lbl_set)(r3[day], ("Wind " + num(wind, "%.0f", "--") + " km/h").c_str());
 
   # ---------------------------------------------------------------------
   # DWD-Warnung (Integration "DWD Weather Warnings" in Home Assistant):
@@ -247,14 +247,14 @@ script:
     then:
       - lambda: |-
           if (level <= 0) {
-            lv_label_set_text(id(wx_warn), "Keine Warnung des DWD");
+            id(lbl_set)(id(wx_warn), "Keine Warnung des DWD");
             lv_obj_set_style_text_color(id(wx_warn), lv_color_hex($col_ink3), 0);
             id(wx_warning_last).clear();
             id(alert_clear).execute(std::string("Wetter"), std::string(""));
             return;
           }
           const std::string t = "DWD-Warnung: " + (text.empty() ? std::string("ohne Text") : text);
-          lv_label_set_text(id(wx_warn), t.c_str());
+          id(lbl_set)(id(wx_warn), t.c_str());
           lv_obj_set_style_text_color(id(wx_warn), level >= 3 ? lv_color_hex($col_crit) : lv_color_hex($col_warn), 0);
           if (t != id(wx_warning_last)) {
             // Eine neue Warnung ersetzt die alte in den Meldungen
@@ -315,7 +315,7 @@ script:
             lv_obj_set_height(bar[i], h);
             lv_obj_clear_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
           }
-          lv_label_set_text(id(wx_rscale), ("Regen bis " + id(fmt_num)(rmax, "%.1f", "-") + " mm").c_str());
+          id(lbl_set)(id(wx_rscale), ("Regen bis " + id(fmt_num)(rmax, "%.1f", "-") + " mm").c_str());
 
 lvgl:
   pages:

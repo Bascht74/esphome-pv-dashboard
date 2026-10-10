@@ -461,8 +461,8 @@ Offen am Datenweg:
       Text, fehlt `change`/`mean` bei 0?), `period: 5minute` mit `start_time` aus dem
       Panel, Größe der Antwort; Flächenwerte aus Stundenmitteln der MPPT-Leistung sind
       DC und liegen um die Wandlungsverluste über dem AC-Tagesertrag des Wechselrichters.
-- [ ] **Summe mehrerer Statistik-IDs je Reihe** (für `ha_pv_energy_total`, falls es
-      keine einzelne Gesamt-Entität gibt) – nicht gebaut, Rückfrage offen.
+- [x] **Summe mehrerer Statistik-IDs je Reihe** (für `ha_pv_energy_total` und
+      `ha_home_energy_total`): kommagetrennte Liste, gebaut am 11.10.2026 (Dokument 03).
 
 **Tagesreihe.** In `record_hour` steht eine einzige auskommentierte Quellzeile für die
 Erzeugung der abgelaufenen Stunde in kWh: `// kwh = id(<Erzeugungssensor>).state;`. Solange

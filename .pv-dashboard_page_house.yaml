@@ -158,7 +158,7 @@ script:
                   *q = ',';
               t = b;
             }
-            lv_label_set_text(segl[i], t.c_str());
+            id(lbl_set)(segl[i], t.c_str());
           }
 
           // --- Klammern: oben In, unten Out
@@ -193,7 +193,7 @@ script:
 
           // Legende rechts: Netzbezug, sonst Einspeisung
           const bool importing = gi > 0.0f || go <= 0.0f;
-          lv_label_set_text(id(hf_leg_2), importing ? "Netzbezug" : "Einspeisung");
+          id(lbl_set)(id(hf_leg_2), importing ? "Netzbezug" : "Einspeisung");
           lv_obj_set_style_bg_color(id(hf_leg_sq_2), importing ? lv_color_hex($col_evcc_grid) : lv_color_hex($col_evcc_export), 0);
 
           // --- Tabelle In / Out
@@ -202,15 +202,15 @@ script:
           // Ein leerer Summand (val_leer, -inf) macht die Summe leer
           const bool leer_in = std::isinf(pv) || std::isinf(bat_out) || std::isinf(grid_in);
           const bool leer_out = std::isinf(home) || std::isinf(loadpoints) || std::isinf(bat_in) || std::isinf(grid_out);
-          lv_label_set_text(id(ht_in_total), leer_in ? "" : (any_in ? pw(p + bo + gi).c_str() : "--"));
-          lv_label_set_text(id(ht_out_total), leer_out ? "" : (any_out ? pw(h + lp + bi + go).c_str() : "--"));
-          lv_label_set_text(id(ht_pv), pw(pv).c_str());
-          lv_label_set_text(id(ht_bat_out), pw(bat_out).c_str());
-          lv_label_set_text(id(ht_grid_in), pw(grid_in).c_str());
-          lv_label_set_text(id(ht_home), pw(home).c_str());
-          lv_label_set_text(id(ht_lp), pw(loadpoints).c_str());
-          lv_label_set_text(id(ht_bat_in), pw(bat_in).c_str());
-          lv_label_set_text(id(ht_grid_out), pw(grid_out).c_str());
+          id(lbl_set)(id(ht_in_total), leer_in ? "" : (any_in ? pw(p + bo + gi).c_str() : "--"));
+          id(lbl_set)(id(ht_out_total), leer_out ? "" : (any_out ? pw(h + lp + bi + go).c_str() : "--"));
+          id(lbl_set)(id(ht_pv), pw(pv).c_str());
+          id(lbl_set)(id(ht_bat_out), pw(bat_out).c_str());
+          id(lbl_set)(id(ht_grid_in), pw(grid_in).c_str());
+          id(lbl_set)(id(ht_home), pw(home).c_str());
+          id(lbl_set)(id(ht_lp), pw(loadpoints).c_str());
+          id(lbl_set)(id(ht_bat_in), pw(bat_in).c_str());
+          id(lbl_set)(id(ht_grid_out), pw(grid_out).c_str());
           shade(id(ht_pv_n), id(ht_pv), pv);
           shade(id(ht_bat_out_n), id(ht_bat_out), bat_out);
           shade(id(ht_grid_in_n), id(ht_grid_in), grid_in);
@@ -218,12 +218,12 @@ script:
           shade(id(ht_lp_n), id(ht_lp), loadpoints);
           shade(id(ht_bat_in_n), id(ht_bat_in), bat_in);
           shade(id(ht_grid_out_n), id(ht_grid_out), grid_out);
-          lv_label_set_text(id(ht_pv_d), ("Rest " + num(forecast, "%.1f", "--,-") + " kWh").c_str());
-          lv_label_set_text(id(ht_bat_out_d), (num(soc, "%.0f", "--") + " %").c_str());
-          lv_label_set_text(id(ht_bat_in_d), (num(soc, "%.0f", "--") + " %").c_str());
-          lv_label_set_text(id(ht_grid_in_d), (num(price_grid, "%.1f", "--,-") + " ct/kWh").c_str());
-          lv_label_set_text(id(ht_home_d), (num(price_home, "%.1f", "--,-") + " ct/kWh").c_str());
-          lv_label_set_text(id(ht_grid_out_d), (num(price_feed, "%.1f", "--,-") + " ct/kWh").c_str());
+          id(lbl_set)(id(ht_pv_d), ("Rest " + num(forecast, "%.1f", "--,-") + " kWh").c_str());
+          id(lbl_set)(id(ht_bat_out_d), (num(soc, "%.0f", "--") + " %").c_str());
+          id(lbl_set)(id(ht_bat_in_d), (num(soc, "%.0f", "--") + " %").c_str());
+          id(lbl_set)(id(ht_grid_in_d), (num(price_grid, "%.1f", "--,-") + " ct/kWh").c_str());
+          id(lbl_set)(id(ht_home_d), (num(price_home, "%.1f", "--,-") + " ct/kWh").c_str());
+          id(lbl_set)(id(ht_grid_out_d), (num(price_feed, "%.1f", "--,-") + " ct/kWh").c_str());
 
           // --- Verbrauch jetzt: Haus und Ladepunkte, Herkunft wie evcc
           // (erst PV, dann Speicher, Rest Netz); Speicherladen zaehlt nicht
@@ -233,14 +233,14 @@ script:
           const float c_bat = std::min(bo, c - c_pv);
           const float c_grid = std::max(c - c_pv - c_bat, 0.0f);
           if (!known) {
-            lv_label_set_text(id(hn_value), std::isinf(home) ? "" : "--");
-            lv_label_set_text(id(hn_unit), "kW");
+            id(lbl_set)(id(hn_value), std::isinf(home) ? "" : "--");
+            id(lbl_set)(id(hn_unit), "kW");
           } else if (c < 999.5f) {
-            lv_label_set_text(id(hn_value), num(c, "%.0f", "--").c_str());
-            lv_label_set_text(id(hn_unit), "W · Haus und Ladepunkte");
+            id(lbl_set)(id(hn_value), num(c, "%.0f", "--").c_str());
+            id(lbl_set)(id(hn_unit), "W · Haus und Ladepunkte");
           } else {
-            lv_label_set_text(id(hn_value), num(c / 1000.0f, "%.1f", "--").c_str());
-            lv_label_set_text(id(hn_unit), "kW · Haus und Ladepunkte");
+            id(lbl_set)(id(hn_value), num(c / 1000.0f, "%.1f", "--").c_str());
+            id(lbl_set)(id(hn_unit), "kW · Haus und Ladepunkte");
           }
           const float cs = c > 0.0f ? c : 1.0f;
           const int s0 = known ? (int) lroundf(c_pv / cs * 100.0f) : -1;
@@ -250,7 +250,7 @@ script:
           const int sh[3] = {s0, s1, (known && c > 0.0f) ? s2 : 0};
           for (int i = 0; i < 3; i++) {
             if (!known)
-              lv_label_set_text(pct[i], std::isinf(home) ? "" : "-- %");
+              id(lbl_set)(pct[i], std::isinf(home) ? "" : "-- %");
             else
               lv_label_set_text_fmt(pct[i], "%d %%", c > 0.0f ? sh[i] : 0);
           }
@@ -301,11 +301,11 @@ script:
           lv_obj_t *const val[3] = {id(ht_b1), id(ht_b2), id(ht_b3)};
           lv_obj_t *const nam[3] = {id(ht_b1_n), id(ht_b2_n), id(ht_b3_n)};
           lv_obj_t *const det[3] = {id(ht_b1_d), id(ht_b2_d), id(ht_b3_d)};
-          lv_label_set_text(val[bat], pw(!std::isfinite(power) ? power : fabsf(power)).c_str());
+          id(lbl_set)(val[bat], pw(!std::isfinite(power) ? power : fabsf(power)).c_str());
           std::string d = num(soc, "%.0f", "--") + " %";
           if (std::isfinite(power) && fabsf(power) > 10.0f)
             d += power > 0.0f ? " · entlädt" : " · lädt";
-          lv_label_set_text(det[bat], d.c_str());
+          id(lbl_set)(det[bat], d.c_str());
           shade(nam[bat], val[bat], !std::isfinite(power) ? NAN : fabsf(power));
 
   # ---------------------------------------------------------------------
@@ -336,8 +336,8 @@ script:
           lv_obj_t *const val[2] = {id(ht_w1), id(ht_w2)};
           lv_obj_t *const nam[2] = {id(ht_w1_n), id(ht_w2_n)};
           lv_obj_t *const det[2] = {id(ht_w1_d), id(ht_w2_d)};
-          lv_label_set_text(val[wb], pw(power).c_str());
-          lv_label_set_text(det[wb], std::isnan(soc) ? "kein Fahrzeug" : (num(soc, "%.0f", "--") + " %").c_str());
+          id(lbl_set)(val[wb], pw(power).c_str());
+          id(lbl_set)(det[wb], std::isnan(soc) ? "kein Fahrzeug" : (num(soc, "%.0f", "--") + " %").c_str());
           shade(nam[wb], val[wb], power);
           // Kopfzeile: wie viele laden gerade (evcc zaehlt ab 10 W)
           static float lpw[2] = {NAN, NAN};
@@ -381,8 +381,8 @@ script:
           lv_obj_t *const val[6] = {id(ht_c1), id(ht_c2), id(ht_c3), id(ht_c4), id(ht_c5), id(ht_c6)};
           lv_obj_t *const nam[6] = {id(ht_c1_n), id(ht_c2_n), id(ht_c3_n), id(ht_c4_n), id(ht_c5_n), id(ht_c6_n)};
           lv_obj_t *const det[6] = {id(ht_c1_d), id(ht_c2_d), id(ht_c3_d), id(ht_c4_d), id(ht_c5_d), id(ht_c6_d)};
-          lv_label_set_text(val[dev], pw(power).c_str());
-          lv_label_set_text(det[dev], (num(energy, "%.1f", "--,-") + " kWh heute").c_str());
+          id(lbl_set)(val[dev], pw(power).c_str());
+          id(lbl_set)(det[dev], (num(energy, "%.1f", "--,-") + " kWh heute").c_str());
           shade(nam[dev], val[dev], power);
           static float now[6] = {NAN, NAN, NAN, NAN, NAN, NAN};
           now[dev] = power;
@@ -401,7 +401,7 @@ script:
             else
               sum += now[k];
           }
-          lv_label_set_text(id(ht_c_total), leer ? "" : (all ? pw(sum).c_str() : "--"));
+          id(lbl_set)(id(ht_c_total), leer ? "" : (all ? pw(sum).c_str() : "--"));
 
   # ---------------------------------------------------------------------
   # Verbrauch der letzten 24 Stunden, je Stunde in kWh:
@@ -462,7 +462,7 @@ script:
           for (char *q = b; *q; q++)
             if (*q == '.')
               *q = ',';
-          lv_label_set_text(id(hc_max), b);
+          id(lbl_set)(id(hc_max), b);
           // Stundenmarken unter jedem dritten Balken
           lv_obj_t *const tick[8] = {id(hc_tick_0), id(hc_tick_1), id(hc_tick_2), id(hc_tick_3), id(hc_tick_4), id(hc_tick_5), id(hc_tick_6), id(hc_tick_7)};
           const int last = ((hour % 24) + 24) % 24;

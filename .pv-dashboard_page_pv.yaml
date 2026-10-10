@@ -88,7 +88,7 @@ script:
             id(pv_fault) |= (1 << inv);
             lv_obj_set_style_border_color(box[inv], lv_color_hex($col_crit), 0);
             lv_obj_set_style_bg_color(dot[inv], lv_color_hex($col_crit), 0);
-            lv_label_set_text(sb[inv], text.empty() ? "Störung" : text.c_str());
+            id(lbl_set)(sb[inv], text.empty() ? "Störung" : text.c_str());
             lv_obj_set_style_text_color(sb[inv], lv_color_hex($col_crit), 0);
             // Neue Stoerung oder anderer Fehlertext: melden, ein anderer
             // Text ersetzt den alten in den Meldungen.
@@ -109,7 +109,7 @@ script:
             std::string t = "W · " + id(fmt_num)(id(pv_inv_energy)[inv], "%.1f", "--,-") + " kWh";
             if (std::isfinite(temp))
               t += " · " + id(fmt_num)(temp, "%.0f", "--") + " °C";
-            lv_label_set_text(sb[inv], t.c_str());
+            id(lbl_set)(sb[inv], t.c_str());
           }
 
   # ---------------------------------------------------------------------
@@ -136,14 +136,14 @@ script:
           if (inv >= 0 && inv <= 3) {
             lv_obj_t *const val[4] = {id(pv_inv_val_1), id(pv_inv_val_2), id(pv_inv_val_3), id(pv_inv_val_4)};
             lv_obj_t *const sb[4] = {id(pv_inv_sub_1), id(pv_inv_sub_2), id(pv_inv_sub_3), id(pv_inv_sub_4)};
-            lv_label_set_text(val[inv], watt(power, "--.---").c_str());
+            id(lbl_set)(val[inv], watt(power, "--.---").c_str());
             // Bei Stoerung traegt die Zweitzeile den Fehlertext (pv_status)
             id(pv_inv_energy)[inv] = energy;
             if (!(id(pv_fault) & (1 << inv))) {
               std::string t = sub(energy);
               if (std::isfinite(id(pv_inv_temp)[inv]))
                 t += " · " + id(fmt_num)(id(pv_inv_temp)[inv], "%.0f", "--") + " °C";
-              lv_label_set_text(sb[inv], t.c_str());
+              id(lbl_set)(sb[inv], t.c_str());
             }
           }
           if (pv >= 0 && pv <= 7) {
@@ -151,8 +151,8 @@ script:
                                       id(pv_str_val_5), id(pv_str_val_6), id(pv_str_val_7), id(pv_str_val_8)};
             lv_obj_t *const sb[8] = {id(pv_str_sub_1), id(pv_str_sub_2), id(pv_str_sub_3), id(pv_str_sub_4),
                                      id(pv_str_sub_5), id(pv_str_sub_6), id(pv_str_sub_7), id(pv_str_sub_8)};
-            lv_label_set_text(val[pv], watt(power, "-.---").c_str());
-            lv_label_set_text(sb[pv], sub(energy).c_str());
+            id(lbl_set)(val[pv], watt(power, "-.---").c_str());
+            id(lbl_set)(sb[pv], sub(energy).c_str());
           }
 
   # ---------------------------------------------------------------------
@@ -220,13 +220,13 @@ script:
           std::string scale = peak > 0.1f ? fmt(peak, "%.1f") : std::string("--,-");
           lv_label_set_text_fmt(id(pv_lbl_scale), "Balken Ist · Linie Prognose · Skala bis %s kWh",
                                 scale.c_str());
-          lv_label_set_text(id(pv_kpi_ist), fmt(sum_ist, "%.1f").c_str());
-          lv_label_set_text(id(pv_kpi_pro), fmt(sum_pro, "%.1f").c_str());
+          id(lbl_set)(id(pv_kpi_ist), fmt(sum_ist, "%.1f").c_str());
+          id(lbl_set)(id(pv_kpi_pro), fmt(sum_pro, "%.1f").c_str());
 
           auto t = id(dash_time).now();
           if (!t.is_valid()) {
-            lv_label_set_text(id(pv_kpi_rest), "--,-");
-            lv_label_set_text(id(pv_kpi_ratio), "--");
+            id(lbl_set)(id(pv_kpi_rest), "--,-");
+            id(lbl_set)(id(pv_kpi_ratio), "--");
             return;
           }
           const int cur = std::clamp((int) t.hour - 6, 0, 16);   // erster offener Platz
@@ -239,11 +239,11 @@ script:
               rest += pro[i];
             }
           }
-          lv_label_set_text(id(pv_kpi_rest), fmt(rest, "%.1f").c_str());
+          id(lbl_set)(id(pv_kpi_rest), fmt(rest, "%.1f").c_str());
           // Unter 0,1 kWh Prognose (vor 7 Uhr, trueber Morgen) waere der
           // Anteil nur Rauschen
           std::string ratio = done_pro >= 0.1f ? fmt(done_ist / done_pro * 100.0f, "%.0f") : std::string("--");
-          lv_label_set_text(id(pv_kpi_ratio), ratio.c_str());
+          id(lbl_set)(id(pv_kpi_ratio), ratio.c_str());
 
 lvgl:
   pages:

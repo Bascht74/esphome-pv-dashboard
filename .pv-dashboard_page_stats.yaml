@@ -168,23 +168,23 @@ script:
             return id(fmt_watt)(v, "--");
           };
           const bool known = n > 0;
-          lv_label_set_text(id(st_prod), kwh(sp, known).c_str());
-          lv_label_set_text(id(st_cons), kwh(sc, known).c_str());
+          id(lbl_set)(id(st_prod), kwh(sp, known).c_str());
+          id(lbl_set)(id(st_cons), kwh(sc, known).c_str());
           if (known && sc > 0.0f)
             lv_label_set_text_fmt(id(st_autarky), "%d", (int) lroundf(std::max(sc - si, 0.0f) / sc * 100.0f));
           else
-            lv_label_set_text(id(st_autarky), "--");
+            id(lbl_set)(id(st_autarky), "--");
           if (known && sp > 0.0f)
             lv_label_set_text_fmt(id(st_selfuse), "%d", (int) lroundf(std::max(sp - se, 0.0f) / sp * 100.0f));
           else
-            lv_label_set_text(id(st_selfuse), "--");
-          lv_label_set_text(id(st_money), id(fmt_num)(id(stats_money)[r], "%.2f", "--,--").c_str());
+            id(lbl_set)(id(st_selfuse), "--");
+          id(lbl_set)(id(st_money), id(fmt_num)(id(stats_money)[r], "%.2f", "--,--").c_str());
           static const char *const NAMES[3] = {"STATISTIK · WOCHE", "STATISTIK · MONAT", "STATISTIK · JAHR"};
           std::string head = NAMES[r];
           if (!t[r * 6 + 0].empty())
             head += " · " + t[r * 6 + 0];
-          lv_label_set_text(id(st_title), head.c_str());
-          lv_label_set_text(id(st_scale), known ? ("Skala bis " + id(fmt_num)(peak, "%.1f", "--") + " kWh").c_str() : "");
+          id(lbl_set)(id(st_title), head.c_str());
+          id(lbl_set)(id(st_scale), known ? ("Skala bis " + id(fmt_num)(peak, "%.1f", "--") + " kWh").c_str() : "");
 
           // Balken: n Plaetze auf 1250 px verteilt
           lv_obj_t *const bp[31] = {id(sb_p_00), id(sb_p_01), id(sb_p_02), id(sb_p_03), id(sb_p_04), id(sb_p_05), id(sb_p_06), id(sb_p_07), id(sb_p_08), id(sb_p_09), id(sb_p_10), id(sb_p_11), id(sb_p_12), id(sb_p_13), id(sb_p_14), id(sb_p_15), id(sb_p_16), id(sb_p_17), id(sb_p_18), id(sb_p_19), id(sb_p_20), id(sb_p_21), id(sb_p_22), id(sb_p_23), id(sb_p_24), id(sb_p_25), id(sb_p_26), id(sb_p_27), id(sb_p_28), id(sb_p_29), id(sb_p_30)};
@@ -210,7 +210,7 @@ script:
             lv_obj_clear_flag(bp[i], LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(bc[i], LV_OBJ_FLAG_HIDDEN);
             lv_obj_set_x(bl[i], cx - 30);
-            lv_label_set_text(bl[i], lab[i].c_str());
+            id(lbl_set)(bl[i], lab[i].c_str());
             lv_obj_clear_flag(bl[i], LV_OBJ_FLAG_HIDDEN);
           }
 
