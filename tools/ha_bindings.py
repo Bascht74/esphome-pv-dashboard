@@ -1576,11 +1576,16 @@ def panel_bauen():
     then:""")
     ids = "{{ [" + ", ".join(f"'{sid}'" for _, sid in STAT_REIHEN) + "] }}"
     for zr in ZEITRAEUME:
+        # Abstand zwischen den Abfragen: alle auf einmal liefen beim Start
+        # in "Action request dropped, TCP buffer full" (Geraet, 10.10.2026)
+        if zr is not ZEITRAEUME[0]:
+            w("      - delay: 2s")
         w(f"      # {zr['name']}")
         w(aktion("recorder.get_statistics", [("period", zr["period"])],
                  [("statistic_ids", ids), ("start_time", "{{ (" + zr["t0"] + ").isoformat() }}"),
                   ("types", "{{ ['change'] }}"), ("units", "{{ {'energy': 'kWh'} }}")],
                  jinja_statistik(zr), erfolg_statistik(zr["range"]), f"Statistik {zr['name']}"))
+    w("      - delay: 2s")
     w("      # 24 Stunden: Hausverbrauch, Netzbezug (solar = Verbrauch - Bezug [A]),\n"
       "      # Erzeugung heute 06..22 Uhr fuer day_curve")
     w(aktion("recorder.get_statistics", [("period", "hour")],
@@ -1742,7 +1747,11 @@ def panel_bauen():
           }
           // Tageswerte aus der Statistik und Stundenbalken der Seite
           // Prognose: alle 5 min ab Minute 1 (Home Assistant schreibt die
-          // 5-min-Statistik kurz nach dem Takt)
+          // 5-min-Statistik kurz nach dem Takt). Erst 45 s nach dem
+          // Verbinden, damit ha_fetch_stats (vier Abfragen mit je 2 s
+          // Abstand) vorher durch ist.
+          if (millis() - seit < 45000)
+            return;
           constexpr bool S_ANY = """ + " || ".join(j_stat_an(z_, q) for z_, q, _ in TAGES_STAT) + " || "
       + " || ".join(j_kurve_an(i) for i in range(1, 9)) + """;
           const int k5 = t.is_valid() ? t.day_of_year * 288 + t.hour * 12 + t.minute / 5 : 0;
