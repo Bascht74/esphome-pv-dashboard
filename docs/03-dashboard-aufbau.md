@@ -14,20 +14,16 @@ SDL-Fenster 1280 x 800) binden dieselben zwei gemeinsamen Packages ein:
   als eigene Packages daran (`.pv-dashboard_page_*.yaml`)
 
 Nur am Gerät: `.pv-dashboard_display.yaml` (I2C, Backlight, DSI-Panel, GT911;
-eigener `lvgl:`-Block mit `rotation: 90`), `.pv-dashboard_audio.yaml`
-(Audio/Voice) und `.pv-dashboard_core.yaml` — darin alles, was aus dem Panel ein
-Gerät macht: SoC, PSRAM, LDO, Funkstrecke zum C6, WLAN, API, Logger, OTA,
-Bluetooth, `dash_time` und die Diagnose-Entities, RS485/RS232. Seit dem
-25.09.2026 dazu `.pv-dashboard_ha.yaml`, der Datenweg von Home Assistant
-(Abschnitt „Datenweg“ unten); erzeugt von `tools/ha_bindings.py`.
+eigener `lvgl:`-Block mit `rotation: 90`) und `.pv-dashboard_core.yaml` —
+darin alles, was aus dem Panel ein Gerät macht: SoC, PSRAM, LDO, Funkstrecke
+zum C6 samt automatischem Firmware-Update (Dokument 02), WLAN, API, Logger,
+OTA, Bluetooth, `dash_time`, die Diagnose-Entities samt `debug:`, RS485/RS232.
+Seit dem 25.09.2026 dazu `.pv-dashboard_ha.yaml`, der Datenweg von Home
+Assistant (Abschnitt „Datenweg“ unten); erzeugt von `tools/ha_bindings.py`.
 
-Audio sollte nach der Planung als dritter Abschnitt in
-`.pv-dashboard_utility.yaml` liegen. Das geht nicht: `i2s_audio`,
-`audio_dac` und `micro_wake_word` verlangen die Plattform `esp32`, der
-Simulator läuft auf `host`. Bindet er das Package ein, bricht schon
-`esphome config` mit „Component i2s_audio requires component esp32“ ab
-(geprüft mit 2026.9.0, 20.09.2026). Audio bleibt deshalb ein eigenes Package,
-das nur das Gerät einbindet.
+Das Audio-Paket `.pv-dashboard_audio.yaml` (Lautsprecher, Mikrofone,
+Wakeword, Sprachassistent) ist seit dem 10.10.2026 entfernt, ebenso das
+Sprachfenster `voice_panel` (Dokument 02, „Audio-Hardware“).
 
 `pv-dashboard.yaml` selbst enthält nur noch den `esphome:`-Block, Gerätename und
 Zugangsdaten als `substitutions` und die Package-Liste. Die eigene Anlage — jede
@@ -62,12 +58,11 @@ packages:
   dashboard:
     url: https://github.com/Bascht74/esphome-pv-dashboard
     ref: main
-    refresh: 1d
+    refresh: always
     files:
       - .pv-dashboard_utility.yaml
       - .pv-dashboard_ui.yaml
       - .pv-dashboard_display.yaml
-      - .pv-dashboard_audio.yaml
       - .pv-dashboard_core.yaml
       - .pv-dashboard_ha.yaml
 ```
@@ -96,8 +91,10 @@ Kopie dieses Repos und gegen ein öffentliches Repo):
   kommt `images/` aus dem Checkout: ESPHome sucht eine Bilddatei auch neben
   der Paketdatei, nicht nur neben `pv-dashboard.yaml`.
 - **Das Gerät baut dann aus dem geschobenen Stand.** Eine Änderung an einem
-  Package wirkt erst nach einem `push`, und `refresh: 1d` holt sie frühestens
-  am nächsten Tag (`always` sofort, `never` gar nicht). Simulator und
+  Package wirkt erst nach einem `push`. Seit dem 10.10.2026 steht
+  `refresh: always`: Jeder Bau holt den neuesten Stand von `main` (`1d` holte
+  ihn frühestens am nächsten Tag, `never` gar nicht). Für die Zeit nach der
+  Entwicklung ist `1d` wieder die ruhigere Wahl. Simulator und
   Screenshots binden weiter die Dateien auf der Platte ein und zeigen den
   Arbeitsstand schon vorher.
 - **Die `!secret`-Zusage von oben gilt dann nicht mehr.** Jede nachgeladene
@@ -129,8 +126,8 @@ Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnun
 
 | Datei | Zeilen | Blöcke, Zeilennummern |
 | --- | --- | --- |
-| `.pv-dashboard_ui.yaml` | 1407 | `substitutions:` 24, `packages:` 36, `text:` 58, `globals:` 88, `script:` 215, `lvgl:` 559, `interval:` 1404 |
-| `.pv-dashboard_page_overview.yaml` | 1617 | `substitutions:` 43, `globals:` 105, `sensor:` 145, `script:` 179, `lvgl:` 533, `interval:` 1369 |
+| `.pv-dashboard_ui.yaml` | 1583 | `esphome:` 35, `substitutions:` 42, `packages:` 54, `text:` 76, `globals:` 106, `script:` 251, `lvgl:` 674, `interval:` 1491, `switch:` 1501, `sensor:` 1528 |
+| `.pv-dashboard_page_overview.yaml` | 1625 | `substitutions:` 43, `globals:` 105, `sensor:` 145, `script:` 179, `lvgl:` 533, `interval:` 1369 |
 | `.pv-dashboard_page_pv.yaml` | 479 | `globals:` 31, `script:` 54, `lvgl:` 248 |
 | `.pv-dashboard_page_forecast.yaml` | 1346 | `globals:` 64, `script:` 147, `interval:` 577, `lvgl:` 582 |
 | `.pv-dashboard_page_weather.yaml` | 522 | `globals:` 49, `script:` 96, `lvgl:` 320 |
@@ -141,17 +138,19 @@ Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnun
 | `.pv-dashboard_page_grid.yaml` | 315 | `substitutions:` 56, `script:` 60, `lvgl:` 183 |
 | `.pv-dashboard_page_stats.yaml` | 400 | `globals:` 31, `script:` 46, `lvgl:` 217 |
 | `.pv-dashboard_page_alerts.yaml` | 721 | `globals:` 26, `script:` 41, `lvgl:` 473 |
-| `.pv-dashboard_ha.yaml` (nur Gerät, erzeugt) | 3719 | `substitutions:` 54, `globals:` 487, `sensor:` 639, `text_sensor:` 1851, `binary_sensor:` 1978, `script:` 2064, `interval:` 3025 |
+| `.pv-dashboard_ha.yaml` (nur Gerät, erzeugt) | 3722 | `substitutions:` 54, `globals:` 488, `sensor:` 640, `text_sensor:` 1852, `binary_sensor:` 1979, `script:` 2065, `interval:` 3026 |
 
 Im Kern steht nur, was alle Seiten teilen: die Tagesreihen `day_curve` und
-`forecast_curve`, die Globals `ota_running` 89, `curve_day` 97, `data_seen` 108,
-`dev_present` 129 und `data_stale_reported` 135, der Sonderwert `val_leer` 153,
-die Formatierer `fmt_num` 157, `fmt_watt` 173 und `fmt_power` 191
+`forecast_curve`, die Build-Option `LV_INV_BUF_SIZE` (`esphome:` 35, Abschnitt
+„Diagnose“), die Globals `ota_running` 107, `curve_day` 115, `data_seen` 126,
+`dev_present` 150, `diag` 165 und `data_stale_reported` 171, der Sonderwert
+`val_leer` 189, die Formatierer `fmt_num` 193, `fmt_watt` 209 und `fmt_power` 227
 (Dezimalkomma, Tausenderpunkt, Striche bei `NAN`, **leer** bei `val_leer`; alle
-Seiten benutzen sie), die Skripte `sys_refresh` 225, `record_hour`
-330, `dev_apply` 395 und `update_clock` 504, unter `lvgl:` die Basis,
-`style_definitions` 608, `gradients` 685 und `top_layer` 975, und am Ende das
-`interval:` für `sys_refresh`. Einen
+Seiten benutzen sie), die Skripte `diag_hook` 266, `diag_window` 306,
+`sys_refresh` 334, `record_hour` 439, `dev_apply` 504 und `update_clock` 619,
+unter `lvgl:` die Basis, `style_definitions` 723, `gradients` 800 und
+`top_layer` 1090, am Ende das `interval:` für `sys_refresh` und `diag_window`,
+der Schalter `diag_switch` und die Sensoren der Diagnose. Einen
 `pages:`-Schlüssel hat der Kern **nicht** — die Seiten bringen ihn mit.
 
 **Jedes Skript liegt bei der Seite, die es benutzt:** `money_update` 193, die
@@ -227,7 +226,7 @@ Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — j
 - `page_stats` – seit 25.09.2026, Statistik. Kopf mit Zeitraum, Umschalter Woche / Monat / Jahr und fünf Kennzahlen (Erzeugung, Verbrauch, Autarkie, Eigenverbrauch, Ertrag in €), darunter Balkenpaare Erzeugung (gelb) und Verbrauch (hell) auf gemeinsamem Maßstab, bis 31 Plätze. Autarkie = (Verbrauch − Bezug) / Verbrauch, Eigenverbrauch = (Erzeugung − Einspeisung) / Erzeugung. Die Reihen liegen nur im RAM.
 - `page_alerts` – Liste `alert_list`, Kopfkachel mit drei Zählern je Schweregrad (`btn_af_2`/`_1`/`_0`, zugleich Filter: Tippen zeigt nur diesen Schweregrad, erneutes Tippen alle), Knöpfe „Alle quittieren“ und „Liste leeren“. Es stehen nur Meldungen da, deren Ursache noch besteht; gleiche Meldungen (gleiches Gerät, gleicher Text) stehen als eine Zeile mit „×3 seit 08:12“ im Hinweis.
 
-In der Statusleiste stehen seit dem 25.09.2026 rechts neben der Mitte drei Symbole (`sys_icons`, x 700, 110 × 30): WLAN, Home Assistant, Daten aktuell. Ein Tipp öffnet das Fenster `sys_panel` im `top_layer` (600 × 592 bei x 340, y 114), ein Tipp darauf schließt es. Inhalt und Regeln in Dokument 06, „Systemstatus“.
+In der Statusleiste stehen seit dem 25.09.2026 rechts neben der Mitte drei Symbole (`sys_icons`, x 700, 110 × 30): WLAN, Home Assistant, Daten aktuell. Ein Tipp öffnet das Fenster `sys_panel` im `top_layer` (600 × 628 bei x 340, y 96; seit 10.10.2026 mit der Zeile „Diagnose“ und ihrem Schalter `sw_diag`), ein Tipp darauf schließt es, ein Tipp auf den Schalter nicht. Inhalt und Regeln in Dokument 06, „Systemstatus“.
 
 **Neue Detailseite.** Vorlage ist `page_battery`. Dazu gehört:
 
@@ -246,7 +245,7 @@ In der Statusleiste stehen seit dem 25.09.2026 rechts neben der Mitte drei Symbo
   `storage_update(...)`, bis dahin Strichmuster — siehe Dokument 06.
 - Danach die Checkliste aus Dokument 04, vollständig.
 
-Ebenfalls im `top_layer`, aber normalerweise versteckt: die Overlays `voice_panel` und `ota_panel`. Bei Untätigkeit (`$idle_timeout`, 240 s) fällt die Oberfläche über `on_idle` auf die Übersicht zurück; das Abdunkeln macht derselbe Timeout im Display-Package.
+Ebenfalls im `top_layer`, aber normalerweise versteckt: das Overlay `ota_panel` und in der Statusleiste die Messzeile `lbl_diag` (statt des Datums, solange die Diagnose an ist). Bei Untätigkeit (`$idle_timeout`, 240 s) fällt die Oberfläche über `on_idle` auf die Übersicht zurück; das Abdunkeln macht derselbe Timeout im Display-Package.
 
 ## Tokens und Stile
 
@@ -340,7 +339,7 @@ Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in D
 - **`ov_totals(gen, use, feed, draw, full_feed, surplus, remaining)`** – die vier Kacheln, beide Ringe (Autarkie = (Verbrauch − Bezug) / Verbrauch, Eigenverbrauch = (Hybrid-Erzeugung − Überschuss) / Hybrid-Erzeugung, Hybrid = `gen − full_feed`) und die Restprognose.
 - **`ov_status`** – Statusleiste links: Autarkie jetzt aus Hausnetz und Bezug, Restprognose. Nur von den Skripten oben gerufen.
 
-**`dev_apply`** – Kern. Liest `dev_present` (ein Bit je Platz: 0–7 Flächen, 8–11 Wechselrichter, 12–14 Speicher, 15/16 Wallboxen, 17 Wärmepumpe, 18 PV-Zähler, 19 Hauszähler; **nicht** im NVS, Anfangswert `dev_present_start`: im Simulator alle an, am Gerät 0, bis die Referenz-Entitäten melden) und blendet fehlende Geräte aus, ohne dass sich etwas verschiebt: Kästen, Dachgruppen und Rahmen der Übersicht, Wechselrichter und Flächen der Seite PV, Ring, Name und Tabellenspalte im Speicher, Karten der Wallboxen, Kacheln der Wärmepumpe, Unterzeilen der Seite Haus. Setzt die Kanäle fehlender Geräte auf 0, hebt die Störung eines fehlenden Wechselrichters auf und rechnet den Speicher-Mittelwert neu. Leitungen und Kugeln zieht der erzeugte Block selbst nach (Regel 10). Gerufen beim Start (`on_boot` von `bar_status`) und vom Datenweg, sobald eine Referenz-Entität kommt oder geht. Fehlt jedes Gerät einer Quelle, meldet `sys_refresh` für sie keine veralteten Daten („kein Gerät“).
+**`dev_apply`** – Kern. Liest `dev_present` (ein Bit je Platz: 0–7 Flächen, 8–11 Wechselrichter, 12–14 Speicher, 15/16 Wallboxen, 17 Wärmepumpe, 18 PV-Zähler, 19 Hauszähler, 20 Hausanschluss mit Hausnetz und Sonstige; **nicht** im NVS, Anfangswert `dev_present_start`: im Simulator alle an, am Gerät 0, bis die Referenz-Entitäten melden) und blendet fehlende Geräte aus, ohne dass sich etwas verschiebt: Kästen (seit 10.10.2026 auch Hausnetz, Sonstige und Hausanschluss, Bit 20), Dachgruppen und Rahmen der Übersicht, Wechselrichter und Flächen der Seite PV, Ring, Name und Tabellenspalte im Speicher, Karten der Wallboxen, Kacheln der Wärmepumpe, Unterzeilen der Seite Haus. Setzt die Kanäle fehlender Geräte auf 0, hebt die Störung eines fehlenden Wechselrichters auf und rechnet den Speicher-Mittelwert neu. Leitungen und Kugeln zieht der erzeugte Block selbst nach (Regel 10). Gerufen beim Start (`on_boot` von `bar_status`) und vom Datenweg, sobald eine Referenz-Entität kommt oder geht. Fehlt jedes Gerät einer Quelle, meldet `sys_refresh` für sie keine veralteten Daten („kein Gerät“).
 
 **`sys_refresh`** – Kern, alle 10 s und beim Öffnen des Systemfensters: Alter der Werte je Quelle aus `data_seen`, Symbole, WLAN, Home Assistant, Laufzeit, Version (Dokument 06). Von Hand ruft es niemand.
 
@@ -354,7 +353,9 @@ Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in D
 
 **`display_wake`** – nur Gerät (Display-Package), `mode: restart`, ausgelöst von `on_touch` des GT911; fährt das Backlight in 150 ms auf 100 %.
 
-**`voice_panel_hide`** – nur Gerät (`.pv-dashboard_audio.yaml`), `mode: restart`: blendet `voice_panel` nach 6 s aus. Gestartet von `on_end` und `on_error` (manche Fehler enden ohne `on_end`), gestoppt von `on_listening` — eine Anschlussfrage hält das Fenster also offen, statt dass ein altes `delay` es mitten in der neuen Sitzung schließt.
+**`diag_hook`**, **`diag_window`** – Kern, Diagnose (Abschnitt „Diagnose“ unten).
+
+**`c6_auto_update`** – nur Gerät (`.pv-dashboard_core.yaml`), `mode: single`: spielt ein gemeldetes Co-Prozessor-Update ein (Dokument 02).
 
 ## Flussanimation
 
@@ -371,9 +372,62 @@ Der Vorschaulauf meldet seit dem 25.09.2026: **37 Leitungen und 24 Gerätekäste
 
 **Woher die Leistung kommt (Regel 9).** Früher stand sie als feste Tabelle `WATT[]` im Block. Jetzt liest der Block je Tick das global `flow_ch` (24 Kanäle, Übersicht): 0–7 Flächen, 8–11 Wechselrichter, 12 Speicher gesamt, 13–15 Speicher 1–3, 16 Hausnetz, 17 Wärmepumpe, 18 Sonstige, 19/20 Wallboxen, 21 PV-Zähler, 22 Hauszähler, 23 Hausanschluss. Geschrieben wird es nur von den Eingabeskripten `ov_*`. Welche Strecke welchen Kanal zeigt, leitet das Werkzeug aus der Geometrie ab: Die Kästen findet es über die ID ihres Wert-Labels (`v_roof_1`, `v_wr_full`, `e_batt` …), eine Strecke, die an einem Kasten beginnt oder endet, zeigt dessen Kanal. Positiv heißt in Zeichenrichtung; negativ läuft die Kugel rückwärts, endlos und ohne etwas auszulösen (Speicher entlädt, Netzbezug); unter 10 W steht sie. Im Simulator füllt eine Demo nur dann `flow_ch`, wenn es leer ist und `USE_HOST` gilt — am Gerät nie.
 
-**Fehlende Geräte (Regel 10).** Jede Leitung trägt die ID `lnNN` und drei Masken gegen `dev_present`: sichtbar, wenn jedes berührte Gerät da ist und hinter der Leitung (vom Hausanschluss aus gesehen) noch etwas Vorhandenes hängt. Der Block vergleicht `dev_present` je Tick mit dem letzten Stand und blendet Leitungen und Kugeln um; eine versteckte Strecke bekommt 0 W. Eine Folge der Zeichnung: Fehlen die Hybrid-Wechselrichter 3 und 4, hängen Hausnetz und Speicher ohne Leitung da, weil ihr Weg zum Hausanschluss über diese Kästen führt (Screenshot `01_overview_reduced`).
+**Fehlende Geräte (Regel 10).** Jede Leitung trägt die ID `lnNN` und drei Masken gegen `dev_present`: sichtbar, wenn jedes berührte Gerät da ist und hinter der Leitung (vom Hausanschluss aus gesehen) noch etwas Vorhandenes hängt. Der Block vergleicht `dev_present` je Tick mit dem letzten Stand und blendet Leitungen und Kugeln um; eine versteckte Strecke bekommt 0 W.
 
-Eckwerte: Takt 20 ms, Kugeln 8 px, Deckel 13 Bewegungen je Tick – LVGL merkt sich nur 32 ungültige Flächen je Bild, jede Bewegung kostet zwei. Die 13 steht als Konstante `MAXMOVE` in `tools/flow_animation.py`; im erzeugten Block ist sie ausgeschrieben, ein `grep MAXMOVE` über die YAML findet also nichts.
+**Ruhiger Start (seit 10.10.2026, Wunsch des Nutzers).** Am Gerät erschienen nach dem Start zuerst Leitungen, die nach etwa drei Sekunden wieder verschwanden, und Hausnetz, Sonstige und Hausanschluss standen ohne Daten da. Ursachen: Die Leitungen standen sichtbar in der Datei, ausgeblendet hat sie erst der erste Lauf des Blocks nach dem Anlauf (150 Takte); die drei Kästen galten als „immer da“ und hingen an keinem Bit. Jetzt schreibt das Werkzeug jede Leitung mit `hidden: true`, der Block blendet sie erst nach ihrer Regel ein (`lvis` startet bei 0), und Hausnetz, Sonstige und Hausanschluss hängen am Platz `grid` (Bit 20, Referenz `ha_grid_power`). Eine Leitung, die sonst an keinem Gerät hinge (Knoten zu Knoten), braucht ebenfalls Bit 20. Folge: Bis die erste Referenz meldet, ist das Schema leer; dann kommt jedes Gerät mit seinen Leitungen und Kugeln. Ist `ha_grid_power` nicht belegt (`none`), bleiben diese drei Kästen und ihre Leitungen weg. Geprüft im Fall S von `tests/ha_probe.py`. Eine Folge der Zeichnung: Fehlen die Hybrid-Wechselrichter 3 und 4, hängen Hausnetz und Speicher ohne Leitung da, weil ihr Weg zum Hausanschluss über diese Kästen führt (Screenshot `01_overview_reduced`).
+
+Eckwerte: Takt 20 ms, Kugeln 8 px, Deckel 13 Bewegungen je Tick – jede Bewegung kostet zwei ungültige Flächen; LVGL merkt sich seit dem 10.10.2026 128 statt 32 je Bild (`LV_INV_BUF_SIZE`, Abschnitt „Diagnose“). Die 13 steht als Konstante `MAXMOVE` in `tools/flow_animation.py`; im erzeugten Block ist sie ausgeschrieben, ein `grep MAXMOVE` über die YAML findet also nichts.
+
+## Diagnose (seit 10.10.2026)
+
+Anlass: Die Kugeln blieben am Panel ab und zu kurz stehen; das erste Log
+zeigte `lvgl took a long time for an operation` mit 536 bis 763 ms. Solange
+`loop()` hängt, läuft auch das 20-ms-Intervall der Animation nicht — die
+Kugeln stehen, statt zu springen, weil der Block je Takt rechnet, nicht nach
+der Uhr.
+
+**Schalter.** `diag_switch` („Diagnose“, Entity-Kategorie config, bleibt über
+einen Neustart) in Home Assistant oder im Systemfenster (`sw_diag`).
+Eingeschaltet: oben rechts statt des Datums zwei Zeilen (`lbl_diag`), alle
+10 s eine Log-Zeile auf INFO mit dem Tag `diag`, und die Sensoren unten
+bekommen Werte. Ausgeschaltet kostet die Messung nur ein paar `micros()` je
+Bild und je Takt.
+
+**Gemessen** wird in einem 10-s-Fenster, gesammelt im Global `diag`:
+`diag_hook` (einmal beim Start) hängt sich an vier LVGL-Ereignisse des
+Displays — `REFR_START`/`REFR_READY` umfassen Layout, Zeichnen und Ausgabe,
+`FLUSH_START`/`FLUSH_FINISH` nur die Ausgabe (Drehen per PPA und Kopieren in
+den Bildspeicher), die Fläche je Ausgabe zählt mit. Der Block der
+Flussanimation misst seinen eigenen Takt-Abstand und seine Laufzeit
+(`tools/flow_animation.py`). `diag_window` wertet alle 10 s aus und setzt
+zurück.
+
+| Sensor (Home Assistant) | Bedeutung |
+| --- | --- |
+| Diagnose LVGL-Bild max | längstes Bild im Fenster, ms |
+| Diagnose LVGL-Ausgabe max | längste Ausgabe eines Bildes (PPA-Drehung + Kopie), ms |
+| Diagnose LVGL-Fläche max | größte gezeichnete Fläche eines Bildes, px (voller Schirm 1.024.000) |
+| Diagnose LVGL-Bilder je 10 s | gezeichnete Bilder |
+| Diagnose LVGL-Auslastung | Anteil der Zeit, die LVGL zeichnet, % |
+| Diagnose Takt Flussanimation max | größter Abstand zweier Takte, ms (Soll 20; das ist zugleich die längste Pause von `loop()`) |
+| Diagnose Flussanimation Laufzeit max | Laufzeit des Blocks, µs |
+| Diagnose Loop-Zeit max | `debug`-Komponente, nur Gerät |
+| Diagnose Heap intern frei, … größter Block, Diagnose PSRAM frei | `debug`-Komponente, nur Gerät |
+
+**Ursache und Abhilfe.** LVGL merkt sich je Bild höchstens `LV_INV_BUF_SIZE`
+ungültige Flächen, Standard 32; läuft der Puffer über, zeichnet es den ganzen
+Schirm (`lv_refr.c`, `lv_inv_area`). Die Kugeln belegen bis zu 26 Flächen je
+Takt (Regel 8), der Datenweg setzt jede Sekunde viele Werte auf einmal.
+Gemessen im Simulator mit einem Wertschwall je Sekunde: mit 32 in jedem
+Fenster ein Bild über den vollen Schirm (76 bis 114 ms), ohne Kugeln höchstens
+138.000 px, mit 128 Flächen höchstens 140.000 px und 19 bis 20 ms. Am Panel
+dauert ein volles Bild etwa eine halbe Sekunde (Log). Deshalb steht im Kern
+`esphome: build_flags: ["-DLV_INV_BUF_SIZE=128"]`; ESPHome gibt `-D`-Flags an
+jede IDF-Komponente weiter, also auch an LVGL (`build_gen/espidf.py`), auf
+host ebenso (in `compile_commands.json` geprüft). Kostet gut 2 KB RAM. Am
+Gerät noch nicht gemessen — mit eingeschalteter Diagnose zeigt „LVGL-Fläche
+max“ sofort, ob noch volle Bilder vorkommen. Weitere Kandidaten und
+Vorschläge stehen in Dokument 06.
 
 ## Datenweg von Home Assistant
 
@@ -435,13 +489,14 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   | `pv_1` … `pv_8` | `ha_pv<N>_power` | `wb_1`, `wb_2` | `ha_wb<N>_mode` (Modus aus evcc, „WB-Status“) |
   | `inv_1` … `inv_4` | `ha_inv<N>_power` | `heatpump` | `ha_hp_dhw` (Warmwasser oben) |
   | `bat_1` … `bat_3` | `ha_bat<N>_soc` | `meter_pv`, `meter_house` | `ha_meter_pv_power`, `ha_meter_house_power` |
+  | `grid` (seit 10.10.2026) | `ha_grid_power` (Hausanschluss; mit ihm Hausnetz und Sonstige) | | |
 
   Das Intervall (1 s) rechnet daraus `dev_present`: Bit an, solange die
   Referenz einen gültigen Wert hat (Zahl nicht `NAN`, Text nicht leer,
   `unavailable` oder `unknown`). Ändert sich etwas, ruft es `dev_apply` und
   markiert alle Gruppen neu – in beide Richtungen, auch zur Laufzeit.
   `dev_present` liegt **nicht** im NVS und startet am Gerät mit 0
-  (`dev_present_start: "0u"` im Paket sticht `"0xFFFFFu"` aus dem Kern).
+  (`dev_present_start: "0u"` im Paket sticht `"0x1FFFFFu"` aus dem Kern).
 - **Nicht belegt.** Jede Substitution `ha_<name>` darf statt einer ID
   `none`, `false`, `off`, `null` oder `""` sein (Groß-/Kleinschreibung egal).
   Umgesetzt mit ESPHomes Jinja in den Substitutionen: `entity_id` wird dann
@@ -678,9 +733,12 @@ Python-Umgebung von ESPHome (nichts nachzuinstallieren):
   Stundenbalken = volle Stunden aus der Statistik, `forecast_curve` = Summe der
   Dächer; Tipp auf „Vorschau“ (`probe_fc_mode`, `LV_EVENT_CLICKED`) → „6 Tage …“
   je Kachel und „Morgen …“ in der Kopfzeile, Tipp auf „Heute“ zurück;
+  ruhiger Start (Fall S): vor dem ersten Wert aus HA, nach dem Anlauf der
+  Animation, ist im Schema nichts sichtbar, mit den Referenzen kommen
+  Hausanschluss, Hausnetz und Leitungen;
   Trennung → genau eine Sammelmeldung, Verbinden → weg; über den
-  ganzen Lauf in keinem der rund 880 Labels aller Seiten „inf“ oder „nan“.
-  `--shots` legt dazu zwölf BMP nach `shots/ha_probe/` (vorher gelöscht, `snapshot.take` überschreibt nicht);
+  ganzen Lauf in keinem der Labels aller Seiten „inf“ oder „nan“.
+  `--shots` legt dazu BMP nach `shots/ha_probe/` (vorher gelöscht, `snapshot.take` überschreibt nicht);
   `probe_page` (nur in der Testkonfiguration) zeigt dafür PV, Haus, Netz,
   Prognose, Übersicht und Meldungen. Exit-Code 0 = alles
   bestanden.
@@ -697,7 +755,7 @@ Projektordner, mit vollem Pfad in die Arbeitsumgebung (ESPHome 2026.9.0):
 
 `pv-dashboard-sim.yaml` öffnet ein SDL-Fenster und **blockiert**, bis das Fenster geschlossen wird; **F12** speichert ein Bild nach `.esphome/snapshots/pv-dashboard-sim/`, `ESPHOME_SNAPSHOT_DIR` lenkt es um.
 
-`pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle elf Seiten, die Statistik zusätzlich als Monat, plus die drei Fenster als BMP (`01_overview.bmp` … `12_system.bmp`, dazu `13_forecast.bmp` (Prognose Heute, Uhrzeit der Seite fest 13:20), `13_forecast_vorschau.bmp` (nach `fc_mode_set` 1) und `14_weather.bmp`, angehängt statt umnummeriert, und `09_alerts_filter.bmp` mit dem Filter „Störungen“; zum Schluss eine kleinere Anlage über `dev_present` als `01_overview_reduced.bmp`, `02_pv_reduced.bmp`, `03_battery_reduced.bmp` und `06_house_reduced.bmp`; in der verkleinerten Übersicht sind zudem drei Werte über `val_leer` leer: Ertrag des ersten Wechselrichters, Spannung von Speicher 2, Leistung des Hauszählers) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
+`pv-dashboard-shots.yaml` bindet den Simulator als Package ein, rendert headless alle elf Seiten, die Statistik zusätzlich als Monat, plus die zwei Fenster als BMP (`01_overview.bmp` … `12_system.bmp`, `10_voice_panel.bmp` gibt es seit dem 10.10.2026 nicht mehr, `12_system.bmp` zeigt die Diagnose eingeschaltet, dazu `13_forecast.bmp` (Prognose Heute, Uhrzeit der Seite fest 13:20), `13_forecast_vorschau.bmp` (nach `fc_mode_set` 1) und `14_weather.bmp`, angehängt statt umnummeriert, und `09_alerts_filter.bmp` mit dem Filter „Störungen“; zum Schluss eine kleinere Anlage über `dev_present` als `01_overview_reduced.bmp`, `02_pv_reduced.bmp`, `03_battery_reduced.bmp` und `06_house_reduced.bmp`; in der verkleinerten Übersicht sind zudem drei Werte über `val_leer` leer: Ertrag des ersten Wechselrichters, Spannung von Speicher 2, Leistung des Hauszählers) nach `shots/` unter dem Startverzeichnis und beendet sich selbst – deshalb im Projektordner starten. `snapshot.take` überschreibt nie, darum löscht `shots_take` vorher.
 
 Beispieldaten für Meldungen, Speicher, PV-Werte, Wallboxen, Wärmepumpe, Haus, Netz, Statistik, Prognose, Wetter, Tagesreihen und Ringe stehen in `shots_run`, also **nur** im Screenshot-Lauf. Die Übersicht füllt `shots_run` über die Eingabeskripte `ov_*`, also auf demselben Weg wie später der Datenweg. Die Demo-Leistungen der Flussanimation stehen dagegen unter `#ifdef USE_HOST` und greifen nur, solange `flow_ch` leer ist — im Simulator also, im Screenshot-Lauf nicht mehr. Im Gerät steht beides nicht.
 
@@ -735,7 +793,7 @@ im YAML:
 
 ---
 
-Stand: 10.10.2026 (Seite Prognose je Dachfläche mit Umschalter Heute / Vorschau, Skripte `fc_roof_*`, Prognose je Dach und Stundenbalken im Datenweg, Tests dazu; Zeilen der Prognose und des Datenwegs neu abgezählt); davor 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert im Datenweg, Tests dazu); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar: `wallbox_mode_set`, Abschnitt „Steuern“, Zeilennummern von Wallboxen und Datenweg neu abgezählt); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, `val_leer` = −∞ samt Rechenregeln, Abschnitt „Tests“, Zeilennummern von Kern, Übersicht und Datenweg neu abgezählt); davor 25.09.2026, später Tag (Datenweg von Home Assistant samt Dummy-Paket, Eingabeskripte `ov_*`, `flow_ch`, `dev_present` und `dev_apply`, Flussanimation mit 37 Leitungen, Tabelle und Skriptliste neu abgezählt); davor 25.09.2026 (Meldungen: Lagebild, Zähler mit Filter, Zusammenfassen, `alert_clear`; danach alle Zeilennummern der Tabelle und der Skriptliste neu abgezählt, Seitenliste in Reiterreihenfolge, `sys_panel`-Maße, `voice_panel_hide`, MDI-Font auf v7.4.47); davor 24.09.2026 (Seiten Wallboxen, Wärmepumpe und Haus samt ihren
+Stand: 10.10.2026 (Seite Prognose je Dachfläche mit Umschalter Heute / Vorschau, Skripte `fc_roof_*`, Prognose je Dach und Stundenbalken im Datenweg, Tests dazu; Audio entfernt, ruhiger Start mit Bit 20 `grid` und versteckten Leitungen, Diagnose samt `LV_INV_BUF_SIZE` 128, Systemfenster 628 hoch, Co-Prozessor-Update automatisch, `refresh: always`; Zeilennummern von Kern und Datenweg neu abgezählt); davor 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert im Datenweg, Tests dazu); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar: `wallbox_mode_set`, Abschnitt „Steuern“, Zeilennummern von Wallboxen und Datenweg neu abgezählt); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, `val_leer` = −∞ samt Rechenregeln, Abschnitt „Tests“, Zeilennummern von Kern, Übersicht und Datenweg neu abgezählt); davor 25.09.2026, später Tag (Datenweg von Home Assistant samt Dummy-Paket, Eingabeskripte `ov_*`, `flow_ch`, `dev_present` und `dev_apply`, Flussanimation mit 37 Leitungen, Tabelle und Skriptliste neu abgezählt); davor 25.09.2026 (Meldungen: Lagebild, Zähler mit Filter, Zusammenfassen, `alert_clear`; danach alle Zeilennummern der Tabelle und der Skriptliste neu abgezählt, Seitenliste in Reiterreihenfolge, `sys_panel`-Maße, `voice_panel_hide`, MDI-Font auf v7.4.47); davor 24.09.2026 (Seiten Wallboxen, Wärmepumpe und Haus samt ihren
 Skripten, Tabelle neu abgezählt); davor 23.09.2026 (eigene Anlage in `.pv-dashboard_anlage.yaml`, Seite PV &
 Prognose samt `pv_update` und `pv_redraw_curve`, Tabelle und Zeilennummern neu
 abgezählt; davor 20.09.2026: Streckenzahlen aus einem Vorschaulauf; Zeilennummern gegen

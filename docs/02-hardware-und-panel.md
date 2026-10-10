@@ -72,7 +72,8 @@ Zur I2C-Frage vom ersten Boot (31.07.2026, am 11.09.2026 per Quelltext geklärt)
   bei `level: INFO` immer. Der YAML-Kommentar nennt `CONFIG` (oder `DEBUG`), die
   Quelltextprüfung vom 11.09.2026 nennt `DEBUG`: zur Kontrolle einmal mit
   **globalem** Level DEBUG flashen, Pro-Tag-Level heben das nicht an.
-- Erwartete Adressen: GT911 0x5D oder 0x14, ES8311 0x18, ES7210 0x40.
+- Erwartete Adressen: GT911 0x5D oder 0x14, dazu die verbauten, aber seit
+  10.10.2026 ungenutzten Audio-Chips ES8311 0x18 und ES7210 0x40.
 
 Logger: `level: INFO`, `hardware_uart: UART0`; das Log geht über den
 USB-UART-Port (Type-C, Beschriftung "UART").
@@ -93,6 +94,30 @@ ohne Ausbau, und wählt die höchste Version, die zur einkompilierten
 esp_hosted-Bibliothek passt (seit 2026.8.0: 2.12.12). `on_update_available`
 schiebt eine Info in die Meldungsliste.
 
+**Automatisch installieren (seit 10.10.2026, Wunsch des Nutzers).**
+`on_update_available` startet danach das Skript `c6_auto_update`
+(`.pv-dashboard_core.yaml`, Update-Entity `id: c6_update`). Es wartet, bis
+WLAN und API verbunden sind und das Gerät mindestens 2 min läuft (höchstens
+30 min), prüft `update.is_available` und ruft `update.perform` auf. Im Quelltext
+von 2026.10.0b2 nachgelesen (`esp32_hosted/update/esp32_hosted_update.cpp`,
+`perform()`):
+
+- `perform()` blockiert einen `loop()`-Durchlauf: Firmware laden, über SDIO auf
+  den C6 schreiben, aktivieren. Solange steht die Oberfläche.
+- `force` ist nicht nötig — ohne `force` installiert es bei Zustand
+  `AVAILABLE`, und genau den setzt die Prüfung.
+- Erfolg: Zustand `NO_UPDATE`, eine Sekunde später startet der **P4** neu
+  (`App.safe_reboot()`). Die Meldungsliste liegt nur im RAM und ist danach
+  leer; die nächste Prüfung findet die neue Version und meldet nichts mehr.
+- Fehler: Zustand bleibt `AVAILABLE`, kein Neustart; dann kommt die Warnung
+  „Firmware-Update fehlgeschlagen“ in die Meldungen. Erneut versucht wird erst
+  nach dem nächsten Neustart, weil `on_update_available` nur beim Wechsel auf
+  „verfügbar“ auslöst.
+
+Im Log steht jeder Schritt („Co-Prozessor-Update: installiere …“, „…
+erfolgreich, Neustart in 1 s“ bzw. „… fehlgeschlagen“), dazu die Zeilen von
+`esp32_hosted.update`. Am Gerät erprobt ist der Ablauf noch nicht.
+
 ## Bluetooth LE
 
 BLE läuft über denselben C6; ESPHome erkennt `esp32_hosted` und schaltet den
@@ -107,18 +132,20 @@ warnt ESPHome davor — die Lücke gehört WLAN. Hält der Proxy GATT-Verbindung
 scannt er nur noch 30 ms pro Intervall. Bleibt WLAN instabil: zuerst
 `active: false` probieren.
 
-## Audio-Hardware
+## Audio-Hardware (ungenutzt)
 
-- Wiedergabe: ES8311 (I2C 0x18), 48 kHz
-- Aufnahme: ES7210 (I2C 0x40), Dual-Mic-Array mit Echo-Unterdrückung, 16 kHz
-- Verstärker-Enable GPIO53 — sonst bleibt der Lautsprecher stumm. Die
-  GPIO-Switch-Entität heißt `"Lautsprecher-Verstaerker"`.
-- **Ein gemeinsamer I2S-Bus:** MCLK GPIO13, BCLK GPIO12, LRCLK GPIO10,
-  DOUT GPIO9 (zum Codec), DIN GPIO11 (vom ADC)
+Seit dem 10.10.2026 ist Audio entfernt (Wunsch des Nutzers): kein Wakeword,
+kein Mikrofon, kein Lautsprecher, kein Sprachassistent. Im ersten Log am Gerät
+meldete `micro_wake_word` mehrmals je Sekunde „Not enough free bytes in ring
+buffer“ und kostete Rechenzeit, die der Oberfläche fehlte. Das Paket
+`.pv-dashboard_audio.yaml` ist gelöscht; die Chips bleiben verbaut:
 
-Ein Bus für beide Richtungen heißt Halbduplex — der Konflikt ist auch
-physikalisch, ein BCLK kann nicht gleichzeitig 48 kHz und 16 kHz takten. Wie
-`.pv-dashboard_audio.yaml` das löst und welcher Test dafür aussteht: Dokument 05.
+- Wiedergabe: ES8311 (I2C 0x18), Aufnahme: ES7210 (I2C 0x40)
+- Verstärker-Enable GPIO53 — ohne Konfiguration nicht angesteuert
+- I2S-Bus: MCLK GPIO13, BCLK GPIO12, LRCLK GPIO10, DOUT GPIO9, DIN GPIO11
+
+Wer Audio zurückhaben will, findet das Paket samt Halbduplex-Lösung im
+Versionsverlauf des Repos (letzter Stand vor dem 10.10.2026, Dokument 05).
 
 ## Serielle Schnittstellen über USB
 

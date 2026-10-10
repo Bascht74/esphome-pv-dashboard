@@ -84,10 +84,15 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 
 **Am Gerät zu erledigen**
 
-- [ ] **OTA-Schritt 2** — `password:` durch `encryption: {}` ersetzen, erst nach der
-      ersten erfolgreichen OTA-Installation einer 9.0-Firmware.
-- [ ] **Audio-Halbduplex testen** — achtstufiger Testplan in Dokument 05.
-- [ ] **Farbwirkung im Tageslicht, Bildzeit, Touch und Scrollen** prüfen.
+- [x] ~~**OTA-Schritt 2**~~ — erledigt am 10.10.2026: OTA nur noch mit `encryption: {}`,
+      das Gerät wurde seriell geflasht.
+- [x] ~~**Audio-Halbduplex testen**~~ — entfallen, Audio ist seit dem 10.10.2026 entfernt.
+- [ ] **Farbwirkung im Tageslicht, Touch und Scrollen** prüfen.
+- [ ] **Bildzeit messen** — Schalter „Diagnose“ einschalten und die Sensoren
+      ansehen (Dokument 03, „Diagnose“); vor allem, ob „LVGL-Fläche max“ nach
+      `LV_INV_BUF_SIZE` 128 noch den vollen Schirm (1.024.000 px) zeigt.
+- [ ] **Co-Prozessor-Update automatisch** — beim ersten Mal im Log verfolgen
+      (Dokument 02, „Funk: C6-Co-Prozessor“).
 
 **Entscheidungen, die noch niemand getroffen hat**
 
@@ -246,18 +251,13 @@ dieser Generalisierung. Am 20.09.2026 hat der Nutzer nach Vorlage der Einzelheit
 entschieden, daran nichts zu ändern. **Entscheidungsstand: entschieden, nicht erneut
 vorschlagen.**
 
-Ein weiterer Punkt bleibt offen; er blockiert das Öffentlichmachen nicht:
-
-- **Der Beispieltext des Sprachassistenten** in `pv-dashboard-shots.yaml` nennt
-  „Wallbox 1" im Fließtext. Er ist absichtlich nicht auf `${name_wb_1}` umgestellt:
-  Der Satz hat einen Artikel davor („Die Wallbox 1 meldet …"), bei einem frei
-  gewählten Namen würde der Satz grammatisch schief. Demo-Prosa, nur im
-  Screenshot-Lauf, nie auf dem Gerät.
+Der frühere Restpunkt, der Beispieltext des Sprachassistenten im
+Screenshot-Lauf, ist mit dem Sprachfenster am 10.10.2026 weggefallen.
 
 ## Erledigt: Packages kommen aus dem Repo
 
 Seit dem 20.09.2026 lädt `pv-dashboard.yaml` die Packages aus dem GitHub-Repo
-(`ref: main`, `refresh: 1d`); die lokale Variante steht auskommentiert als
+(`ref: main`, seit 10.10.2026 `refresh: always` statt `1d`); die lokale Variante steht auskommentiert als
 Rückfall daneben (Dokument 03).
 
 Folgen, beide in Dokument 03 belegt: Das Gerät baut aus dem geschobenen Stand,
@@ -650,23 +650,67 @@ Simulator und Screenshots decken Layout und Logik ab, diese Punkte nicht:
   zeigt erst das Panel. Dasselbe gilt für die Stufen in den Verläufen: LVGL 9 dithert bei
   `LV_COLOR_DEPTH 16` nicht. Die Entscheidung dazu steht in Dokument 03; geprüft wird in jedem Screenshot.
 - **Bildzeit auf dem P4.** Die Flussanimation läuft in einem `interval: 20ms` über 37
-  Teilstrecken (28 Leitungen, 20 Übergänge — Zahlen aus der Ausgabe von
-  `tools/flow_animation.py`). Eine Messung auf dem Panel gibt es nicht.
+  Teilstrecken (37 Leitungen, 20 Übergänge — Zahlen aus der Ausgabe von
+  `tools/flow_animation.py`). Seit dem 10.10.2026 misst die Diagnose am Panel
+  (Dokument 03); Analyse und Vorschläge im Abschnitt „Ruckeln der Kugeln“.
 - **Touch und Scrollen.** Dass `scrollable: false` das Verschieben wirklich unterbindet, ist
   bisher per Quelltext-Prüfung (11.09.2026) und im Simulator belegt, nicht mit dem Finger auf
   dem GT911.
-- **Audio-Halbduplex.** Umgesetzt am 11.09.2026, **Hardware-Test steht aus** — siehe die
-  zwei offenen Punkte im nächsten Abschnitt.
+
+## Ruckeln der Kugeln (Analyse 10.10.2026)
+
+Erstes Log am Panel: `lvgl took a long time for an operation` 536, 712 und
+763 ms, `esp32_hosted.update` 597 ms, `esp32_ble` 297 ms, `interval` 67 bis
+142 ms. Solange eine Komponente `loop()` hält, steht das 20-ms-Intervall der
+Kugeln — sie bleiben stehen. Was der Code dazu zeigt:
+
+- **Voller Schirm durch Überlauf der Flächenliste — behoben.** LVGL hält
+  32 ungültige Flächen je Bild, darüber zeichnet es alles neu
+  (`lv_refr.c`, `lv_inv_area`). Die Kugeln nehmen bis zu 26 (Regel 8 in
+  `tools/flow_animation.py`, `MAXMOVE = 13`), der Datenweg setzt jede Sekunde
+  viele Werte (`interval: 1s` in `.pv-dashboard_ha.yaml`). Im Simulator
+  nachgestellt: mit Kugeln und Wertschwall jedes 10-s-Fenster ein Bild über
+  1.024.000 px, ohne Kugeln höchstens 138.000 px, mit 128 Flächen höchstens
+  140.000 px. Abhilfe `LV_INV_BUF_SIZE=128` im Kern (Dokument 03).
+- **Volles Bild ist teuer.** `buffer_size: 100%` (`.pv-dashboard_ui.yaml`,
+  `lvgl:`) mit einem einzigen Puffer: ESPHome legt ihn und den Drehpuffer
+  (`rotation: 90`, `.pv-dashboard_display.yaml`) je 2 MB ins PSRAM
+  (`lvgl_esphome.cpp`, `setup()`); gezeichnet wird in PSRAM, danach dreht
+  die PPA blockierend (`ppa_rotate_`, `PPA_TRANS_MODE_BLOCKING`) und
+  `esp_lcd_panel_draw_bitmap` kopiert in den Bildspeicher des Panels. Kein
+  zweiter Puffer, also kein Zeichnen während der Ausgabe. Beim Start und bei
+  jedem Seitenwechsel ist ein volles Bild unvermeidlich — die gemessenen
+  536 bis 763 ms passen dazu. Vorschlag, nicht umgesetzt: erst messen
+  (Sensor „LVGL-Ausgabe max“ gegen „LVGL-Bild max“), dann gegebenenfalls
+  einen kleineren Puffer (`buffer_size: 25%`) gegen die volle Fläche
+  abwägen; ESPHome versucht kleine Puffer zuerst im internen RAM.
+- **Verläufe.** Viele Kacheln haben `bg_grad`; Software-Verläufe kosten bei
+  jedem Neuzeichnen der Fläche. Nur relevant, wenn die Kacheln oft neu
+  gezeichnet werden — mit dem größeren Flächenpuffer selten.
+- **Viele Labels je Schwall.** Die Eingabeskripte setzen jeden Text bei
+  jedem Aufruf neu, auch wenn er gleich bleibt; jeder Aufruf macht das Label
+  ungültig. Vorschlag: in den Skripten nur bei geändertem Text setzen (würde
+  die 140.000 px je Schwall weiter senken). Nicht umgesetzt, betrifft alle
+  Seiten.
+- **`esp32_hosted.update`** (597 ms): Die Prüfung holt das Manifest per HTTP
+  blockierend, alle 6 h und einmal nach dem Start (`update_interval: 6h`,
+  `.pv-dashboard_core.yaml`). Selten, kein Grund für regelmäßiges Ruckeln.
+- **`esp32_ble`** (297 ms): Der Bluetooth-Proxy (`bluetooth_proxy: active:
+  true`). Wird er nicht gebraucht, wäre Abschalten der einfachste Gewinn;
+  sonst `active: false`. Nicht geändert — er dient Home Assistant, nicht dem
+  Audio.
+- **`interval`** (67 bis 142 ms): Alle Intervalle zählen unter diesem Namen.
+  Kandidaten: der Datenweg (1 s, ruft je Gruppe die Seitenskripte) und
+  `sys_refresh` (10 s). Der Block der Kugeln selbst braucht im Simulator unter
+  1 ms; am Panel zeigt es „Flussanimation Laufzeit max“.
+- **`micro_wake_word`**: lief mit drei Modellen dauernd und meldete
+  Pufferüberlauf — mit Audio entfernt.
 
 ## Offen aus dem 9.0-Umstieg
 
-Vom 9.0-Umstieg sind noch **zwei** Punkte offen, beide in Dokument 05 beschrieben:
-
-- **Schritt 2 des OTA-Umstiegs** — `password:` durch `encryption: {}` ersetzen, erst nach
-  der ersten erfolgreichen OTA-Installation einer 9.0-Firmware. Auf dem Panel läuft laut
-  Device Builder noch 2026.7.3, der Schritt ist also nicht fällig.
-- **Der Hardware-Test des Audio-Halbduplex** — umgesetzt am 11.09.2026, am Gerät nie
-  gelaufen. Achtstufiger Testplan und die zwei bekannten ESPHome-Grenzen in Dokument 05.
+Vom 9.0-Umstieg ist nichts mehr offen: Der Audio-Test ist mit dem Entfernen von Audio
+am 10.10.2026 entfallen, OTA läuft seit demselben Tag nur noch verschlüsselt
+(`encryption: {}`), ohne Passwort.
 
 Der LVGL-`list`-Bug ist mit 2026.9.0 erledigt.
 
@@ -690,7 +734,7 @@ Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 10.10.2026 (Seite Prognose je Dachfläche, offene Punkte dazu unter „Prognose und Wetter“); davor 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Stand: 10.10.2026 (Seite Prognose je Dachfläche, offene Punkte dazu unter „Prognose und Wetter“; Audio entfernt, ruhiger Start, Diagnose und Analyse „Ruckeln der Kugeln“, Co-Prozessor-Update automatisch, `refresh: always`); davor 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
 Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc

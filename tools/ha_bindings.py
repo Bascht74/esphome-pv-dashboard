@@ -148,6 +148,9 @@ PLAETZE = (
     + [(f"inv_{k}", 7 + k) for k in range(1, 5)]
     + [(f"bat_{n}", 11 + n) for n in range(1, 4)]
     + [("wb_1", 15), ("wb_2", 16), ("heatpump", 17), ("meter_pv", 18), ("meter_house", 19)]
+    # Hausnetz, Sonstige und Hausanschluss samt Leitungen (Ruhiger Start,
+    # 10.10.2026): erst sichtbar, wenn der Hausanschluss liefert
+    + [("grid", 20)]
 )
 
 # Referenz je Platz: Name der Tabellenzeile, deren Wert "Geraet da" heisst
@@ -157,7 +160,8 @@ REFERENZ = dict(
     + [(f"bat_{n}", f"bat{n}_soc") for n in range(1, 4)]
     + [("wb_1", "wb1_mode"), ("wb_2", "wb2_mode"),   # "WB-Status": Modus aus evcc
        ("heatpump", "hp_dhw"),                         # Warmwasser oben (Nilan)
-       ("meter_pv", "meter_pv_power"), ("meter_house", "meter_house_power")]
+       ("meter_pv", "meter_pv_power"), ("meter_house", "meter_house_power"),
+       ("grid", "grid_power")]                         # Hausanschluss (Shelly)
 )
 FREI_WERTE = "['none', 'false', 'off', 'null', '']"
 ERSATZ_ID = "sensor.pv_dashboard_nicht_belegt"

@@ -59,6 +59,10 @@ Entitaet weg -> nur der Wert weg):
      Vorschau -> "6 Tage" mit der Summe der Folgetage; forecast_curve aus
      der Summe der Daecher
   J  in keinem Label irgendwo "inf" oder "nan", ueber den ganzen Lauf
+  S  Ruhiger Start (Wunsch des Nutzers, 10.10.2026): nach dem Start und vor
+     dem ersten Wert aus HA ist im Schema nichts zu sehen -- kein Kasten,
+     keine Leitung, keine Kugel, auch nicht nach dem Anlauf der Animation;
+     mit den Referenzen erscheinen Geraete, Hausanschluss und Leitungen
 
 Liest keine secrets.yaml und nicht .pv-dashboard_anlage.yaml. Ergebnis:
 Exit-Code 0, wenn alle Faelle bestehen.
@@ -403,6 +407,13 @@ def pruefe(fall, text, ok, info=""):
 
 
 async def ablauf(panel, ha, bilder):
+    # S: vor dem Verbinden, nach dem Anlauf der Flussanimation (150 Takte
+    # zu 20 ms) -- vorher stand dort nichts Pruefbares
+    d = await panel.warten(lambda d: d["ms"] > 6000, 30)
+    pruefe("S", "vor dem ersten Wert: kein Geraet, keine Leitung, keine Kugel im Schema",
+           d and d["dev"] == 0 and d["schema_vis"] == 0,
+           d and {k: d[k] for k in ("dev", "schema_vis", "schema_lines")})
+
     await ha.verbinden()
     print("verbunden", flush=True)
 
@@ -423,6 +434,10 @@ async def ablauf(panel, ha, bilder):
     pruefe("B", "Referenz fehlt in HA (Wallbox 2): Bit aus, Kasten weg", bit(d, "wb_2") == 0 and d["hid"]["wb2"] == 1)
     pruefe("B", "uebrige Geraete da", all(bit(d, p) for p, _ in hb.PLAETZE if p not in ("pv_8", "wb_2", "bat_3"))
            and d["hid"]["roof1"] == 0 and d["hid"]["wb1"] == 0 and d["hid"]["heatpump"] == 0, hex(d["dev"]))
+    # S: mit den Referenzen kommt das Schema
+    pruefe("S", "nach den Referenzen: Hausanschluss und Hausnetz da, Leitungen sichtbar",
+           bit(d, "grid") == 1 and d["hid"]["grid"] == 0 and d["hid"]["house"] == 0 and d["schema_lines"] > 20,
+           {k: d[k] for k in ("dev", "schema_vis", "schema_lines")})
     # C
     pruefe("C", "Referenz unavailable (Speicher 3): Bit aus, Kasten weg", bit(d, "bat_3") == 0 and d["hid"]["bat3"] == 1)
     # D

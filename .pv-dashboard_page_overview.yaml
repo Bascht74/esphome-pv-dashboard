@@ -1078,46 +1078,46 @@ lvgl:
               # Nachbarleitung mitgeht. Die IDs lnNN und die Regel, wann
               # eine Leitung sichtbar ist, setzt tools/flow_animation.py
               # (aus der Geometrie); das Bild ist dasselbe wie vorher.
-              - line: { id: ln00, points: [[55,107],[55,119],[107,119]], line_color: $col_full, line_width: 3, line_rounded: true }
-              - line: { id: ln01, points: [[107,119],[107,131]], line_color: $col_full, line_width: 3, line_rounded: true }
-              - line: { id: ln02, points: [[159,107],[159,119],[107,119]], line_color: $col_full, line_width: 3, line_rounded: true }
-              - line: { id: ln03, points: [[285,107],[285,119],[337,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln04, points: [[337,119],[337,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln05, points: [[389,107],[389,119],[337,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln06, points: [[515,107],[515,119],[567,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln07, points: [[567,119],[567,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln08, points: [[619,107],[619,119],[567,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln09, points: [[745,107],[745,119],[797,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln10, points: [[797,119],[797,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln11, points: [[849,107],[849,119],[797,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln12, points: [[407,171],[497,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln13, points: [[727,171],[637,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln14, points: [[553,211],[553,241],[330,241],[330,257]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln15, points: [[581,211],[581,250],[590,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { id: ln16, points: [[783,211],[783,250],[774,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { id: ln17, points: [[682,285],[556,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { id: ln18, points: [[682,285],[808,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { id: ln19, points: [[556,285],[556,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { id: ln20, points: [[682,274],[682,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { id: ln21, points: [[682,285],[682,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
-              - line: { id: ln22, points: [[808,285],[808,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln00, hidden: true, points: [[55,107],[55,119],[107,119]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln01, hidden: true, points: [[107,119],[107,131]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln02, hidden: true, points: [[159,107],[159,119],[107,119]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln03, hidden: true, points: [[285,107],[285,119],[337,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln04, hidden: true, points: [[337,119],[337,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln05, hidden: true, points: [[389,107],[389,119],[337,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln06, hidden: true, points: [[515,107],[515,119],[567,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln07, hidden: true, points: [[567,119],[567,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln08, hidden: true, points: [[619,107],[619,119],[567,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln09, hidden: true, points: [[745,107],[745,119],[797,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln10, hidden: true, points: [[797,119],[797,131]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln11, hidden: true, points: [[849,107],[849,119],[797,119]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln12, hidden: true, points: [[407,171],[497,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln13, hidden: true, points: [[727,171],[637,171]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln14, hidden: true, points: [[553,211],[553,241],[330,241],[330,257]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln15, hidden: true, points: [[581,211],[581,250],[590,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln16, hidden: true, points: [[783,211],[783,250],[774,250]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln17, hidden: true, points: [[682,285],[556,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln18, hidden: true, points: [[682,285],[808,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln19, hidden: true, points: [[556,285],[556,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln20, hidden: true, points: [[682,274],[682,285]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln21, hidden: true, points: [[682,285],[682,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
+              - line: { id: ln22, hidden: true, points: [[808,285],[808,299]], line_color: $col_batt, line_width: 3, line_rounded: true }
               # Einspeisung knickt bei y 241 ab, gespiegelt zur Solarleitung
               # links (553 / 811 = 682 -/+ 129, beide 30 unter den Kaesten):
               # 28 zur Speicherleitung bei 783, 44 ueber der Schiene (285).
-              - line: { id: ln23, points: [[811,211],[811,241],[882,241],[882,517],[797,517],[797,545]], line_color: $col_feed, line_width: 3, line_rounded: true }
-              - line: { id: ln24, points: [[330,385],[330,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln25, points: [[144,403],[268,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln26, points: [[330,403],[268,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln27, points: [[330,403],[392,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln28, points: [[392,403],[516,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln29, points: [[144,403],[144,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln30, points: [[268,403],[268,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln31, points: [[392,403],[392,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
-              - line: { id: ln32, points: [[516,403],[516,419]], line_color: $col_line, line_width: 3, line_rounded: true }
-              - line: { id: ln33, points: [[107,211],[107,545]], line_color: $col_full, line_width: 3, line_rounded: true }
-              - line: { id: ln34, points: [[171,595],[370,595]], line_color: $col_full, line_width: 3, line_rounded: true }
-              - line: { id: ln35, points: [[733,595],[534,595]], line_color: $col_feed, line_width: 3, line_rounded: true }
-              - line: { id: ln36, points: [[452,657],[452,664]], line_color: $col_feed, line_width: 3, line_rounded: true }
+              - line: { id: ln23, hidden: true, points: [[811,211],[811,241],[882,241],[882,517],[797,517],[797,545]], line_color: $col_feed, line_width: 3, line_rounded: true }
+              - line: { id: ln24, hidden: true, points: [[330,385],[330,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln25, hidden: true, points: [[144,403],[268,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln26, hidden: true, points: [[330,403],[268,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln27, hidden: true, points: [[330,403],[392,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln28, hidden: true, points: [[392,403],[516,403]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln29, hidden: true, points: [[144,403],[144,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln30, hidden: true, points: [[268,403],[268,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln31, hidden: true, points: [[392,403],[392,419]], line_color: $col_solar, line_width: 3, line_rounded: true }
+              - line: { id: ln32, hidden: true, points: [[516,403],[516,419]], line_color: $col_line, line_width: 3, line_rounded: true }
+              - line: { id: ln33, hidden: true, points: [[107,211],[107,545]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln34, hidden: true, points: [[171,595],[370,595]], line_color: $col_full, line_width: 3, line_rounded: true }
+              - line: { id: ln35, hidden: true, points: [[733,595],[534,595]], line_color: $col_feed, line_width: 3, line_rounded: true }
+              - line: { id: ln36, hidden: true, points: [[452,657],[452,664]], line_color: $col_feed, line_width: 3, line_rounded: true }
 
               # ---------- Dachgruppen: je zwei Dachflaechen ueber ihrem
               #            Wechselrichter, Verlauf grad_lit_*, vor den
@@ -1396,8 +1396,8 @@ interval:
           // Sichtbarkeit je Leitung gegen dev_present (Bits wie dort):
           // alle Bits aus L_ALL gesetzt und, wo nicht 0, je eines aus L_A
           // (dahinter) und L_B (Summenkasten Speicher).
-          static const uint32_t L_ALL[] = {0x1,0x100,0x2,0x4,0x200,0x8,0x10,0x400,0x20,0x40,0x800,0x80,0x600,0xC00,0x400,0x400,0x800,0x0,0x0,0x1000,0x0,0x2000,0x4000,0x80800,0x0,0x0,0x0,0x0,0x0,0x20000,0x0,0x8000,0x10000,0x40100,0x40000,0x80000,0x0};
-          static const uint32_t L_A[] = {0x1,0x3,0x2,0x4,0xC,0x8,0x10,0x30,0x20,0x40,0xC0,0x80,0x20C,0x0,0x0,0x0,0x0,0x1000,0x4000,0x1000,0x7000,0x2000,0x4000,0x0,0x0,0x20000,0x0,0x18000,0x10000,0x20000,0x0,0x8000,0x10000,0x103,0x40103,0x0,0x0};
+          static const uint32_t L_ALL[] = {0x1,0x100,0x2,0x4,0x200,0x8,0x10,0x400,0x20,0x40,0x800,0x80,0x600,0xC00,0x100400,0x400,0x800,0x0,0x0,0x1000,0x0,0x2000,0x4000,0x80800,0x100000,0x0,0x0,0x0,0x0,0x20000,0x100000,0x8000,0x10000,0x40100,0x140000,0x180000,0x100000};
+          static const uint32_t L_A[] = {0x1,0x3,0x2,0x4,0xC,0x8,0x10,0x30,0x20,0x40,0xC0,0x80,0x20C,0x0,0x138000,0x0,0x0,0x1000,0x4000,0x1000,0x7000,0x2000,0x4000,0x13FEFC,0x138000,0x20000,0x120000,0x18000,0x10000,0x20000,0x100000,0x8000,0x10000,0x103,0x40103,0x1BFEFC,0x0};
           static const uint32_t L_B[] = {0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x7000,0x7000,0x0,0x0,0x0,0x7000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0};
           static_assert(sizeof(id(flow_ch)) == 24 * sizeof(float), "flow_ch passt nicht zu KANAELE in tools/flow_animation.py");
           static float   pos[37] = {0}, posB[37] = {0}, acc[37] = {0}, accB[37] = {0};
@@ -1406,7 +1406,7 @@ interval:
           static bool    init = false;
           static uint8_t next = 0;
           static uint32_t gesehen = 0xFFFFFFFFu;
-          static uint64_t lvis = ~0ULL;
+          static uint64_t lvis = 0;
           lv_obj_t *const dots[37] = {
             reinterpret_cast<lv_obj_t *>(id(fl00)), reinterpret_cast<lv_obj_t *>(id(fl01)), reinterpret_cast<lv_obj_t *>(id(fl02)), reinterpret_cast<lv_obj_t *>(id(fl03)), reinterpret_cast<lv_obj_t *>(id(fl04)),
             reinterpret_cast<lv_obj_t *>(id(fl05)), reinterpret_cast<lv_obj_t *>(id(fl06)), reinterpret_cast<lv_obj_t *>(id(fl07)), reinterpret_cast<lv_obj_t *>(id(fl08)), reinterpret_cast<lv_obj_t *>(id(fl09)),
@@ -1425,6 +1425,13 @@ interval:
             nullptr, nullptr, nullptr, nullptr, nullptr,
             nullptr, nullptr, nullptr, nullptr, nullptr,
             nullptr, nullptr };
+          // Diagnose (diag in .pv-dashboard_ui.yaml): groesster Abstand zweier
+          // Takte (Soll 20 ms; mehr heisst, loop() hing und die Kugeln
+          // standen) und Laufzeit des Blocks, je in Mikrosekunden
+          static uint32_t t_vor = 0;
+          const uint32_t t_ein = micros();
+          if (t_vor != 0 && t_ein - t_vor > id(diag)[8]) id(diag)[8] = t_ein - t_vor;
+          t_vor = t_ein;
           // Anlauf abwarten: Das Intervall laeuft ab dem ersten Tick, LVGL
           // baut seine Objekte aber erst auf. Ein Zugriff darauf endet in
           // einem Load access fault (get_prop_core) und damit im Rollback.
@@ -1614,4 +1621,5 @@ interval:
             }
           }
           next = (next + bewegt + 1) % 37;
+          if (micros() - t_ein > id(diag)[9]) id(diag)[9] = micros() - t_ein;
   # <<< flow-animation

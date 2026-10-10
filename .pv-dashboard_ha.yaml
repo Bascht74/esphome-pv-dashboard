@@ -77,6 +77,7 @@ substitutions:
   #   heatpump     ha_hp_dhw
   #   meter_pv     ha_meter_pv_power
   #   meter_house  ha_meter_house_power
+  #   grid         ha_grid_power
   ha_pv1_power: sensor.wr1_pv1_leistung  # W, Flaeche/Modul am Wechselrichter 1, MPPT 1 [A]
   ha_pv1_energy: sensor.wr1_pv1_ertrag_heute  # kWh heute [A]; statistik: aus pv1_power
   ha_pv2_power: sensor.wr1_pv2_leistung  # W, Flaeche/Modul am Wechselrichter 1, MPPT 2 [A]
@@ -3254,6 +3255,8 @@ interval:
             neu |= 1u << 18;   // meter_pv
           if (B_meter_house_power && id(ha_meter_house_power).has_state() && !std::isnan(id(ha_meter_house_power).state))
             neu |= 1u << 19;   // meter_house
+          if (B_grid_power && id(ha_grid_power).has_state() && !std::isnan(id(ha_grid_power).state))
+            neu |= 1u << 20;   // grid
           if (neu != id(dev_present)) {
             id(dev_present) = neu;
             id(dev_apply).execute();

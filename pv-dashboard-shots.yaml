@@ -21,8 +21,8 @@
 # mit headless-Display: Es oeffnet sich kein Fenster. Das Programm zeigt
 # nacheinander alle elf Seiten (die Statistik zweimal, Woche und Monat, die
 # Prognose zweimal, Heute und Vorschau) -- der passende Reiter unten ist
-# dabei markiert -- und die drei Fenster
-# Sprachassistent, Firmware-Update und System. Zum Schluss dieselbe Anlage
+# dabei markiert -- und die zwei Fenster
+# Firmware-Update und System. Zum Schluss dieselbe Anlage
 # ohne einige Geraete (dev_present, dev_apply): Uebersicht, PV, Speicher und
 # Haus noch einmal als *_reduced, dazu drei Werte leer (val_leer: Entitaet
 # nicht belegt oder nicht verfuegbar). Jedes Bild landet als BMP, dann beendet
@@ -111,7 +111,7 @@ script:
       - script.execute: update_clock
       # Volle Anlage: dev_present startet ohnehin mit allem (nicht im NVS);
       # hier noch einmal ausdruecklich, damit die Bilder davon nicht abhaengen.
-      - lambda: 'id(dev_present) = 0xFFFFFu;'
+      - lambda: 'id(dev_present) = 0x1FFFFFu;'
       - script.execute: dev_apply
 
       # Beispieldaten, damit Meldungen, Speicher, PV und die Meldungszeile
@@ -578,25 +578,10 @@ script:
       - lambda: 'id(alert_filter) = -1;'
       - script.execute: alert_refresh
 
-      # Overlays im top_layer, wie im Betrieb ueber der Uebersicht. Die Texte
-      # sind Beispiele, damit Umbruch und Ueberlauf mit auf dem Bild sind.
+      # Overlays im top_layer, wie im Betrieb ueber der Uebersicht.
       - lvgl.page.show: page_overview
       - script.execute: shots_nav_clear
       - lvgl.matrix.button.update: { id: btn_nav_overview, control: { checked: true } }
-      - lvgl.label.update:
-          id: lbl_assist_status
-          text: "Antworte …"
-      - lvgl.label.update:
-          id: lbl_assist_request
-          text: "Wie viel hat die PV-Anlage heute erzeugt und wie viel davon wurde direkt im Haus verbraucht?"
-      - lvgl.label.update:
-          id: lbl_assist_response
-          text: "Heute wurden bisher 23,4 kWh erzeugt, davon 17,9 kWh selbst verbraucht. Der Speicher ist zu 72 % geladen, bis zum Abend werden noch etwa 6 kWh erwartet. Die Wallbox 1 meldet einen Fehlerstrom."
-      - lvgl.widget.show: voice_panel
-      - script.execute: { id: shots_take, name: 10_voice_panel.bmp }
-      - script.wait: shots_take
-      - lvgl.widget.hide: voice_panel
-
       - lvgl.bar.update:
           id: bar_ota
           value: 42
@@ -608,12 +593,18 @@ script:
       - script.wait: shots_take
       - lvgl.widget.hide: ota_panel
 
-      # Systemfenster (Tipp auf die Symbole oben rechts)
+      # Systemfenster (Tipp auf die Symbole oben rechts), mit eingeschalteter
+      # Diagnose: Schalter an, oben rechts die Messzeile statt des Datums.
+      # Die Werte sind die des Rechners, nicht die des Panels.
+      - switch.turn_on: diag_switch
+      - delay: 2s
+      - script.execute: diag_window
       - script.execute: sys_refresh
       - lvgl.widget.show: sys_panel
       - script.execute: { id: shots_take, name: 12_system.bmp }
       - script.wait: shots_take
       - lvgl.widget.hide: sys_panel
+      - switch.turn_off: diag_switch
 
       # Kleinere Anlage ueber dieselbe Maske, die am Geraet die
       # Referenz-Entitaeten setzen (dev_present, Bits in
@@ -628,7 +619,7 @@ script:
       - lvgl.matrix.button.update: { id: btn_nav_overview, control: { checked: true } }
       - lambda: |-
           id(dev_present) = (1u << 0) | (1u << 1) | (1u << 8) | (1u << 12) | (1u << 13) |
-                            (1u << 15) | (1u << 18) | (1u << 19);
+                            (1u << 15) | (1u << 18) | (1u << 19) | (1u << 20);
       - script.execute: dev_apply
       # Wert weg, Geraet bleibt: Ertrag WR 1, Spannung Speicher 2 und
       # Leistung Hauszaehler leer (Entitaet nicht belegt/nicht verfuegbar)
