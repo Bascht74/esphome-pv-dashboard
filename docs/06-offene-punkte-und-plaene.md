@@ -280,7 +280,7 @@ kann der Shelly auch, dort ist die Adresszählung (ab 0 oder 1) in den Quellen
 nicht eindeutig.
 
 **Rechtslage (Recherche 25.09.2026, keine Rechtsberatung; was gilt, sagt der
-Netzbetreiber).** Quellen: EEG 2023 § 9 und EnWG § 14a auf
+Netzbetreiber).** Quelle: EEG 2023 § 9 auf
 gesetze-im-internet.de, Stand der Änderungen durch das „Solarspitzengesetz“
 vom Februar 2025.
 
@@ -293,12 +293,6 @@ vom Februar 2025.
   den Zustand daraus ab: aktiv, solange `feed_limit_pct` unter 100 liegt
   (Wunsch des Nutzers, 10.10.2026, kein Helfer in Home Assistant); eine
   belegte Entität hat Vorrang.
-- **§ 14a EnWG:** Steuerbar sind Wallboxen, Wärmepumpen und netzladende
-  Speicher über 4,2 kW; im Signal darf der Netzbetreiber auf mindestens 4,2 kW
-  je Gerät drosseln (bei einem Energiemanagement für mehrere Geräte nach
-  Formel mehr, für zwei Wallboxen rund 7,6 kW). Die **Wallboxen fallen
-  darunter**, die Nilan Compact P mit ihrer kleinen Leistungsaufnahme
-  vermutlich nicht (Einschätzung, nicht geprüft).
 
 **Beide Kreise zusammen oder nur einer?** Am 25.09.2026 im Gesetzestext
 nachgelesen (§ 9 EEG auf gesetze-im-internet.de): Begrenzt wird „am
@@ -313,7 +307,9 @@ Betrieb ging (dann zählt er nicht mit) oder einen eigenen Netzanschluss hat.
 Ab zusammen 25 kW verlangt § 9 Abs. 2 Nr. 2 zusätzlich eine Einrichtung, mit
 der der Netzbetreiber die Einspeisung fernsteuern kann. Keine Rechtsberatung.
 
-**Börsenpreis und negative Preise:** Die Zeilen „Börsenstrompreis“, „Negative Viertelstunden heute“ und „Vergütung bei negativem Preis“ sind am 10.10.2026 auf Wunsch des Nutzers entfallen, samt Skriptparametern und Zuordnung. Die Kachel Netzvorgaben zeigt noch Einspeisegrenze, Steuersignal § 14a und Smart Meter.
+**Börsenpreis und negative Preise:** Die Zeilen „Börsenstrompreis“, „Negative Viertelstunden heute“ und „Vergütung bei negativem Preis“ sind am 10.10.2026 auf Wunsch des Nutzers entfallen, samt Skriptparametern und Zuordnung.
+
+**Steuersignal § 14a:** Die Zeile ist am 10.10.2026 auf Wunsch des Nutzers entfallen, samt Skriptparametern (`p14a_active`, `p14a_kw`), Zuordnung und Testhelfern: Die Anlage nimmt an § 14a EnWG nicht teil. Die Kachel Netzvorgaben zeigt nur noch Einspeisegrenze sowie Smart Meter und Steuerbox, zwei Zeilen im Raster 144.
 
 **Abgeregelte Energie:** Die Zeile „abgeregelt heute“ ist am 26.09.2026 auf Wunsch des Nutzers entfallen. Abgeregelte Energie wird nicht erzeugt und deshalb nirgends gemessen; sie ließe sich nur schätzen (etwa Prognose minus Erzeugung, solange die Einspeisung an der Grenze liegt). Die Kachel zeigt nur Gemessenes.
 

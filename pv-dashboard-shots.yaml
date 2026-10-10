@@ -276,7 +276,7 @@ script:
       - script.wait: grid_meter
       - script.execute: { id: grid_meter, meter: 4, total: 6410.2, today: 30.6 }
       - script.wait: grid_meter
-      - script.execute: { id: grid_rules, limit_active: true, p14a_active: false, p14a_kw: 4.2, smart_meter: false }
+      - script.execute: { id: grid_rules, limit_active: true, smart_meter: false }
       # Statistik: Woche, Monat, Jahr; gezeigt wird die Woche.
       - script.execute:
           id: stats_update

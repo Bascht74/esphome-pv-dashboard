@@ -240,8 +240,6 @@ substitutions:
   ha_meter_pv_power: sensor.pv_zaehler_leistung  # W, + = Einspeisung [A]
   ha_meter_house_power: sensor.hauszaehler_leistung  # W, + = Einspeisung [A]
   ha_rule_limit: input_boolean.einspeisegrenze_aktiv  # nicht belegt: aktiv, wenn feed_limit_pct < 100
-  ha_p14a_active: binary_sensor.p14a_signal
-  ha_p14a_kw: input_number.p14a_grenze_kw
   ha_rule_smart_meter: input_boolean.smart_meter_eingebaut
   ha_pv_energy_today: sensor.pv_erzeugung_heute  # Summe beider Kreise [A]
   ha_home_energy_today: sensor.hausverbrauch_heute  # [A]
@@ -410,7 +408,6 @@ substitutions:
   ha_meter4_today_faktor: "1"
   ha_meter_pv_power_faktor: "1"
   ha_meter_house_power_faktor: "1"
-  ha_p14a_kw_faktor: "1"
   ha_pv_energy_today_faktor: "1"
   ha_home_energy_today_faktor: "1"
   ha_selfuse_energy_today_faktor: "1"
@@ -1634,14 +1631,6 @@ sensor:
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00800000u;'
   - platform: homeassistant
-    id: ha_p14a_kw
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_p14a_kw | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_p14a_kw }"
-    internal: true
-    filters:
-      - multiply: ${ha_p14a_kw_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x01000000u;'
-  - platform: homeassistant
     id: ha_pv_energy_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv_energy_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv_energy_today }"
     internal: true
@@ -2213,13 +2202,6 @@ binary_sensor:
   - platform: homeassistant
     id: ha_rule_limit
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_rule_limit | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_rule_limit }"
-    internal: true
-    trigger_on_initial_state: true
-    on_state:
-      - lambda: 'id(ha_dirty) |= 0x01000000u;'
-  - platform: homeassistant
-    id: ha_p14a_active
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_p14a_active | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_p14a_active }"
     internal: true
     trigger_on_initial_state: true
     on_state:
@@ -2970,7 +2952,6 @@ interval:
           constexpr bool B_meter4_total = ${ 'false' if (ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_meter_house_power = ${ 'false' if (ha_meter_house_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_meter_pv_power = ${ 'false' if (ha_meter_pv_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_p14a_kw = ${ 'false' if (ha_p14a_kw | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_pv1_energy = ${ 'false' if (ha_pv1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_pv1_power = ${ 'false' if (ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_pv2_energy = ${ 'false' if (ha_pv2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
@@ -3377,12 +3358,10 @@ interval:
           }
           // 24 Netzvorgaben
           if ((d & (1u << 24)) &&
-              (ready || id(ha_rule_limit).has_state() || id(ha_p14a_active).has_state() || id(ha_p14a_kw).has_state() ||
-               id(ha_rule_smart_meter).has_state())) {
+              (ready || id(ha_rule_limit).has_state() || id(ha_rule_smart_meter).has_state())) {
             // Grenze ohne Entitaet (nicht belegt): aus der Anlage, feed_limit_pct < 100
             // heisst aktiv (Wunsch des Nutzers, 10.10.2026: kein Helfer in HA)
-            id(grid_rules).execute(B_rule_limit ? id(ha_rule_limit).state : (${feed_limit_pct} < 100), id(ha_p14a_active).state, V(id(ha_p14a_kw), B_p14a_kw),
-                                   id(ha_rule_smart_meter).state);
+            id(grid_rules).execute(B_rule_limit ? id(ha_rule_limit).state : (${feed_limit_pct} < 100), id(ha_rule_smart_meter).state);
           }
           // 25 Tageswerte
           if ((d & (1u << 25)) &&
