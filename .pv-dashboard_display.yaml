@@ -16,7 +16,9 @@ i2c:
     scl: GPIO8
     frequency: 400kHz
     # Beim ersten Flashen einschalten: listet gefundene Adressen im Log.
-    # Erwartet werden GT911 (0x5D oder 0x14), ES8311 (0x18), ES7210 (0x40).
+    # Erwartet werden GT911 (0x5D oder 0x14), dazu die verbauten, aber
+    # ungenutzten Audio-Chips ES8311 (0x18) und ES7210 (0x40) -- Audio ist
+    # seit 10.10.2026 entfernt (Wunsch des Nutzers).
     scan: true
 
 # --- Hintergrundbeleuchtung -------------------------------------------------

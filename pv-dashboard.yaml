@@ -67,15 +67,19 @@ packages:
   # einer Stelle. Statt "ref: main" laesst sich auch ein Release festnageln,
   # z. B. "ref: v0.2.0" -- dann aendert sich am Geraet nichts, bis jemand die
   # Zeile anfasst.
+  #
+  # refresh: always (Wunsch 10.10.2026): Waehrend der Entwicklung holt jeder
+  # Bau den neuesten Stand von main, nicht nur einmal am Tag. Wenn das Panel
+  # fertig ist, wieder auf "1d" stellen -- das spart den Abgleich mit GitHub
+  # bei jedem Lauf.
   dashboard:
     url: https://github.com/Bascht74/esphome-pv-dashboard
     ref: main
-    refresh: 1d
+    refresh: always
     files:
       - .pv-dashboard_utility.yaml
       - .pv-dashboard_ui.yaml
       - .pv-dashboard_display.yaml
-      - .pv-dashboard_audio.yaml
       - .pv-dashboard_core.yaml
       # Datenweg von Home Assistant (tools/ha_bindings.py); braucht in Home
       # Assistant die Option "Allow the device to perform Home Assistant
@@ -88,8 +92,8 @@ packages:
 #   * Das Geraet baut aus dem GESCHOBENEN Stand. Eine Aenderung an einem Paket
 #     wirkt erst nach "git push", nicht schon beim Speichern.
 #   * ESPHome legt den Checkout unter .esphome/packages ab und frischt ihn
-#     gemaess refresh auf: "1d" fruehestens am naechsten Tag, "always" bei
-#     jedem Lauf, "never" gar nicht.
+#     gemaess refresh auf: "always" bei jedem Lauf (eingestellt), "1d"
+#     fruehestens am naechsten Tag, "never" gar nicht.
 #   * Simulator und Screenshots bleiben lokal: pv-dashboard-sim.yaml und
 #     pv-dashboard-shots.yaml binden die Dateien weiter von der Platte ein und
 #     zeigen den Arbeitsstand schon vor dem push. Zum Pruefen einer Aenderung
@@ -114,7 +118,6 @@ packages:
 #   utility: !include .pv-dashboard_utility.yaml
 #   ui:      !include .pv-dashboard_ui.yaml
 #   display: !include .pv-dashboard_display.yaml
-#   audio:   !include .pv-dashboard_audio.yaml
 #   core:    !include .pv-dashboard_core.yaml
 #   ha:      !include .pv-dashboard_ha.yaml
 ##############################################################################

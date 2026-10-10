@@ -89,11 +89,27 @@ esp32_hosted:
 #
 # Es wird automatisch die hoechste Version gewaehlt, die zur einkompilierten
 # esp_hosted-Bibliothek passt (seit ESPHome 2026.8.0: 2.12.12).
+#
+# Automatisch installieren (Wunsch 10.10.2026): Meldet die Pruefung ein
+# Update, steht es als Info in den Meldungen, und c6_auto_update spielt es
+# ein. Nachgelesen in 2026.10.0b2 (esp32_hosted_update.cpp, perform()):
+#   - perform() laeuft blockierend in einem loop()-Durchlauf: Firmware
+#     laden, per SDIO auf den C6 schreiben, aktivieren. Waehrenddessen
+#     zeichnet LVGL nicht, die Kugeln stehen.
+#   - Ohne "force" nur bei Zustand AVAILABLE -- genau den setzt die
+#     Pruefung, force ist also nicht noetig.
+#   - Erfolg: Zustand NO_UPDATE, eine Sekunde spaeter startet der P4 neu
+#     (App.safe_reboot). Die Meldungsliste liegt nur im RAM und ist danach
+#     leer; die naechste Pruefung findet die neue Version und meldet nichts.
+#   - Fehler: Zustand bleibt AVAILABLE, kein Neustart. Dann eine Warnung in
+#     die Meldungen; erneut versucht wird erst nach dem naechsten Neustart
+#     (on_update_available feuert nur beim Wechsel auf "verfuegbar").
 http_request:
   verify_ssl: false
 
 update:
   - platform: esp32_hosted
+    id: c6_update
     type: http
     name: "Co-Prozessor-Firmware"
     source: "https://esphome.github.io/esp-hosted-firmware/manifest/esp32c6.json"
@@ -113,6 +129,73 @@ update:
             if (!x.current_version.empty())
               s += " (installiert: " + x.current_version + ")";
             return s;
+      - script.execute: c6_auto_update
+
+script:
+  # Co-Prozessor-Update einspielen, sobald die Lage ruhig ist: WLAN und API
+  # verbunden und das Geraet mindestens 2 min am Laufen -- so kommt es weder
+  # dem Start noch dem ersten Datenschwall von Home Assistant in die Quere.
+  # mode single: Ein zweiter Aufruf waehrend des Wartens geht verloren, das
+  # ist gewollt.
+  - id: c6_auto_update
+    mode: single
+    then:
+      - wait_until:
+          condition:
+            and:
+              - wifi.connected:
+              - api.connected:
+              - lambda: 'return millis() > 120000;'
+          timeout: 30min
+      - if:
+          condition:
+            not:
+              update.is_available: c6_update
+          then:
+            - logger.log:
+                level: INFO
+                format: "Co-Prozessor-Update: nichts mehr zu tun"
+          else:
+            - if:
+                condition:
+                  not:
+                    and:
+                      - wifi.connected:
+                      - api.connected:
+                then:
+                  - logger.log:
+                      level: WARN
+                      format: "Co-Prozessor-Update: keine Verbindung, verschoben bis zum naechsten Neustart"
+                else:
+                  - logger.log:
+                      level: INFO
+                      format: "Co-Prozessor-Update: installiere %s (bisher %s)"
+                      args: ['id(c6_update).update_info.latest_version.c_str()', 'id(c6_update).update_info.current_version.c_str()']
+                  # Blockiert bis zum Ende (siehe oben). Bei Erfolg startet
+                  # das Geraet danach von selbst neu.
+                  - update.perform: c6_update
+                  - if:
+                      condition:
+                        update.is_available: c6_update
+                      then:
+                        - logger.log:
+                            level: ERROR
+                            format: "Co-Prozessor-Update fehlgeschlagen, Details im Log oben (esp32_hosted.update)"
+                        - script.execute:
+                            id: alert_push
+                            severity: 1
+                            device: "Co-Prozessor"
+                            text: "Firmware-Update fehlgeschlagen"
+                      else:
+                        - logger.log:
+                            level: INFO
+                            format: "Co-Prozessor-Update erfolgreich, Neustart in 1 s"
+                        # Info "verfuegbar" weg; die Liste ist nach dem
+                        # Neustart ohnehin leer.
+                        - script.execute:
+                            id: alert_clear
+                            device: "Co-Prozessor"
+                            text: ""
 
 wifi:
   ssid: ${wifi_ssid}
@@ -131,11 +214,6 @@ api:
   reboot_timeout: 9999 min
   encryption:
     key: ${api_key}
-  # Wakeword-Start/-Stopp steuert das Audio-Package ueber voice_assistant:
-  # on_client_connected/-disconnected (Halbduplex, siehe dort). Hier nicht:
-  # Die api-Trigger feuern auch fuer Log-Clients -- ein Start mitten in der
-  # Musik belegt den I2S-Bus, ein voice_assistant.stop beim Trennen eines
-  # Log-Clients bricht eine laufende Sprachsitzung ab.
 
 # Zuletzt gezeichnete Zehnerstufe des OTA-Fortschritts (on_progress). on_begin
 # setzt sie zurueck: Sonst fehlte bei einem zweiten Upload in derselben
@@ -278,7 +356,7 @@ bluetooth_proxy:
 # Zeit und Diagnose
 #
 # Zeitquelle kommt von Home Assistant (kein eigener NTP-Server noetig) und ist
-# Voraussetzung fuer Uhr-Anzeigen und Voice-Timer.
+# Voraussetzung fuer die Uhr in der Statusleiste.
 ##############################################################################
 
 time:
@@ -325,6 +403,25 @@ sensor:
     update_interval: 60s
     entity_category: diagnostic
 
+  # Diagnose (10.10.2026, Ruckeln der Kugeln): Komponente debug, je 10 s.
+  # loop_time ist der laengste Abstand zweier loop()-Durchlaeufe im Fenster
+  # -- haengt dort eine Komponente (lvgl, esp32_hosted.update, esp32_ble),
+  # steht dieser Wert hoch. Die Messwerte von LVGL und Flussanimation stehen
+  # in .pv-dashboard_ui.yaml (Schalter "Diagnose").
+  - platform: debug
+    loop_time:
+      name: "Diagnose Loop-Zeit max"
+      entity_category: diagnostic
+    free:
+      name: "Diagnose Heap intern frei"
+      entity_category: diagnostic
+    block:
+      name: "Diagnose Heap intern groesster Block"
+      entity_category: diagnostic
+    psram:
+      name: "Diagnose PSRAM frei"
+      entity_category: diagnostic
+
 text_sensor:
   # Bewusst keine "version"-Entity: die ESPHome-Version steht ohnehin im
   # Boot-Log und im Geraeteeintrag von Home Assistant.
@@ -338,6 +435,9 @@ text_sensor:
     mac_address:
       name: "MAC-Adresse"
       entity_category: diagnostic
+
+debug:
+  update_interval: 10s
 
 button:
   - platform: restart

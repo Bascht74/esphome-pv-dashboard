@@ -23,7 +23,7 @@
 # echten Panel. Wer hier etwas aendert, aendert es dort mit.
 #
 # Was der Simulator NICHT zeigt: die tatsaechliche Bildrate auf dem P4 und
-# alles Hardwarenahe (Backlight, Audio, Modbus, BLE).
+# alles Hardwarenahe (Backlight, Modbus, BLE).
 ##############################################################################
 
 substitutions:

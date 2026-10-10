@@ -173,7 +173,23 @@ interval:
           j += std::string(",\"bat1\":") + hid(box(id(v_bat1))) + ",\"bat2\":" + hid(box(id(v_bat2)));
           j += std::string(",\"bat3\":") + hid(box(id(v_bat3))) + ",\"wb1\":" + hid(box(id(v_wb1)));
           j += std::string(",\"wb2\":") + hid(box(id(v_wb2))) + ",\"heatpump\":" + hid(box(id(v_heatpump)));
-          j += std::string(",\"meter_house\":") + hid(box(id(v_meter_house))) + "}";
+          j += std::string(",\"meter_house\":") + hid(box(id(v_meter_house)));
+          j += std::string(",\"grid\":") + hid(box(id(v_grid))) + ",\"house\":" + hid(box(id(v_house))) + "}";
+          // Ruhiger Start (Fall S): sichtbare Kinder des Schemas (Kaesten,
+          // Leitungen, Kugeln, Rahmen) und davon die Leitungen lnNN
+          {
+            lv_obj_t *s = id(schema_area);
+            int vis = 0, lines = 0;
+            for (uint32_t i = 0; i < lv_obj_get_child_count(s); i++) {
+              lv_obj_t *c = lv_obj_get_child(s, i);
+              if (lv_obj_has_flag(c, LV_OBJ_FLAG_HIDDEN))
+                continue;
+              vis++;
+              if (lv_obj_check_type(c, &lv_line_class))
+                lines++;
+            }
+            j += ",\"schema_vis\":" + std::to_string(vis) + ",\"schema_lines\":" + std::to_string(lines);
+          }
           j += ",\"txt\":{";
           j += "\"v_bat1\":" + txt(id(v_bat1)) + ",\"d_bat1\":" + txt(id(d_bat1));
           j += ",\"v_bat2\":" + txt(id(v_bat2)) + ",\"v_bat3\":" + txt(id(v_bat3));

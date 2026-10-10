@@ -10,7 +10,7 @@
 #
 # Hier steht nur, was alle Seiten teilen: die Tagesreihen, die globals, die
 # Skripte fuer Uhr und Stundenschreiber, die Stile, die Verlaeufe und das
-# top_layer (Statusleiste, Meldungszeile, Menueleiste, Sprach- und
+# top_layer (Statusleiste, Meldungszeile, Menueleiste, Systemfenster und
 # Update-Abdeckung). Jede Seite liegt in einer eigenen Datei und haengt
 # unten als Paket dran.
 #
@@ -18,11 +18,29 @@
 # Skripte der Seiten.
 ##############################################################################
 
+# Puffer fuer ungueltige Flaechen in LVGL: 128 statt 32 (10.10.2026, Ruckeln
+# der Kugeln). Laeuft der Puffer ueber, zeichnet LVGL den ganzen Schirm neu
+# (lv_refr.c, lv_inv_area: "If no place for the area add the screen") --
+# 1280 x 800 = 1.024.000 px, am Panel eine halbe Sekunde und mehr, in der
+# loop() steht und die Kugeln mit. Die Kugeln allein brauchen bis zu 26
+# Flaechen je Takt (tools/flow_animation.py, Regel 8), ein Schwall neuer
+# Werte aus Home Assistant (jede Sekunde) noch einmal etliche: zusammen
+# lief der Puffer jede Sekunde ueber. Gemessen im Simulator mit Werten je
+# Sekunde (Diagnose, 10-s-Fenster): mit 32 je Fenster ein Bild mit vollem
+# Schirm, 76..114 ms; mit 128 hoechstens 140.000 px, 19..20 ms. Kostet gut
+# 2 KB RAM. LV_INV_BUF_SIZE steht in LVGL hinter #ifndef; ESPHome gibt die
+# -D-Flags an jede IDF-Komponente weiter, also auch an LVGL selbst
+# (build_gen/espidf.py, COMPILE_OPTIONS), auf host ebenso (geprueft in
+# compile_commands.json).
+esphome:
+  build_flags:
+    - "-DLV_INV_BUF_SIZE=128"
+
 # Anfangswert von dev_present (globals unten): alle Plaetze vorhanden. Der
 # Datenweg (.pv-dashboard_ha.yaml, nur Geraet) setzt "0u" -- er steht in
 # der Paketliste spaeter und sticht damit diesen Wert.
 substitutions:
-  dev_present_start: "0xFFFFFu"
+  dev_present_start: "0x1FFFFFu"
 
 # Die Seiten, jede in einer eigenen Datei. Wer diesen Kern einbindet, bekommt
 # sie alle mit -- Geraet, Simulator und Screenshots sehen dieselbe Oberflaeche.
@@ -116,20 +134,38 @@ globals:
   #   15, 16 wb_1, wb_2      Wallboxen
   #   17     heatpump        Waermepumpe
   #   18, 19 meter_pv, meter_house   PV-Zaehler, Hauszaehler
-  # Hausnetz, Sonstige und Hausanschluss gibt es immer. Am Geraet setzt der
+  #   20     grid            Hausanschluss, Hausnetz und Sonstige
+  # Hausnetz, Sonstige und Hausanschluss gibt es in jeder Anlage; sie haengen
+  # trotzdem an Bit 20 (Referenz: Leistung am Hausanschluss), damit nach dem
+  # Start nichts ohne Daten dasteht (Wunsch 10.10.2026). Am Geraet setzt der
   # Datenweg die Maske (.pv-dashboard_ha.yaml): Ein Platz ist da, solange
   # seine Referenz-Entitaet einen gueltigen Wert hat; eine auf none gesetzte
   # Referenz heisst "gibt es nicht". dev_apply blendet danach aus, die
   # Leitungen und Kugeln des Schemas zieht der erzeugte Block der Uebersicht
   # selbst nach. Bewusst NICHT im NVS (Wunsch des Nutzers): Nach einem
   # Neustart ist nichts da, bis die Referenzen melden.
-  # Start: dev_present_start -- hier alle 20 Plaetze (Simulator, Screenshots),
+  # Start: dev_present_start -- hier alle 21 Plaetze (Simulator, Screenshots),
   # der Datenweg setzt 0. Dieselbe Reihenfolge steht in
   # tools/flow_animation.py und tools/ha_bindings.py (PLAETZE).
   - id: dev_present
     type: uint32_t
     restore_value: false
     initial_value: '${dev_present_start}'
+  # Diagnose (10.10.2026, Ruckeln der Kugeln): Messwerte des laufenden
+  # 10-s-Fensters, gefuellt von den LVGL-Ereignissen (diag_hook, on_boot von
+  # bar_status) und vom Block der Flussanimation; diag_window wertet aus und
+  # setzt zurueck. Zeiten in Mikrosekunden.
+  #   0 Beginn des laufenden Bildes (REFR_START)   1 Beginn der Ausgabe
+  #   2 Ausgabezeit des laufenden Bildes           3 Pixel des laufenden Bildes
+  #   4 Bild max (Layout + Zeichnen + Ausgabe)     5 Ausgabe max (Drehen, Kopieren)
+  #   6 Pixel je Bild max                          7 gezeichnete Bilder
+  #   8 Abstand zweier Takte der Flussanimation max (Soll 20 ms; mehr heisst:
+  #     loop() hing, die Kugeln standen)           9 Laufzeit des Blocks max
+  #   10 Ausgabezeit des Fensters gesamt           11 Zeit fuer Bilder gesamt
+  - id: diag
+    type: std::array<uint32_t, 12>
+    restore_value: false
+    initial_value: '{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}'
   # Quellen, deren Ausbleiben schon gemeldet ist (Bit 0..7 je Quelle,
   # Bit 8 = Verbindung zu Home Assistant, siehe sys_refresh)
   - id: data_stale_reported
@@ -222,6 +258,79 @@ script:
   # Home Assistant (WLAN oder API), kommt statt der Einzelwarnungen eine
   # Stoerung "Keine Verbindung zu Home Assistant".
   # Im Simulator gibt es weder WLAN noch API -- dort steht "Simulator".
+  # Diagnose einhaengen: eigene Ereignisse am LVGL-Display, ohne die von
+  # ESPHome (on_draw_start/-end) zu benutzen -- REFR_START/REFR_READY
+  # umfassen auch das Layout, FLUSH_START/-FINISH die Ausgabe (Drehen per
+  # PPA und Kopieren in den Bildspeicher des Panels). Kostet je Bild ein
+  # paar micros(). Einmal beim Start (on_boot von bar_status).
+  - id: diag_hook
+    then:
+      - lambda: |-
+          lv_display_t *disp = lv_display_get_default();
+          if (disp == nullptr)
+            return;
+          lv_display_add_event_cb(disp, [](lv_event_t *e) {
+            auto &g = id(diag);
+            g[0] = micros();
+            g[2] = 0;
+            g[3] = 0;
+          }, LV_EVENT_REFR_START, nullptr);
+          lv_display_add_event_cb(disp, [](lv_event_t *e) {
+            auto &g = id(diag);
+            g[1] = micros();
+            const lv_area_t *a = static_cast<const lv_area_t *>(lv_event_get_param(e));
+            if (a != nullptr)
+              g[3] += lv_area_get_size(a);
+          }, LV_EVENT_FLUSH_START, nullptr);
+          lv_display_add_event_cb(disp, [](lv_event_t *e) {
+            auto &g = id(diag);
+            g[2] += micros() - g[1];
+          }, LV_EVENT_FLUSH_FINISH, nullptr);
+          lv_display_add_event_cb(disp, [](lv_event_t *e) {
+            auto &g = id(diag);
+            if (g[3] == 0)
+              return;                         // nichts gezeichnet
+            const uint32_t d = micros() - g[0];
+            g[4] = std::max(g[4], d);
+            g[5] = std::max(g[5], g[2]);
+            g[6] = std::max(g[6], g[3]);
+            g[7]++;
+            g[10] += g[2];
+            g[11] += d;
+          }, LV_EVENT_REFR_READY, nullptr);
+
+  # Alle 10 s: Fenster auswerten und zuruecksetzen. Nur mit eingeschaltetem
+  # Schalter "Diagnose" (diag_switch) gibt es die Zeile oben rechts, eine
+  # Log-Zeile auf INFO und die Sensoren fuer Home Assistant -- ausgeschaltet
+  # kostet die Messung nur die micros()-Aufrufe.
+  - id: diag_window
+    then:
+      - lambda: |-
+          auto &g = id(diag);
+          const uint32_t bild = g[4], aus = g[5], px = g[6], n = g[7], takt = g[8], lauf = g[9];
+          const uint32_t aus_sum = g[10], bild_sum = g[11];
+          for (int k = 4; k < 12; k++)
+            g[k] = 0;
+          if (!id(diag_switch).state)
+            return;
+          char z1[64], z2[64];
+          snprintf(z1, sizeof(z1), "Bild max %u ms (Ausgabe %u) · Takt max %u ms",
+                   (unsigned) (bild / 1000), (unsigned) (aus / 1000), (unsigned) (takt / 1000));
+          snprintf(z2, sizeof(z2), "%u Bilder/10 s · max %u kpx · Fluss %u us",
+                   (unsigned) n, (unsigned) (px / 1000), (unsigned) lauf);
+          lv_label_set_text_fmt(id(lbl_diag), "%s\n%s", z1, z2);
+          ESP_LOGI("diag", "10 s: Bild max %.1f ms (Ausgabe max %.1f ms), %u Bilder, zusammen %.0f ms (Ausgabe %.0f ms), "
+                           "Flaeche max %u px, Takt Flussanimation max %.1f ms, Lauf max %u us",
+                   bild / 1000.0f, aus / 1000.0f, (unsigned) n, bild_sum / 1000.0f, aus_sum / 1000.0f,
+                   (unsigned) px, takt / 1000.0f, (unsigned) lauf);
+          id(diag_lvgl_ms).publish_state(bild / 1000.0f);
+          id(diag_flush_ms).publish_state(aus / 1000.0f);
+          id(diag_lvgl_px).publish_state(px);
+          id(diag_lvgl_frames).publish_state(n);
+          id(diag_lvgl_busy).publish_state(bild_sum / 100.0f / 1000.0f);
+          id(diag_flow_gap_ms).publish_state(takt / 1000.0f);
+          id(diag_flow_us).publish_state(lauf);
+
   - id: sys_refresh
     then:
       - lambda: |-
@@ -443,6 +552,12 @@ script:
           zeig(box(id(v_meter_house)), da(19));
           if (!da(18)) ch[21] = 0.0f;
           if (!da(19)) ch[22] = 0.0f;
+          // Hausanschluss, Hausnetz und Sonstige: erst mit Daten vom
+          // Hausanschluss (ruhiger Start)
+          zeig(box(id(v_grid)), da(20));
+          zeig(box(id(v_house)), da(20));
+          zeig(box(id(v_misc)), da(20));
+          if (!da(20)) { ch[16] = 0.0f; ch[18] = 0.0f; ch[23] = 0.0f; }
 
           // --- Seite PV: Wechselrichterkasten und Flaechen ---------------
           lv_obj_t *const pinv[4] = {id(pv_inv_box_1), id(pv_inv_box_2), id(pv_inv_box_3), id(pv_inv_box_4)};
@@ -981,6 +1096,7 @@ lvgl:
           # (Prioritaet 390, nach LVGL und globals): fehlende Geraete aus.
           on_boot:
             - script.execute: dev_apply
+            - script.execute: diag_hook
           x: 0
           y: 0
           width: 1280
@@ -1043,6 +1159,20 @@ lvgl:
                 text: ""
                 text_color: $col_ink2
                 text_font: f_bar
+            # Diagnose (diag_switch): zwei Zeilen an der Stelle des Datums,
+            # 2 x 17 (f_unit) = 34 von 44. Rechte Kante wie beim Datum.
+            - label:
+                id: lbl_diag
+                align: RIGHT_MID
+                x: -104
+                width: 420
+                height: 34
+                long_mode: CLIP
+                text_align: RIGHT
+                hidden: true
+                text: ""
+                text_color: $col_ink2
+                text_font: f_unit
             - label:
                 id: lbl_clock
                 align: RIGHT_MID
@@ -1213,17 +1343,19 @@ lvgl:
                           - lvgl.page.show: page_alerts
 
       # Systemfenster: oeffnet ueber die Symbole in der Statusleiste,
-      # schliesst auf Tipp. 600 x 520 mittig ueber der Seitenflaeche
-      # (x 340, y 114, 600 x 592), innen 578 x 570: Titel 0..17, fuenf
-      # Zeilen im Raster 36 ab 28, Titel Datenalter 222..239, acht Zeilen
-      # ab 250, Hinweis 548..565.
+      # schliesst auf Tipp. 600 x 628 mittig ueber der Seitenflaeche 84..736
+      # (x 340, y 96), innen 578 x 606: Titel 0..17, sechs Zeilen im Raster
+      # 36 ab 28 (die sechste mit dem Schalter Diagnose, 212..238), Linie
+      # 246, Titel Datenalter 258..275, acht Zeilen ab 286, Hinweis
+      # 584..601 -> Reserve 5. Der Schalter faengt seinen Tipp selbst ab,
+      # das Fenster bleibt dabei offen.
       - obj:
           id: sys_panel
           styles: st_tile
           x: 340
-          y: 114
+          y: 96
           width: 600
-          height: 592
+          height: 628
           border_color: $col_batt
           border_width: 2
           hidden: true
@@ -1244,89 +1376,43 @@ lvgl:
             - label: { id: sys_version, x: 270, y: 143, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
             - label: { x: 0, y: 180, width: 260, height: 20, long_mode: DOT, text: "Datenwarnung nach", text_font: f_text_s, text_color: $col_ink2 }
             - label: { id: sys_limit, x: 270, y: 179, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "${data_stale_s} s", text_font: f_text, text_color: $col_ink }
-            - obj: { x: 0, y: 210, width: 576, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
-            - label: { x: 0, y: 222, width: 576, height: 17, long_mode: DOT, styles: st_label, text: "LETZTE WERTE" }
-            - label: { x: 0, y: 258, width: 260, height: 20, long_mode: DOT, text: "PV", text_font: f_text_s, text_color: $col_ink2 }
-            - label: { id: sys_age_0, x: 270, y: 257, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
-            - label: { x: 0, y: 294, width: 260, height: 20, long_mode: DOT, text: "Speicher", text_font: f_text_s, text_color: $col_ink2 }
-            - label: { id: sys_age_1, x: 270, y: 293, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
-            - label: { x: 0, y: 330, width: 260, height: 20, long_mode: DOT, text: "Wallboxen", text_font: f_text_s, text_color: $col_ink2 }
-            - label: { id: sys_age_2, x: 270, y: 329, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
-            - label: { x: 0, y: 366, width: 260, height: 20, long_mode: DOT, text: "Wärmepumpe", text_font: f_text_s, text_color: $col_ink2 }
-            - label: { id: sys_age_3, x: 270, y: 365, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
-            - label: { x: 0, y: 402, width: 260, height: 20, long_mode: DOT, text: "Haus", text_font: f_text_s, text_color: $col_ink2 }
-            - label: { id: sys_age_4, x: 270, y: 401, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
-            - label: { x: 0, y: 438, width: 260, height: 20, long_mode: DOT, text: "Netz", text_font: f_text_s, text_color: $col_ink2 }
-            - label: { id: sys_age_5, x: 270, y: 437, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
-            - label: { x: 0, y: 474, width: 260, height: 20, long_mode: DOT, text: "Prognose", text_font: f_text_s, text_color: $col_ink2 }
-            - label: { id: sys_age_6, x: 270, y: 473, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
-            - label: { x: 0, y: 510, width: 260, height: 20, long_mode: DOT, text: "Wetter", text_font: f_text_s, text_color: $col_ink2 }
-            - label: { id: sys_age_7, x: 270, y: 509, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
-            - label: { x: 0, y: 548, width: 576, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "Tippen schließt das Fenster" }
-
-      # Sprachassistent: liegt als Overlay ueber der Seite und erscheint nur,
-      # solange die Pipeline laeuft. So braucht er keinen festen Platz im
-      # Layout, ist aber aus jeder Entfernung sichtbar.
-      - obj:
-          id: voice_panel
-          align: BOTTOM_MID
-          # Schirm 588..736: 8 (gap_tile) ueber der Menueleiste (ab 744),
-          # waagerecht 280..1000, Mitte 640. Deckend, sonst scheinen Schema
-          # und Reiter durch.
-          y: -64
-          width: 720
-          # Innen 148 - 2 x 16 - 2 x 2 = 112: Status 0..30 (f_val_l), Frage
-          # 37..59 (eine Zeile f_text), Antwort 66..110 (hoechstens zwei
-          # Zeilen) -> Abstaende je 7, Reserve 2. DOT kuerzt nur bei fester Hoehe; mit WRAP
-          # ohne height liefe ein langer Text in die naechste Zeile bzw. aus
-          # dem Panel.
-          height: 148
-          hidden: true
-          bg_color: $col_surface
-          bg_opa: COVER
-          scrollbar_mode: 'off'
-          scrollable: false
-          scroll_dir: NONE
-          border_color: $col_batt
-          border_width: 2
-          radius: 16
-          pad_all: 16
-          widgets:
-            - label:
-                id: lbl_assist_status
-                align: TOP_MID
-                # Volle Innenbreite 720 - 2 x 16 - 2 x 2 = 684 und feste Hoehe:
-                # Ein langer Fehlercode aus .pv-dashboard_audio.yaml wird
-                # gekuerzt, statt waagerecht aus dem Panel zu laufen.
-                width: 684
-                height: 30
-                long_mode: DOT
-                text_align: CENTER
-                text: "Bereit"
-                text_font: f_val_l
-                text_color: $col_batt
-            - label:
-                id: lbl_assist_request
-                align: TOP_MID
-                y: 37
-                width: 660
-                height: 22
-                text: ""
-                text_font: f_text
-                text_color: $col_ink
-                long_mode: DOT
-                text_align: CENTER
-            - label:
-                id: lbl_assist_response
-                align: TOP_MID
-                y: 66
-                width: 660
-                height: 44
-                text: ""
-                text_font: f_text
-                text_color: $col_ink2
-                long_mode: DOT
-                text_align: CENTER
+            - label: { x: 0, y: 216, width: 260, height: 20, long_mode: DOT, text: "Diagnose", text_font: f_text_s, text_color: $col_ink2 }
+            - switch:
+                id: sw_diag
+                x: 526
+                y: 212
+                width: 50
+                height: 26
+                indicator:
+                  checked:
+                    bg_color: $col_batt
+                on_value:
+                  - if:
+                      condition:
+                        lambda: 'return x;'
+                      then:
+                        - switch.turn_on: diag_switch
+                      else:
+                        - switch.turn_off: diag_switch
+            - obj: { x: 0, y: 246, width: 576, height: 1, bg_color: $col_line, bg_opa: COVER, border_width: 0, radius: 0, pad_all: 0, clickable: false, scrollable: false }
+            - label: { x: 0, y: 258, width: 576, height: 17, long_mode: DOT, styles: st_label, text: "LETZTE WERTE" }
+            - label: { x: 0, y: 294, width: 260, height: 20, long_mode: DOT, text: "PV", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_0, x: 270, y: 293, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 330, width: 260, height: 20, long_mode: DOT, text: "Speicher", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_1, x: 270, y: 329, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 366, width: 260, height: 20, long_mode: DOT, text: "Wallboxen", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_2, x: 270, y: 365, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 402, width: 260, height: 20, long_mode: DOT, text: "Wärmepumpe", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_3, x: 270, y: 401, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 438, width: 260, height: 20, long_mode: DOT, text: "Haus", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_4, x: 270, y: 437, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 474, width: 260, height: 20, long_mode: DOT, text: "Netz", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_5, x: 270, y: 473, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 510, width: 260, height: 20, long_mode: DOT, text: "Prognose", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_6, x: 270, y: 509, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 546, width: 260, height: 20, long_mode: DOT, text: "Wetter", text_font: f_text_s, text_color: $col_ink2 }
+            - label: { id: sys_age_7, x: 270, y: 545, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "noch keine Werte", text_font: f_text, text_color: $col_ink3 }
+            - label: { x: 0, y: 584, width: 576, height: 17, long_mode: DOT, text_align: CENTER, styles: st_unit, text: "Tippen schließt das Fenster" }
 
       # Firmware-Update. Deckt die Oberflaeche vollflaechig ab, weil sich
       # Display und OTA waehrend des Uploads die PSRAM-Bandbreite teilen --
@@ -1400,8 +1486,98 @@ lvgl:
                 text_font: f_text_s
                 text_color: $col_ink3
 
-# Systemzustand alle 10 s auffrischen (sys_refresh oben)
+# Systemzustand alle 10 s auffrischen (sys_refresh oben), dazu das
+# Diagnosefenster (diag_window)
 interval:
   - interval: 10s
     then:
       - script.execute: sys_refresh
+      - script.execute: diag_window
+
+# Diagnose ein/aus: aus Home Assistant oder im Systemfenster (sw_diag).
+# Eingeschaltet steht oben rechts statt des Datums eine Messzeile, alle 10 s
+# kommt eine Log-Zeile (INFO, Tag "diag"), und die Sensoren unten bekommen
+# Werte. Bleibt ueber einen Neustart erhalten.
+switch:
+  - platform: template
+    id: diag_switch
+    name: "Diagnose"
+    icon: "mdi:speedometer"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      - lvgl.widget.hide: lbl_date
+      - lvgl.label.update:
+          id: lbl_diag
+          text: "Diagnose: erste Werte nach 10 s"
+      - lvgl.widget.show: lbl_diag
+      - lvgl.widget.update:
+          id: sw_diag
+          state:
+            checked: true
+    on_turn_off:
+      - lvgl.widget.hide: lbl_diag
+      - lvgl.widget.show: lbl_date
+      - lvgl.widget.update:
+          id: sw_diag
+          state:
+            checked: false
+
+# Messwerte der Diagnose fuer Home Assistant, je 10-s-Fenster (diag_window)
+sensor:
+  - platform: template
+    id: diag_lvgl_ms
+    name: "Diagnose LVGL-Bild max"
+    unit_of_measurement: "ms"
+    accuracy_decimals: 1
+    state_class: measurement
+    entity_category: diagnostic
+    update_interval: never
+  - platform: template
+    id: diag_flush_ms
+    name: "Diagnose LVGL-Ausgabe max"
+    unit_of_measurement: "ms"
+    accuracy_decimals: 1
+    state_class: measurement
+    entity_category: diagnostic
+    update_interval: never
+  - platform: template
+    id: diag_lvgl_px
+    name: "Diagnose LVGL-Flaeche max"
+    unit_of_measurement: "px"
+    accuracy_decimals: 0
+    state_class: measurement
+    entity_category: diagnostic
+    update_interval: never
+  - platform: template
+    id: diag_lvgl_frames
+    name: "Diagnose LVGL-Bilder je 10 s"
+    accuracy_decimals: 0
+    state_class: measurement
+    entity_category: diagnostic
+    update_interval: never
+  - platform: template
+    id: diag_lvgl_busy
+    name: "Diagnose LVGL-Auslastung"
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    state_class: measurement
+    entity_category: diagnostic
+    update_interval: never
+  - platform: template
+    id: diag_flow_gap_ms
+    name: "Diagnose Takt Flussanimation max"
+    unit_of_measurement: "ms"
+    accuracy_decimals: 1
+    state_class: measurement
+    entity_category: diagnostic
+    update_interval: never
+  - platform: template
+    id: diag_flow_us
+    name: "Diagnose Flussanimation Laufzeit max"
+    unit_of_measurement: "µs"
+    accuracy_decimals: 0
+    state_class: measurement
+    entity_category: diagnostic
+    update_interval: never

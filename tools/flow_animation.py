@@ -66,6 +66,10 @@ DIE REGELN, jede aus einem konkreten Fehler im Bild entstanden:
    Bewegung kostet zwei Flaechen. Deshalb ein Deckel auf MAXMOVE Bewegungen
    je Tick, der Rest wartet einen Tick. Das Dashboard braucht zusaetzlich
    Reserve fuer Uhr, Messwerte und die Stundenbalken.
+   Seit 10.10.2026 hat LVGL 128 statt 32 Flaechen (LV_INV_BUF_SIZE,
+   .pv-dashboard_ui.yaml): Mit dem Datenweg kommen jede Sekunde viele Werte
+   auf einmal, zusammen mit den Kugeln lief der Puffer sonst ueber. Der
+   Deckel bleibt trotzdem -- jede Flaeche kostet Zeichenzeit.
 
 9. LEISTUNG KOMMT AUS KANAELEN (seit 25.09.2026).
    Die Leistung je Strecke steht nicht mehr fest im Block, sondern in dem
@@ -89,6 +93,12 @@ DIE REGELN, jede aus einem konkreten Fehler im Bild entstanden:
    Sonstige), oder faellt nichts ab (Masche), gilt nur (a). Der Block
    vergleicht dev_present je Tick mit dem letzten Stand und blendet
    Leitungen und ihre Kugeln um; eine versteckte Strecke bekommt 0 W.
+   Ruhiger Start (10.10.2026): Jede Leitung steht mit hidden: true in der
+   Datei, sichtbar macht sie erst der Block, wenn ihre Regel erfuellt ist.
+   Vorher waren sie bis zum ersten Lauf des Blocks (nach dem Anlauf) zu
+   sehen und verschwanden dann. Eine Leitung, die nach (a) und (b) an
+   keinem Geraet haengt (Knoten zu Knoten), braucht den Platz "grid" --
+   ohne Daten vom Hausanschluss steht also keine Leitung im Schema.
 ------------------------------------------------------------------------------
 """
 import re
@@ -112,19 +122,23 @@ MINWATT = 10       # darunter steht die Kugel (Messrauschen)
 # Tabelle steht in .pv-dashboard_ui.yaml (dev_present) und in
 # tools/ha_bindings.py (PLAETZE, REFERENZ) -- alle drei gleich halten.
 SLOTS = ([f"pv_{i}" for i in range(1, 9)] + [f"inv_{i}" for i in range(1, 5)] +
-         ["bat_1", "bat_2", "bat_3", "wb_1", "wb_2", "heatpump", "meter_pv", "meter_house"])
+         ["bat_1", "bat_2", "bat_3", "wb_1", "wb_2", "heatpump", "meter_pv", "meter_house", "grid"])
 BIT = {s: 1 << i for i, s in enumerate(SLOTS)}
 BAT_ALL = BIT["bat_1"] | BIT["bat_2"] | BIT["bat_3"]
 
-# Kasten (ID seines Wert-Labels) -> Geraeteplatz. "immer" = gibt es in
-# jeder Anlage, "speicher" = Summenkasten, da sobald ein Speicher da ist.
+# Kasten (ID seines Wert-Labels) -> Geraeteplatz. "speicher" = Summenkasten,
+# da sobald ein Speicher da ist. Hausnetz, Sonstige und Hausanschluss gibt es
+# in jeder Anlage; sie haengen trotzdem am Platz "grid" (Referenz: Leistung
+# am Hausanschluss), damit nach dem Start nichts davon ohne Daten dasteht
+# (Wunsch 10.10.2026). "immer" bleibt als Wert erlaubt, wird aber nicht
+# mehr benutzt.
 KASTEN = {**{f"v_roof_{i}": f"pv_{i}" for i in range(1, 9)},
           "v_wr_full": "inv_1", "v_wr_mini": "inv_2",
           "v_wr_hybrid1": "inv_3", "v_wr_hybrid2": "inv_4",
           "v_bat1": "bat_1", "v_bat2": "bat_2", "v_bat3": "bat_3",
           "e_batt": "speicher", "v_heatpump": "heatpump", "v_wb1": "wb_1",
           "v_wb2": "wb_2", "v_meter_pv": "meter_pv", "v_meter_house": "meter_house",
-          "v_house": "immer", "v_misc": "immer", "v_grid": "immer"}
+          "v_house": "grid", "v_misc": "grid", "v_grid": "grid"}
 WURZEL = "v_grid"  # Hausanschluss: von hier aus zaehlt "dahinter"
 
 # Kanaele in flow_ch, in dieser Reihenfolge. Vorzeichen: positiv in
@@ -150,7 +164,7 @@ def leitungen_lesen(text):
         {"pts": [[int(x), int(y)] for x, y in re.findall(r"\[(\d+),(\d+)\]", m.group(1))],
          "col": m.group(2)}
         for m in re.finditer(
-            r"- line: \{ (?:id: \w+, )?points: \[((?:\[\d+,\d+\],?)+)\], line_color: \$(\w+)", block)
+            r"- line: \{ (?:id: \w+, )?(?:hidden: true, )?points: \[((?:\[\d+,\d+\],?)+)\], line_color: \$(\w+)", block)
     ]
 
 
@@ -337,6 +351,8 @@ def sichtbarkeit(lines, boxes):
                     b = BAT_ALL
                 else:
                     alle |= BIT.get(KASTEN[n], 0)
+        if alle == 0 and a == 0 and b == 0:
+            alle = BIT["grid"]          # Ruhiger Start, Regel 10
         out.append((alle, a, b))
     return out
 
@@ -566,11 +582,18 @@ def yaml_bauen(d):
           static bool    init = false;
           static uint8_t next = 0;
           static uint32_t gesehen = 0xFFFFFFFFu;
-          static uint64_t lvis = ~0ULL;
+          static uint64_t lvis = 0;
           lv_obj_t *const dots[{n}] = {{
             {ref("")} }};
           lv_obj_t *const dotsB[{n}] = {{
             {ref("b")} }};
+          // Diagnose (diag in .pv-dashboard_ui.yaml): groesster Abstand zweier
+          // Takte (Soll {TICK} ms; mehr heisst, loop() hing und die Kugeln
+          // standen) und Laufzeit des Blocks, je in Mikrosekunden
+          static uint32_t t_vor = 0;
+          const uint32_t t_ein = micros();
+          if (t_vor != 0 && t_ein - t_vor > id(diag)[8]) id(diag)[8] = t_ein - t_vor;
+          t_vor = t_ein;
           // Anlauf abwarten: Das Intervall laeuft ab dem ersten Tick, LVGL
           // baut seine Objekte aber erst auf. Ein Zugriff darauf endet in
           // einem Load access fault (get_prop_core) und damit im Rollback.
@@ -625,6 +648,7 @@ def yaml_bauen(d):
             if (!liveB[i] || WATT[i] <= 0.0f) {{ lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }}{lauf("posB", "accB", "liveB", "lxB", "lyB", "dotsB", False)}
           }}
           next = (next + bewegt + 1) % {n};
+          if (micros() - t_ein > id(diag)[9]) id(diag)[9] = micros() - t_ein;
   # <<< flow-animation
 '''
     return "\n".join(dots), logik
@@ -634,7 +658,7 @@ def yaml_bauen(d):
 KUGEL = re.compile(r"^ {14}- obj: \{ id: fl\d{2}b?, x: -?\d+, y: -?\d+, width: \d+, "
                    r"height: \d+, radius: CIRCLE, .*hidden: true, scrollable: false \}\n", re.M)
 # Eine Leitung im Schema, mit oder ohne ID
-LEITUNG = re.compile(r"(- line: \{ )(?:id: \w+, )?(points: )")
+LEITUNG = re.compile(r"(- line: \{ )(?:id: \w+, )?(?:hidden: true, )?(points: )")
 
 
 def einbauen(text, dots, logik):
@@ -645,7 +669,7 @@ def einbauen(text, dots, logik):
     a = text.index("id: schema_area")
     b = text.find("\ninterval:", a)
     zaehler = iter(range(1000))
-    schema = LEITUNG.sub(lambda m: f"{m.group(1)}id: ln{next(zaehler):02d}, {m.group(2)}", text[a:b])
+    schema = LEITUNG.sub(lambda m: f"{m.group(1)}id: ln{next(zaehler):02d}, hidden: true, {m.group(2)}", text[a:b])
     text = text[:a] + schema + text[b:]
     stelle = text.index("\n", text.index("            widgets:", text.index("id: schema_area")))
     text = text[:stelle + 1] + dots + "\n" + text[stelle + 1:]

@@ -42,9 +42,10 @@ Uhr und Systemsymbolen (WLAN, Home Assistant, Daten aktuell) und eine Meldungsze
 | Statistik | Woche, Monat, Jahr: Erzeugung gegen Verbrauch, Autarkie, Eigenverbrauch, Ertrag |
 | Meldungen | Bestehende Meldungen, neueste oben; gleiche zusammengefasst („×3 seit 08:12“), Zähler je Schweregrad als Filter, Quittieren per Antippen; oben die schwerste in ihrer Farbe |
 
-Dazu drei Fenster über der Oberfläche: Sprachassistent (`voice_panel`),
-Firmware-Update mit Fortschrittsbalken (`ota_panel`) und System (`sys_panel`,
-Tipp auf die Symbole oben rechts) mit dem Alter der Werte je Quelle.
+Dazu zwei Fenster über der Oberfläche: Firmware-Update mit Fortschrittsbalken
+(`ota_panel`) und System (`sys_panel`, Tipp auf die Symbole oben rechts) mit dem
+Alter der Werte je Quelle und dem Schalter „Diagnose“ (Bildzeit, Takt der
+Flussanimation; `docs/03`).
 
 **Anbindung.** Die Oberfläche wird über feste Skript-Schnittstellen gefüttert
 (`alert_push`, `alert_clear`, `storage_update`, `pv_update`, `pv_status`,
@@ -221,7 +222,6 @@ API-Schlüssel im Klartext.
 | `.pv-dashboard_page_stats.yaml` | Seite 10 Statistik: Woche / Monat / Jahr, `stats_update` / `stats_show` |
 | `.pv-dashboard_page_alerts.yaml` | Seite 11 Meldungen: Liste, Zähler mit Filter, `alert_push` / `alert_ack` / `alert_clear` / `alert_refresh` |
 | `.pv-dashboard_display.yaml` | Nur Gerät: I2C, Backlight, MIPI-DSI-Panel, GT911, Drehung |
-| `.pv-dashboard_audio.yaml` | Nur Gerät: ES8311/ES7210, Voice Assistant, I2S-Halbduplex |
 | `pv-dashboard-sim.yaml` | Simulator: `host:`-Plattform mit SDL-Fenster und SDL-Touchscreen |
 | `pv-dashboard-shots.yaml` | Headless-Screenshots aller Seiten, bindet den Simulator als Package ein |
 | `pv-dashboard-demo.yaml` | Prototyp: drei Bewegungsmuster für die Flussrichtung nebeneinander |
@@ -239,10 +239,10 @@ API-Schlüssel im Klartext.
 
 Gerät und Simulator binden `utility` und `ui` gemeinsam ein: Eine Änderung an
 der Oberfläche, an den Schriften oder an den Farben wirkt auf beiden Seiten.
-Nur am Gerät hängen `display`, `audio`, `core` und `ha`.
+Nur am Gerät hängen `display`, `core` und `ha` (Audio ist seit dem 10.10.2026 entfernt).
 
 Die Oberfläche liegt in **zwölf** Dateien: dem Kern `.pv-dashboard_ui.yaml`
-(1381 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
+(1583 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
 eigenen `packages:`-Block ein — **diese Reihenfolge ist die Reihenfolge der
 Seiten**. Jedes Skript liegt bei der Seite, die es benutzt; im Kern bleiben nur
 `sys_refresh`, `record_hour` und `update_clock`, die kein Seiten-Widget anfassen,
@@ -271,7 +271,7 @@ von `esphome config` stehen in `docs/03` unter „Packages aus dem GitHub-Repo�
   ist der Aufbau, nicht eine bestimmte Anlage.
 - **[docs/02 — Hardware und Panel](docs/02-hardware-und-panel.md)** — Board und
   ECO2-Silizium, Takt, Toolchain, Display und Touch, C6-Co-Prozessor, BLE,
-  Audio-Hardware, serielle Schnittstellen, Kamera, Bauen und Flashen.
+  Audio-Hardware (ungenutzt), serielle Schnittstellen, Kamera, Bauen und Flashen.
 - **[docs/03 — Aufbau des Dashboards](docs/03-dashboard-aufbau.md)** — Packages,
   Einstieg in Kern und Seitendateien, Seitenaufbau, Tokens und Stile, Verläufe,
   Skripte und ihre Schnittstellen, Flussanimation, Simulator und Screenshots
@@ -281,7 +281,7 @@ von `esphome config` stehen in `docs/03` unter „Packages aus dem GitHub-Repo�
   bis zum Rendering.
 - **[docs/05 — Umstieg auf ESPHome 2026.9](docs/05-esphome-2026-9-umstieg.md)** —
   `min_version`, Device Builder und Bauumgebungen, OTA auf Noise in zwei
-  Schritten, Audio-Halbduplex, der LVGL-`list`-Fehler.
+  Schritten, Audio-Halbduplex (seit 10.10.2026 entfernt), der LVGL-`list`-Fehler.
 - **[docs/06 — Offene Punkte und Pläne](docs/06-offene-punkte-und-plaene.md)** —
   geplante Detailseiten, echte Daten anbinden, BMS, Modbus-Regeln, Kamera, was
   sich nur am Gerät prüfen lässt.
