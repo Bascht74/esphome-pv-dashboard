@@ -51,6 +51,13 @@ Entitaet weg -> nur der Wert weg):
      "FAULT" -> Meldung und roter Text, "Normal" -> haelt 4 s, dann weg;
      Schleife Fault <-> Normal innerhalb der Haltezeit -> eine Meldung,
      Anzahl 1; "Standby" -> keine
+  R  Prognose je Dach (Wunsch des Nutzers, 10.10.2026, ha-test.yaml): eine
+     Aktion liest Zustand, estimate10 und detailedForecast (Format wie die
+     echte Solcast-Integration: period_start als datetime) von
+     ha_pv<N>_fc_d1..7 -> Kacheln nur fuer Flaechen mit Wert heute, Titel
+     "bisher / Prognose kWh", Stundenbalken aus der Statistik, Tipp auf
+     Vorschau -> "6 Tage" mit der Summe der Folgetage; forecast_curve aus
+     der Summe der Daecher
   J  in keinem Label irgendwo "inf" oder "nan", ueber den ganzen Lauf
 
 Liest keine secrets.yaml und nicht .pv-dashboard_anlage.yaml. Ergebnis:
@@ -105,9 +112,11 @@ def today_at(s="00:00"):
 
 
 ATTR = {}
+STATE = {}
 env = ImmutableSandboxedEnvironment(undefined=StrictUndefined)
 env.globals.update(now=now, as_datetime=as_datetime, as_local=lambda d: d.astimezone(TZ), today_at=today_at,
-                   timedelta=dt.timedelta, state_attr=lambda e, a: ATTR.get((e, a)))
+                   timedelta=dt.timedelta, state_attr=lambda e, a: ATTR.get((e, a)),
+                   states=lambda e: STATE.get(e, "unknown"))
 env.filters["tojson"] = json.dumps
 
 
@@ -126,8 +135,34 @@ def E(name):
     return hb.NAMEN[name]["ent"]
 
 
+# Prognose je Dach (Fall R): IDs wie in tests/ha-test.yaml, Tageswerte P50 /
+# P10 in kWh nach dem Muster der echten Integration (Stand 10.10.2026)
+DACH = {
+    "sensor.solcast_test_sued_prognose_": [(6.9432, 3.112), (6.2651, 1.6718), (10.9892, 3.4028), (5.9857, 0.6437),
+                                           (7.0262, 1.6951), (11.1401, 3.3985), (7.5508, 1.2128)],
+    "sensor.solcast_test_west_prognose_": [(8.1593, 3.6992), (8.4717, 1.9855)],
+}
+DACH_TAG = ["heute", "morgen"] + [f"tag_{d}" for d in range(3, 8)]
+DACH_SPITZE = {"sensor.solcast_test_sued_prognose_": (1.4475, 13.0), "sensor.solcast_test_west_prognose_": (1.7, 15.0)}
+
+
+def dach_halbstunden(praefix, tag=0):
+    """detailedForecast wie Solcast: 48 Eintraege, period_start als datetime
+    in Ortszeit, pv_estimate / pv_estimate10 / pv_estimate90 in kW."""
+    spitze, mitte = DACH_SPITZE[praefix]
+    t0 = today_at("00:00") + dt.timedelta(days=tag)
+    aus = []
+    for i in range(48):
+        t = i / 2 + 0.25
+        p = round(max(0.0, spitze * (1 - ((t - mitte) / 5.5) ** 2)), 4) if 7.5 <= t <= 18.5 else 0.0
+        aus.append({"period_start": t0 + dt.timedelta(minutes=30 * i), "pv_estimate": p,
+                    "pv_estimate10": round(p * 0.45, 4), "pv_estimate90": round(p * 1.3, 4), "dampening_factor": 1.0})
+    return aus
+
+
 def zustaende():
-    state = {}
+    state = STATE
+    state.clear()
     for e in hb.TABELLE:
         ent = hb.entitaet(e)[1]
         v = e["demo"]
@@ -147,6 +182,13 @@ def zustaende():
     ATTR[("sun.sun", "next_rising")] = "2026-09-26T05:12:00+00:00"
     ATTR[("sun.sun", "next_setting")] = "2026-09-25T17:21:00+00:00"
     ATTR[(E("solcast_today"), "detailedForecast")] = parse(render(hb.DUMMY_DETAILED))
+    for praefix, tage in DACH.items():
+        for d, (p50, p10) in enumerate(tage):
+            ent = praefix + DACH_TAG[d]
+            state[ent] = str(p50)
+            ATTR[(ent, "estimate10")] = p10
+            ATTR[(ent, "detailedForecast")] = dach_halbstunden(praefix, d)
+    state["sensor.solcast_test_weg_prognose_heute"] = "unavailable"
     # Ausgangslage der Faelle
     del state[E("wb2_mode")]              # B: Referenz fehlt in HA ganz
     state[E("bat3_soc")] = "unavailable"  # C: Referenz nicht verfuegbar
@@ -564,6 +606,45 @@ async def ablauf(panel, ha, bilder):
     ha.setzen("inv4_energy", str(inv[3]))
     d = await panel.warten(lambda d: d["txt"]["val_gen"] == soll, 5)
     pruefe("P", "Wert kommt wieder -> Summe wieder da", d, panel.letzte["txt"]["val_gen"])
+    # R: Prognose je Dach
+    sued, west = DACH["sensor.solcast_test_sued_prognose_"], DACH["sensor.solcast_test_west_prognose_"]
+    k = lambda v: f"{v:.1f}".replace(".", ",")  # noqa: E731
+    d = await panel.warten(lambda d: d["fc"]["on"] == 3 and d["fc"]["tiles"] == 2, 30)
+    pruefe("R", "Kacheln nur fuer Flaechen mit Wert heute (1 und 2; 3 unavailable)", d, panel.letzte["fc"])
+    await asyncio.sleep(1.5)
+    fc = panel.letzte["fc"]
+    pruefe("R", "Kachel 1 heisst wie Flaeche 1", fc["t0n"] == "Dach Süd", repr(fc["t0n"]))
+    bisher = ha.heute(E("pv1_power"), "m")
+    m = re.match(r"^(\d+,\d) / (\d+,\d) kWh$", fc["t0"])
+    pruefe("R", f"Titel Flaeche 1: bisher {k(bisher)} / Prognose {k(sued[0][0])} kWh",
+           m and m.group(2) == k(sued[0][0]) and abs(float(m.group(1).replace(",", ".")) - bisher) <= 0.051,
+           repr(fc["t0"]))
+    pruefe("R", f"Kopfzeile: Prognose = Summe heute {k(sued[0][0] + west[0][0])} kWh",
+           f"/ Prognose {k(sued[0][0] + west[0][0])} kWh · Rest " in fc["total"], repr(fc["total"]))
+    pruefe("R", f"Stundenbalken aus der Statistik: {now().hour} volle Stunden je Dach",
+           fc["act"] == [now().hour, now().hour], fc["act"])
+    p = [dach_halbstunden(x) for x in DACH]
+    soll = sum((q[24]["pv_estimate"] + q[25]["pv_estimate"]) / 2 for q in p)
+    ist = panel.letzte["forecast_curve"].split(",")
+    pruefe("R", f"forecast_curve aus der Summe der Daecher (12 Uhr {soll:.2f})",
+           len(ist) == 16 and abs(float(ist[6]) - soll) <= 0.02, panel.letzte["forecast_curve"])
+    if bilder:
+        await ha.bild("probe_11_prognose.bmp", "forecast")
+    await ha.dienst("probe_fc_mode", {"mode": 1})
+    soll_t0 = "6 Tage " + k(sum(x for x, _ in sued[1:])) + " kWh"
+    soll_t1 = "6 Tage " + k(west[1][0]) + " kWh"
+    d = await panel.warten(lambda d: d["fc"]["mode"] == 1 and d["fc"]["t0"] == soll_t0, 4)
+    pruefe("R", f"Tipp Vorschau: Kachel 1 {soll_t0}", d, panel.letzte["fc"])
+    fc = panel.letzte["fc"]
+    pruefe("R", f"Vorschau: Kachel 2 nur morgen ({soll_t1})", fc["t1"] == soll_t1, repr(fc["t1"]))
+    pruefe("R", f"Vorschau: Kopfzeile Morgen {k(sued[1][0] + west[1][0])} kWh",
+           fc["total"].startswith(f"Morgen {k(sued[1][0] + west[1][0])} kWh · 6 Tage "), repr(fc["total"]))
+    if bilder:
+        await ha.bild("probe_12_prognose_vorschau.bmp", "forecast")
+    await ha.dienst("probe_fc_mode", {"mode": 0})
+    d = await panel.warten(lambda d: d["fc"]["mode"] == 0 and d["fc"]["t0"].endswith(f"/ {k(sued[0][0])} kWh"), 4)
+    pruefe("R", "Tipp Heute: zurueck auf bisher / Prognose", d, panel.letzte["fc"])
+
     if bilder:
         await ha.bild("probe_5_pv.bmp", "pv")
         await ha.bild("probe_6_haus.bmp", "house")

@@ -16,7 +16,8 @@
 # auf stdout -- dev_present, ausgeblendete Kaesten, Texte einzelner Labels,
 # offene Systemmeldungen, Prognose- und Statistikreihen. Die Probe liest
 # nur diese Zeilen. probe_shot(name) legt auf Wunsch ein Bild ab.
-# probe_page(page) zeigt eine Seite (overview, pv, house, grid, alerts),
+# probe_page(page) zeigt eine Seite (overview, pv, house, grid, alerts,
+# forecast), probe_fc_mode(mode) tippt den Umschalter der Seite Prognose an,
 # damit probe_shot sie aufnimmt. probe_tap(wb, seg) tippt einen Teil des Modus-Schalters an: Es schickt
 # LV_EVENT_CLICKED an wb<N>_seg<S>, also denselben Weg wie ein Finger
 # (on_click -> wallbox_mode_set); einen Touchscreen hat der Test nicht.
@@ -48,6 +49,19 @@ substitutions:
   # Stoerung aus dem Statustext (Fall Q), kurze Haltezeit fuer den Test
   ha_inv3_fault: none
   inv_fault_hold_s: "4"
+  # Prognose je Dach (Fall R): Flaeche 1 mit allen sieben Tagen, Flaeche 2
+  # nur heute und morgen, Flaeche 3 belegt, aber in HA unavailable (keine
+  # Kachel). IDs wie Solcast mit einem Eintrag je Dach.
+  ha_pv1_fc_d1: sensor.solcast_test_sued_prognose_heute
+  ha_pv1_fc_d2: sensor.solcast_test_sued_prognose_morgen
+  ha_pv1_fc_d3: sensor.solcast_test_sued_prognose_tag_3
+  ha_pv1_fc_d4: sensor.solcast_test_sued_prognose_tag_4
+  ha_pv1_fc_d5: sensor.solcast_test_sued_prognose_tag_5
+  ha_pv1_fc_d6: sensor.solcast_test_sued_prognose_tag_6
+  ha_pv1_fc_d7: sensor.solcast_test_sued_prognose_tag_7
+  ha_pv2_fc_d1: sensor.solcast_test_west_prognose_heute
+  ha_pv2_fc_d2: sensor.solcast_test_west_prognose_morgen
+  ha_pv3_fc_d1: sensor.solcast_test_weg_prognose_heute
 
 packages:
   sim: !include ../pv-dashboard-sim.yaml
@@ -96,6 +110,19 @@ api:
               lambda: 'return page == "alerts";'
             then:
               - lvgl.page.show: page_alerts
+        - if:
+            condition:
+              lambda: 'return page == "forecast";'
+            then:
+              - lvgl.page.show: page_forecast
+    - action: probe_fc_mode
+      variables:
+        mode: int
+      then:
+        # Tipp auf den Umschalter Heute / Vorschau (wie ein Finger)
+        - lambda: |-
+            if (mode >= 0 && mode <= 1)
+              lv_obj_send_event(mode == 0 ? id(fc_seg0) : id(fc_seg1), LV_EVENT_CLICKED, nullptr);
     - action: probe_tap
       variables:
         wb: int
@@ -142,7 +169,9 @@ interval:
           static bool clip = false;
           if (!clip) {
             for (lv_obj_t *l : {id(hp_season), id(hp_bypass), id(hp_compressor), id(gr_rule_0), id(pv_str_sub_1),
-                                id(pv_inv_sub_3), id(ht_c3_d), id(gm_today_2)})
+                                id(pv_inv_sub_3), id(ht_c3_d), id(gm_today_2), id(fc_total),
+                                lv_obj_get_child(id(fc_t0), 0), lv_obj_get_child(id(fc_t0), 1),
+                                lv_obj_get_child(id(fc_t1), 1)})
               lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_CLIP);
             clip = true;
           }
@@ -244,6 +273,24 @@ interval:
           };
           j += ",\"wb_seg\":[" + std::to_string(seg(id(wb1_seg0), id(wb1_seg1), id(wb1_seg2))) + "," +
                std::to_string(seg(id(wb2_seg0), id(wb2_seg1), id(wb2_seg2))) + "]";
+          // Seite Prognose: Umschalter, Daecher mit Prognose, Kacheln, Titel,
+          // Kopfzeile, Zahl der Stundenwerte (Ist) je Dach
+          {
+            int tiles = 0;
+            for (lv_obj_t *t : {id(fc_t0), id(fc_t1), id(fc_t2), id(fc_t3), id(fc_t4), id(fc_t5)})
+              tiles += lv_obj_has_flag(t, LV_OBJ_FLAG_HIDDEN) ? 0 : 1;
+            auto zahl = [](const std::array<float, 24> &a) {
+              int c = 0;
+              for (float v : a)
+                c += std::isfinite(v) ? 1 : 0;
+              return c;
+            };
+            j += ",\"fc\":{\"mode\":" + std::to_string(id(fc_mode)) + ",\"on\":" + std::to_string(id(fc_roof_on)) +
+                 ",\"tiles\":" + std::to_string(tiles) + ",\"t0\":" + txt(lv_obj_get_child(id(fc_t0), 1)) +
+                 ",\"t1\":" + txt(lv_obj_get_child(id(fc_t1), 1)) + ",\"t0n\":" + txt(lv_obj_get_child(id(fc_t0), 0)) +
+                 ",\"total\":" + txt(id(fc_total)) + ",\"act\":[" + std::to_string(zahl(id(fc_r_act)[0])) + "," +
+                 std::to_string(zahl(id(fc_r_act)[1])) + "]}";
+          }
           j += ",\"wx_stamp\":\"" + esc(id(ha_wx_stamp)) + "\"}";
           printf("PROBE %s\n", j.c_str());
           fflush(stdout);

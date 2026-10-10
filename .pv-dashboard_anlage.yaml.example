@@ -203,3 +203,21 @@ feed_limit_pct: "60"
 # ha_inv3_status: sensor.<wechselrichter>_device_state
 # inv_fault_texts: "Fault,Alarm"
 # inv_fault_hold_s: "300"
+#
+# Prognose je Dachflaeche (Seite Prognose, Heute / Vorschau): je Flaeche N
+# die Solcast-Tagesprognosen ihres eigenen Solcast-Eintrags (eine Anlage je
+# Dach in Solcast), d1 = heute .. d7 = Tag 7, Standard none. Eine Kachel
+# bekommt jede Flaeche, deren ha_pv<N>_fc_d1 belegt ist und einen Wert hat
+# (hoechstens sechs, in Flaechenreihenfolge). Gelesen werden der Zustand
+# (P50, kWh), das Attribut estimate10 (P10) und bei d1 detailedForecast
+# (Halbstunden). Die Ist-Balken kommen aus der Statistik von ha_pv<N>_power,
+# "bisher" aus ha_pv<N>_energy (ohne Wert: Summe der Balken). Fehlende Tage
+# duerfen none bleiben. Beispiel (deutsche Solcast-IDs, ein Eintrag je Dach):
+#
+# ha_pv1_fc_d1: sensor.solcast_<dach>_prognose_heute
+# ha_pv1_fc_d2: sensor.solcast_<dach>_prognose_morgen
+# ha_pv1_fc_d3: sensor.solcast_<dach>_prognose_tag_3
+# ha_pv1_fc_d4: sensor.solcast_<dach>_prognose_tag_4
+# ha_pv1_fc_d5: sensor.solcast_<dach>_prognose_tag_5
+# ha_pv1_fc_d6: sensor.solcast_<dach>_prognose_tag_6
+# ha_pv1_fc_d7: sensor.solcast_<dach>_prognose_tag_7

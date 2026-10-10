@@ -37,6 +37,7 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
       entsprechend umgestellt; die Seite bleibt grafisch.
 - [x] **Seiten Prognose (Solcast) und Wetter (DWD)**, auf Zuruf des Nutzers. Siehe
       „Prognose und Wetter“. Menüleiste mit elf Reitern, der PV-Reiter heißt „PV“.
+      Die Prognose ist seit dem 10.10.2026 je Dachfläche aufgebaut (Heute / Vorschau).
 
 **Erledigt am 25.09.2026, später Tag** (auf Zuruf des Nutzers)
 
@@ -318,7 +319,46 @@ der der Netzbetreiber die Einspeisung fernsteuern kann. Keine Rechtsberatung.
 Seiten `page_forecast` und `page_weather`, gebaut am 25.09.2026 auf Zuruf des
 Nutzers. Aufbau und Skripte in Dokument 03.
 
-**Prognose (Solcast).** Welche Werte, hat der Nutzer vorgegeben: die, die sein
+**Prognose je Dachfläche (seit 10.10.2026).** Auf Wunsch des Nutzers zeigt die
+Seite Prognose nicht mehr die Anlage als Ganzes, sondern je Dachfläche eine
+kleine Grafik wie das Energie-Dashboard von Home Assistant (Ist als
+Stundenbalken, P50 und P10 als Linien, Marke jetzt) und über einen Umschalter
+„Vorschau“ je Dach die kommenden sechs Tage; P90 ist entfallen. Quelle ist die
+Solcast-Integration mit **einem Eintrag je Dach** (beim Nutzer sechs:
+Süd, West, Carport innen, Nord, Carport außen, Ost; Sensoren
+`sensor.solcast_<dach>_prognose_heute`, `_morgen`, `_tag_3` … `_tag_7`, je
+mit `estimate10` und 48 Halbstunden in `detailedForecast`, am 10.10.2026 in
+seinem Home Assistant nachgesehen). Zuordnung über `ha_pv<N>_fc_d1` …
+`_d7` in `.pv-dashboard_anlage.yaml` (Vorlage `.pv-dashboard_anlage.yaml.example`),
+Fläche N wie in der Übersicht. Die alte Fassung (eine Kachel „Solcast ·
+heute“, Halbstundenband P10 bis P90, sieben Tage mit Wetterbild) und mit ihr
+die Schlüssel `ha_solcast_today_p10`/`_p90`, `_power_now`, `_next_hour`,
+`_peak`, `_peak_time`, `_last_poll`, `_api_used`, `_api_limit` und
+`_d2` … `_d7` samt P10/P90 sind entfernt; stehen sie noch in der eigenen
+Anlage, schaden sie nicht (ungenutzte Substitution). Geblieben sind
+`ha_solcast_today` (nur noch sein `detailedForecast` für `forecast_curve`,
+solange es keine Prognose je Dach gibt) und `ha_solcast_remaining`
+(Statusleiste „Restprognose“, Seite Haus).
+
+Offen bzw. bewusst so:
+
+- Mehr als sechs Dächer mit Prognose: die ersten sechs in Flächenreihenfolge
+  bekommen eine Kachel, der Rest fehlt auch in den Summen der Kopfzeile.
+- Die Kachel hängt nur an der Prognose, nicht an `dev_present`: Fällt die
+  Leistung einer Fläche aus, bleibt die Kachel mit Prognose, ohne Ist.
+- Die Restprognose der Statusleiste kommt weiter aus `ha_solcast_remaining`
+  (beim Nutzer nur vier der sechs Dächer); die Kopfzeile der Seite Prognose
+  rechnet ihren Rest selbst aus den Halbstunden aller Dächer. Auf Zuruf
+  ließe sich die Statusleiste auf diese Summe umstellen.
+- Datenalter „Prognose“ im Systemfenster: Der Abruf kommt alle 30 min, die
+  Leistung der Dächer hält den Stempel dazwischen frisch; nachts, wenn
+  sich keine Leistung ändert, kann nach `data_stale_s` (300 s) eine Warnung
+  „Keine Daten von Prognose“ kommen. Am Gerät beobachten.
+- Ein echter Lauf gegen das eigene Home Assistant steht aus; die Vorlage je
+  Dach ist am 10.10.2026 in seinem Home Assistant (nur lesend, Template-Test)
+  mit allen sechs Dächern fehlerfrei gelaufen (Antwort 4,3 kB).
+
+**Prognose (Solcast), Fassung vom 25.09.2026.** Welche Werte, hat der Nutzer vorgegeben: die, die sein
 Blueprint `ha-pv-optimizer` (github.com/Bascht74/ha-pv-optimizer, am 25.09.2026
 gelesen) benutzt. Das sind aus der Solcast-Integration (HACS) der Sensor „heute“
 mit dem Attribut `detailedForecast` (Halbstunden mit `pv_estimate`,
@@ -428,7 +468,8 @@ Offen am Datenweg:
 Erzeugung der abgelaufenen Stunde in kWh: `// kwh = id(<Erzeugungssensor>).state;`. Solange
 sie auskommentiert ist, wird 0 eingetragen. Am Gerät schreibt der Datenweg `day_curve`
 stündlich ganz neu aus der Statistik (Erzeugung heute 06 bis 22 Uhr) und `forecast_curve`
-aus den Solcast-Halbstunden; die Quellzeile bleibt für eine native Quelle.
+aus den Solcast-Halbstunden (seit 10.10.2026 aus der Summe der Dächer, wenn es
+Prognosen je Dach gibt); die Quellzeile bleibt für eine native Quelle.
 
 **Speicher.** `storage_update(...)` füllt Tabellenspalte und Ring der Speicherseite;
 Signatur und Sonderwerte stehen in Dokument 03. Künftige BMS-Sensoren rufen nur dieses
@@ -649,7 +690,7 @@ Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Stand: 10.10.2026 (Seite Prognose je Dachfläche, offene Punkte dazu unter „Prognose und Wetter“); davor 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
 Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc

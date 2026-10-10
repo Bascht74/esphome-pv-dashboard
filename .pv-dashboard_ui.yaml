@@ -102,7 +102,7 @@ globals:
   #   0 PV (pv_update)          1 Speicher (storage_update)
   #   2 Wallboxen (wallbox_update)  3 Waermepumpe (heatpump_update)
   #   4 Haus (house_flow)       5 Netz (grid_update)
-  #   6 Prognose (fc_today)     7 Wetter (wx_now)
+  #   6 Prognose (fc_roof_fc, fc_roof_live)  7 Wetter (wx_now)
   # sys_refresh liest daraus das Datenalter fuer Statusleiste und
   # Systemfenster und meldet ausbleibende Daten.
   - id: data_seen

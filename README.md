@@ -32,7 +32,7 @@ Uhr und Systemsymbolen (WLAN, Home Assistant, Daten aktuell) und eine Meldungsze
 | --- | --- |
 | Übersicht | Anlagenschema mit Flussanimation, rechte Kennzahlenspalte, Ringe und Tagesertrag in Euro (auch als Sensoren für Home Assistant) |
 | PV & Prognose | Leistung und Tageswert je Wechselrichter und Fläche, getrennt nach Volleinspeisung und Hausnetz, Status mit Fehlertext und Temperatur; Tagesverlauf Ist gegen Prognose mit vier Kennzahlen |
-| Prognose | Solcast: heute P50 mit P10 bis P90, Rest, jetzt, Spitze; Halbstunden als Band mit Linie; sieben Tage mit Wetterbild |
+| Prognose | Solcast je Dachfläche, Umschalter Heute / Vorschau: heute Ist-Stundenbalken mit Linien P50 und P10 und Marke jetzt, bisher / Prognose je Dach; Vorschau die kommenden sechs Tage je Dach (P50, darin P10) |
 | Wetter | DWD: jetzt mit Wind, Feuchte, Druck, Sonne; nächste 24 Stunden mit Temperaturkurve und Regen; sieben Tage; DWD-Warnung |
 | Speicher | Tabelle mit Zellwerten, drei SoC-Ringe |
 | Wallboxen | im Stil von evcc: je Wallbox Modus, Leistung mit Phasen, Geladen, Sonnenanteil, Ladedauer, Fahrzeug mit Ladestand, Ladeplan und Limit; Monatswerte |
@@ -48,7 +48,7 @@ Tipp auf die Symbole oben rechts) mit dem Alter der Werte je Quelle.
 
 **Anbindung.** Die Oberfläche wird über feste Skript-Schnittstellen gefüttert
 (`alert_push`, `alert_clear`, `storage_update`, `pv_update`, `pv_status`,
-`money_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`, `wx_hour`, `wx_day`,
+`money_update`, `fc_roof_fc`, `fc_roof_hours`, `fc_roof_live`, `wx_now`, `wx_hour`, `wx_day`,
 `wx_warning`, `grid_update`, `grid_phase`, `grid_meter`, `grid_rules`,
 `stats_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`,
 `heatpump_extra`, `house_flow`, `house_battery`, `house_loadpoint`, `house_update`,
@@ -211,7 +211,7 @@ API-Schlüssel im Klartext.
 | `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die elf Seiten ein |
 | `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, `money_update`, Eingabeskripte `ov_*`, erzeugter Flussanimations-Block |
 | `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose: Wechselrichter und Flächen je Kreis, Tagesverlauf mit Kennzahlen, `pv_status` / `pv_update` / `pv_redraw_curve` |
-| `.pv-dashboard_page_forecast.yaml` | Seite 3 Prognose: Solcast heute, Halbstunden, sieben Tage, `fc_*` |
+| `.pv-dashboard_page_forecast.yaml` | Seite 3 Prognose je Dachfläche: Heute / Vorschau, `fc_*` |
 | `.pv-dashboard_page_weather.yaml` | Seite 4 Wetter: DWD jetzt, 24 Stunden, sieben Tage, Warnung, `wx_*` |
 | `.pv-dashboard_page_battery.yaml` | Seite 5 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
 | `.pv-dashboard_page_wallbox.yaml` | Seite 6 Wallboxen: Ladepunkt-Karten nach evcc mit bedienbarem Modus-Schalter, Monatskachel, `wallbox_update` / `wallbox_mode_set` / `wallbox_month` |

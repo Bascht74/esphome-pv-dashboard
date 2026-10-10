@@ -260,7 +260,7 @@ Die Oberfläche hat dafür feste Schnittstellen (`alert_push`, `alert_clear`,
 `storage_update`, `pv_update`, `pv_status`, `money_update`, `wallbox_update`,
 `wallbox_month`, `heatpump_update`, `heatpump_extra`, `house_flow`, `house_battery`,
 `house_loadpoint`, `house_update`, `house_history`, `grid_update`, `grid_phase`,
-`grid_meter`, `grid_rules`, `stats_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`,
+`grid_meter`, `grid_rules`, `stats_update`, `fc_roof_fc`, `fc_roof_hours`, `fc_roof_live`, `wx_now`,
 `wx_hour`, `wx_day`, `wx_warning`, `record_hour`) und für das Anlagenschema die
 Eingabeskripte `ov_roof`, `ov_inverter`, `ov_battery`, `ov_battery_total`,
 `ov_consumer`, `ov_meter`, `ov_grid`, `ov_house` und `ov_totals`; siehe Dokument 03.
