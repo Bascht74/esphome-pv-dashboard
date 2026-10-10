@@ -84,7 +84,7 @@ geräteeigenen Pakete, nie mit `--show-secrets`; `run`/`compile` darauf
 
 ## Packages kommen aus dem Repo
 
-`pv-dashboard.yaml` lädt die Packages von GitHub (`ref: main`, `refresh: 1d`);
+`pv-dashboard.yaml` lädt die Packages von GitHub (`ref: main`, `refresh: always`);
 die lokale Variante steht darunter auskommentiert. Folgen für die Arbeit:
 
 - Das **Gerät** baut aus dem geschobenen Stand: erst Simulator und Screenshots
@@ -106,7 +106,7 @@ normales Deutsch mit Umlauten.
 
 - Zum Anfassen sind `pv-dashboard.yaml` und die lokale
   `.pv-dashboard_anlage.yaml`. Daneben
-  `.pv-dashboard_core.yaml`, `_display`, `_audio`, `_utility` und die
+  `.pv-dashboard_core.yaml`, `_display`, `_utility` und die
   Oberfläche: Kern `.pv-dashboard_ui.yaml` plus elf Seitendateien in der
   Reihenfolge seines `packages:`-Blocks. Nicht am Stück lesen — Dateitabelle in
   `docs/03`. Ein neues Skript gehört zu der Seite, die es benutzt.

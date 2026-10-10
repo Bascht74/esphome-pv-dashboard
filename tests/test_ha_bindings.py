@@ -76,6 +76,12 @@ class Zuordnung(unittest.TestCase):
     def test_standard_sind_entity_ids(self):
         for k, v in self.subs.items():
             if k.startswith("ha_") and not k.endswith("_faktor"):
+                if k.endswith("_energy_total") and k.startswith("ha_dev"):
+                    self.assertEqual(v, "none", k)   # nur fuer ha_dev<N>_energy: statistik
+                    continue
+                if re.match(r"^ha_pv\d_fc_d\d$", k):
+                    self.assertEqual(v, "none", k)   # Prognose je Dach: nur eigene Anlage
+                    continue
                 self.assertRegex(v, r"^[a-z_]+\.[a-z0-9_]+$", k)
 
     def test_eine_referenz_je_platz(self):
@@ -213,6 +219,260 @@ class NichtBelegt(unittest.TestCase):
                 else:
                     self.assertEqual(x[f"e_{k}"], v)
                     self.assertEqual(x[f"b_{k}"], "constexpr bool B = true;")
+
+
+def esphome_substitution(subs, werte):
+    """werte (Name -> Text mit ${...}) durch ESPHomes Substitution schicken."""
+    from esphome import yaml_util
+    from esphome.components.substitutions import do_substitution_pass
+    y = "substitutions:\n" + "".join(f"  {k}: {v}\n" for k, v in subs.items()) + "x:\n"
+    for k, v in werte.items():
+        y += f"  {k}: |-\n" + "".join(f"    {z}\n" for z in v.split("\n"))
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "t.yaml"
+        p.write_text(y, encoding="utf-8")
+        return do_substitution_pass(yaml_util.load_yaml(p))["x"]
+
+
+TZ_TEST = __import__("datetime").timezone(__import__("datetime").timedelta(hours=2))
+
+
+def ha_jinja(vorlage, json_text=True, states=None, attrs=None, **kw):
+    """Vorlage wie Home Assistant rendern (Ausschnitt: today_at, now, as_datetime,
+    as_local, states, state_attr, tojson); "jetzt" ist der 10.10.2026, 13:20 (+02:00)."""
+    import datetime as dt
+    import json
+    from jinja2 import StrictUndefined
+    from jinja2.sandbox import ImmutableSandboxedEnvironment
+    tz = TZ_TEST
+    env = ImmutableSandboxedEnvironment(undefined=StrictUndefined)
+    env.globals.update(
+        today_at=lambda s="00:00": dt.datetime(2026, 10, 10, *map(int, s.split(":")), tzinfo=tz),
+        now=lambda: dt.datetime(2026, 10, 10, 13, 20, tzinfo=tz),
+        as_local=lambda d: d.astimezone(tz),
+        states=lambda e: (states or {}).get(e, "unknown"),
+        state_attr=lambda e, a: (attrs or {}).get((e, a)),
+        as_datetime=lambda v: v if isinstance(v, dt.datetime) else dt.datetime.fromisoformat(v))
+    env.filters["tojson"] = json.dumps
+    t = env.from_string(vorlage).render(**kw)
+    return json.loads(t) if json_text else t
+
+
+class TagesStatistik(unittest.TestCase):
+    """ha_<ziel>: statistik (10.10.2026): Tageswert aus recorder.get_statistics."""
+
+    def setUp(self):
+        try:
+            import esphome  # noqa: F401
+        except ImportError:
+            self.skipTest("esphome nicht importierbar -- mit der ESPHome-Umgebung starten")
+        self.text = PANEL.read_text(encoding="utf-8")
+
+    def test_ziele_und_quellen(self):
+        ziele = [z for z, _, _ in hb.TAGES_STAT]
+        self.assertEqual(ziele, [f"pv{i}_energy" for i in range(1, 9)] + [f"dev{d}_energy" for d in range(1, 6)]
+                         + [f"meter{m}_today" for m in range(5)])
+        for z, q, art in hb.TAGES_STAT:
+            with self.subTest(ziel=z):
+                self.assertIn(z, hb.NAMEN)
+                self.assertIn(q, hb.NAMEN)
+                self.assertEqual(art, "m" if z.startswith("pv") else "c")
+                self.assertEqual(hb.NAMEN[q]["art"], "n" if art == "m" else "z")
+
+    def test_substitution(self):
+        subs = {"ha_pv1_energy": "Statistik", "ha_pv1_power": "sensor.p1",
+                "ha_pv2_energy": "statistik", "ha_pv2_power": "none",
+                "ha_pv3_energy": "sensor.e3", "ha_pv3_power": "sensor.p3",
+                "ha_pv4_energy": "NONE", "ha_pv4_power": "sensor.p4"}
+        werte = {}
+        for i in range(1, 5):
+            werte[f"e{i}"] = hb.j_entity(f"ha_pv{i}_energy")
+            werte[f"b{i}"] = hb.j_belegt(f"ha_pv{i}_energy")
+            werte[f"q{i}"] = "<" + hb.j_stat_quelle(f"pv{i}_energy", f"pv{i}_power") + ">"
+            werte[f"a{i}"] = hb.j_stat_an(f"pv{i}_energy", f"pv{i}_power")
+        x = esphome_substitution(subs, werte)
+        self.assertEqual([x[f"e{i}"] for i in range(1, 5)], [hb.ERSATZ_ID, hb.ERSATZ_ID, "sensor.e3", hb.ERSATZ_ID])
+        self.assertEqual([x[f"b{i}"] for i in range(1, 5)], ["true", "true", "true", "false"])
+        self.assertEqual([x[f"q{i}"] for i in range(1, 5)], ["<sensor.p1>", "<>", "<>", "<>"])
+        self.assertEqual([x[f"a{i}"] for i in range(1, 5)], ["true", "false", "false", "false"])
+
+    def test_vorlage_rechnet(self):
+        """Stunden: Summe mean / 1000 (Leistung) bzw. change (Zaehler); leer ohne Zeile."""
+        subs = {f"ha_{n}": e["ent"] for n, e in hb.NAMEN.items() if not e["attr"]}
+        subs.update({"ha_pv1_energy": "statistik", "ha_dev2_energy": "statistik",
+                     "ha_dev2_energy_total": "sensor.zaehler2", "ha_meter1_today": "statistik",
+                     "ha_meter4_today": "statistik"})
+        x = esphome_substitution(subs, {"h": hb.jinja_heute(1000), "m": hb.jinja_heute(12000), "ids": hb.stat_ids()})
+        p1, m1, m4 = hb.NAMEN["pv1_power"]["ent"], hb.NAMEN["meter1_total"]["ent"], hb.NAMEN["meter4_total"]["ent"]
+        self.assertEqual(ha_jinja(x["ids"], json_text=False), "['%s', 'sensor.zaehler2', '%s', '%s']" % (p1, m1, m4))
+        zeile = lambda h, **w: dict(start=f"2026-10-10T{h - 1:02d}:00:00+00:00",  # noqa: E731
+                                    end=f"2026-10-10T{h:02d}:00:00+00:00", **w)
+        resp = {"statistics": {
+            p1: [zeile(6, mean=500.0), zeile(7, mean=1500.0), zeile(8)],
+            "sensor.zaehler2": [zeile(6, change=0.25), zeile(9, change=1.0)],
+            m1: [zeile(5, change=0)],
+        }}
+        r = ha_jinja(x["h"], response=resp)
+        v = r["v"].split(",")
+        self.assertEqual(len(v), len(hb.TAGES_STAT))
+        self.assertEqual(float(v[0]), 2.0)          # (500 + 1500) / 1000; Zeile ohne mean zaehlt 0
+        self.assertEqual(float(v[9]), 1.25)         # dev2
+        self.assertEqual(float(v[14]), 0.0)         # meter1: Zeile mit 0 -> 0, nicht leer
+        self.assertEqual(v[17], "")                 # meter4: keine Zeile -> leer
+        self.assertEqual([i for i, w in enumerate(v) if w], [0, 9, 14])
+        self.assertEqual(r["end"], "2026-10-10T09:00:00+00:00")
+        r = ha_jinja(x["m"], response={"statistics": {p1: [zeile(10, mean=1200.0)] * 3}})
+        self.assertEqual(float(r["v"].split(",")[0]), 0.3)   # 3 x 1200 / 12000
+        r = ha_jinja(x["h"], response={"statistics": {}})
+        self.assertEqual(r["v"], "," * (len(hb.TAGES_STAT) - 1))
+        self.assertTrue(r["end"].startswith("2026-10-10T00:00:00"))
+
+    def test_ziele_mit_ersatz_und_publish(self):
+        bloecke = sensor_bloecke(self.text)
+        for z, _, _ in hb.TAGES_STAT:
+            with self.subTest(ziel=z):
+                self.assertIn(f"(ha_{z} | string | lower | trim) == 'statistik'", bloecke[f"ha_{z}"][1])
+        m = re.search(r"sensor::Sensor \*const ZIEL\[(\d+)\] = \{([^}]*)\};", self.text)
+        self.assertIsNotNone(m)
+        self.assertEqual(int(m.group(1)), len(hb.TAGES_STAT))
+        self.assertEqual(m.group(2), ", ".join(f"id(ha_{z})" for z, _, _ in hb.TAGES_STAT))
+        # Abruf nur, wenn ein Ziel auf statistik steht; bestehende Statistik bleibt
+        self.assertIn("constexpr bool S_ANY = ", self.text)
+        self.assertIn("id(ha_fetch_stats).execute();", self.text)
+        self.assertEqual(self.text.count("action: recorder.get_statistics"), len(hb.ZEITRAEUME) + 1 + 2)
+
+
+class PrognoseJeDach(unittest.TestCase):
+    """ha_pv<N>_fc_d1..7 (10.10.2026): Seite Prognose je Dachflaeche."""
+
+    def setUp(self):
+        try:
+            import esphome  # noqa: F401
+        except ImportError:
+            self.skipTest("esphome nicht importierbar -- mit der ESPHome-Umgebung starten")
+        self.text = PANEL.read_text(encoding="utf-8")
+        self.subs = substitutions_block(self.text)
+
+    def test_schluessel_ohne_sensoren(self):
+        for i in range(1, 9):
+            for d in range(1, hb.FC_TAGE + 1):
+                with self.subTest(k=f"pv{i}_fc_d{d}"):
+                    self.assertEqual(self.subs.get(f"ha_pv{i}_fc_d{d}"), "none")
+                    self.assertNotIn(f"id: ha_pv{i}_fc_d{d}\n", self.text)
+                    self.assertNotIn(f"ha_pv{i}_fc_d{d}_faktor", self.subs)
+
+    def test_gruppen(self):
+        namen = [g["name"] for g in hb.GRUPPEN]
+        self.assertNotIn("Prognose", namen)
+        for i in range(8):
+            self.assertIn(f"id(fc_roof_live).execute({i}, @pv{i + 1}_power, @pv{i + 1}_energy);",
+                          hb.GRUPPEN[i]["code"])
+        self.assertNotIn("fc_today", self.text)
+        self.assertNotIn("fc_day", self.text)
+        self.assertNotIn("ha_wx_cond", self.text)
+
+    def _echte_halbstunden(self, tag=0, spitze=1.4475):
+        """detailedForecast wie die Solcast-Integration (period_start datetime)."""
+        import datetime as dt
+        t0 = dt.datetime(2026, 10, 10 + tag, tzinfo=TZ_TEST)
+        aus = []
+        for i in range(48):
+            p = spitze if i in (26, 27) else (0.5 if 16 <= i < 36 else 0.0)
+            aus.append({"period_start": t0 + dt.timedelta(minutes=30 * i), "pv_estimate": p,
+                        "pv_estimate10": round(p * 0.4, 4), "pv_estimate90": p * 1.3, "dampening_factor": 1.0})
+        return aus
+
+    def test_vorlage_dach(self):
+        subs = {f"ha_pv{i}_fc_d{d}": "none" for i in range(1, 9) for d in range(1, 8)}
+        subs.update({f"ha_pv1_fc_d{d}": f"sensor.solcast_sued_{d}" for d in range(1, 8)})
+        subs.update({"ha_pv6_fc_d1": "sensor.solcast_nord_heute", "ha_pv6_fc_d2": "FALSE",
+                     "ha_pv7_fc_d1": "sensor.solcast_weg"})
+        x = esphome_substitution(subs, {"t": hb.jinja_dach()})
+        self.assertNotIn("${", x["t"])
+        states = {f"sensor.solcast_sued_{d}": str(5.0 + d) for d in range(1, 8)}
+        states["sensor.solcast_sued_5"] = "unavailable"
+        states["sensor.solcast_nord_heute"] = "8.0105"
+        attrs = {(f"sensor.solcast_sued_{d}", "estimate10"): 1.0 + d * 0.5 for d in range(1, 8)}
+        attrs[("sensor.solcast_sued_1", "detailedForecast")] = self._echte_halbstunden()
+        attrs[("sensor.solcast_sued_2", "detailedForecast")] = self._echte_halbstunden(1)
+        attrs[("sensor.solcast_nord_heute", "estimate10")] = 4.2319
+        r = ha_jinja(x["t"], states=states, attrs=attrs)
+        # Flaeche 7: belegt, aber ohne Zustand -> Schluessel da, Tag 1 leer
+        self.assertEqual(sorted(r), ["a1", "a6", "a7", "b1", "b6", "b7", "d1", "d6", "d7", "e1", "e6", "e7"])
+        a = r["a1"].split(",")
+        self.assertEqual(len(a), 48)
+        self.assertEqual(a[26], "1.45")            # 1.4475 mit drei Stellen
+        self.assertEqual(a[0], "0")
+        self.assertEqual(a[16], "0.5")
+        self.assertEqual(r["b1"].split(",")[26], "0.579")
+        self.assertEqual(r["d1"], "6,7,8,9,,11,12")   # Tag 5 unavailable -> leer
+        self.assertEqual(r["e1"], "1.5,2,2.5,3,3.5,4,4.5")
+        self.assertEqual(r["a6"], "," * 47)            # ohne detailedForecast
+        self.assertEqual(r["d6"], "8.011,,,,,,")
+        self.assertEqual(r["e6"], "4.232,,,,,,")
+        self.assertEqual(r["d7"], ",,,,,,")
+        # Groesse: sechs Daecher mit vollen Halbstunden bleiben klein
+        self.assertLess(len(__import__("json").dumps(r)) * 6 / 3, 4000)
+
+    def test_heute_stundenbalken(self):
+        subs = {f"ha_{n}": e["ent"] for n, e in hb.NAMEN.items() if not e["attr"]}
+        subs.update({"ha_pv1_fc_d1": "sensor.solcast_sued", "ha_pv1_energy": "statistik",
+                     "ha_pv2_fc_d1": "sensor.solcast_west", "ha_pv2_power": "none",
+                     "ha_pv3_fc_d1": "sensor.solcast_ost"})
+        x = esphome_substitution(subs, {"h": hb.jinja_heute(1000), "m": hb.jinja_heute(12000),
+                                        "ids": hb.stat_ids(), "an": hb.j_kurve_an(3) + hb.j_kurve_an(2)})
+        p1, p3 = hb.NAMEN["pv1_power"]["ent"], hb.NAMEN["pv3_power"]["ent"]
+        # pv1 einmal (statistik und Balken), pv2 ohne Leistung nicht, pv3 nur Balken
+        self.assertEqual(ha_jinja(x["ids"], json_text=False), "['%s', '%s']" % (p1, p3))
+        self.assertEqual(x["an"], "truefalse")
+        zeile = lambda h, **w: dict(start=f"2026-10-10T{h - 1:02d}:00:00+00:00",  # noqa: E731
+                                    end=f"2026-10-10T{h:02d}:00:00+00:00", **w)
+        resp = {"statistics": {p1: [zeile(7, mean=812.5), zeile(8, mean=1500.0)], p3: [zeile(9, mean=20.0)]}}
+        r = ha_jinja(x["h"], response=resp)
+        c = r["c"].split(";")
+        self.assertEqual(len(c), 8)
+        h1 = c[0].split(",")
+        self.assertEqual(len(h1), 24)
+        # UTC 06:00 = 08:00 Ortszeit (+02:00)
+        self.assertEqual((h1[8], h1[9]), ("0.812", "1.5"))
+        self.assertEqual([i for i, v in enumerate(h1) if v], [8, 9])
+        self.assertEqual(c[1], "")                      # Flaeche 2: keine Leistung
+        self.assertEqual(c[2].split(",")[10], "0.02")
+        self.assertEqual(r["end"], "2026-10-10T09:00:00+00:00")
+        self.assertEqual(float(r["v"].split(",")[0]), 2.312)   # Tageswert pv1 unveraendert
+        r = ha_jinja(x["m"], response={"statistics": {p1: [zeile(10, mean=1200.0), zeile(10, mean=600.0)]}})
+        self.assertEqual(r["c"].split(";")[0], "0.9")    # Mittel der 5-min-Mittel in kW
+        self.assertEqual(r["c"].split(";")[2], "")
+
+    def test_abruf_und_antwort(self):
+        self.assertIn("action: weather.get_forecasts", self.text)
+        self.assertIn("id(fc_roof_fc).execute(k, ", self.text)
+        self.assertIn("id(fc_roof_hours).execute(k, ", self.text)
+        # Tagesreihe aus der Anlage nur ohne Prognose je Dach
+        self.assertIn("if (id(fc_roof_on) != 0)\n", self.text)
+        self.assertEqual(self.text.count("id(forecast_curve).make_call()"), 3)
+        m = re.search(r"constexpr bool S_ANY = ([^;]*);", self.text)
+        self.assertIn("ha_pv8_fc_d1", m.group(1))
+
+
+class StoerungAusText(unittest.TestCase):
+    """ha_inv<N>_fault nicht belegt: Statustext aus inv_fault_texts = Stoerung."""
+
+    def setUp(self):
+        self.text = PANEL.read_text(encoding="utf-8")
+        self.subs = substitutions_block(self.text)
+
+    def test_standards(self):
+        self.assertEqual(self.subs.get("inv_fault_texts"), '"Fault,Alarm"')
+        self.assertEqual(self.subs.get("inv_fault_hold_s"), '"300"')
+
+    def test_gruppe_nimmt_text_nur_ohne_entitaet(self):
+        for n in range(1, 5):
+            with self.subTest(wr=n):
+                self.assertIn(f"const bool f = B_inv{n}_fault ? id(ha_inv{n}_fault).state : "
+                              f"((id(ha_inv_fault_txt) >> {n - 1}) & 1u);", self.text)
+                self.assertIn(f"!B_inv{n}_fault && B_inv{n}_status", self.text)
+                self.assertIn(f"constexpr bool B_inv{n}_fault = ", self.text)
 
 
 if __name__ == "__main__":

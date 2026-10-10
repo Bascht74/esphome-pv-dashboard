@@ -169,3 +169,55 @@ feed_limit_pct: "60"
 # ha_bat1_current_faktor: "-1"                  # + = Entladen -> + = Laden
 # ha_wb1_power_faktor: "0.001"                  # W -> kW
 # ha_wb1_minutes_faktor: "0.0166667"            # s -> min
+#
+# Tageswert ohne eigene Entitaet: "statistik" statt der ID. Das Panel
+# rechnet ihn aus der Langzeitstatistik von Home Assistant
+# (recorder.get_statistics, ab 0 Uhr, alle 5 min, hinkt bis etwa 6 min
+# nach) -- ohne Helfer in Home Assistant:
+#   ha_pv<N>_energy     aus dem Mittel von ha_pv<N>_power (W)
+#   ha_meter<N>_today   aus dem Zuwachs von ha_meter<N>_total
+#   ha_dev<N>_energy    aus dem Zuwachs von ha_dev<N>_energy_total, einem
+#                       laufenden Zaehlerstand (Standard none, hier eintragen)
+# Die Quelle braucht Statistik (state_class measurement bzw. total/
+# total_increasing). Beispiele:
+#
+# ha_pv1_energy: statistik
+# ha_meter1_today: statistik
+# ha_dev1_energy: statistik
+# ha_dev1_energy_total: sensor.<steckdose>_energy
+#
+# Ohne Entitaet (none) rechnet das Panel auch die Summen: Erzeugung heute
+# = Summe der Wechselrichter-Tageswerte, Eigenverbrauch heute =
+# Hybrid-Erzeugung - Ueberschuss (docs/01).
+#
+# ha_pv_energy_today: none
+# ha_selfuse_energy_today: none
+#
+# Stoerung aus dem Statustext: ha_inv<N>_fault nicht belegt, ha_inv<N>_status
+# belegt -> ein Text aus inv_fault_texts (ganzer Text, Gross-/Klein-
+# schreibung egal) ist eine Stoerung. Sie haelt inv_fault_hold_s Sekunden
+# ueber den letzten Treffer hinaus (eine Schleife Normal <-> Fault bleibt
+# eine Meldung). Standards:
+#
+# ha_inv3_fault: none
+# ha_inv3_status: sensor.<wechselrichter>_device_state
+# inv_fault_texts: "Fault,Alarm"
+# inv_fault_hold_s: "300"
+#
+# Prognose je Dachflaeche (Seite Prognose, Heute / Vorschau): je Flaeche N
+# die Solcast-Tagesprognosen ihres eigenen Solcast-Eintrags (eine Anlage je
+# Dach in Solcast), d1 = heute .. d7 = Tag 7, Standard none. Eine Kachel
+# bekommt jede Flaeche, deren ha_pv<N>_fc_d1 belegt ist und einen Wert hat
+# (hoechstens sechs, in Flaechenreihenfolge). Gelesen werden der Zustand
+# (P50, kWh), das Attribut estimate10 (P10) und bei d1 detailedForecast
+# (Halbstunden). Die Ist-Balken kommen aus der Statistik von ha_pv<N>_power,
+# "bisher" aus ha_pv<N>_energy (ohne Wert: Summe der Balken). Fehlende Tage
+# duerfen none bleiben. Beispiel (deutsche Solcast-IDs, ein Eintrag je Dach):
+#
+# ha_pv1_fc_d1: sensor.solcast_<dach>_prognose_heute
+# ha_pv1_fc_d2: sensor.solcast_<dach>_prognose_morgen
+# ha_pv1_fc_d3: sensor.solcast_<dach>_prognose_tag_3
+# ha_pv1_fc_d4: sensor.solcast_<dach>_prognose_tag_4
+# ha_pv1_fc_d5: sensor.solcast_<dach>_prognose_tag_5
+# ha_pv1_fc_d6: sensor.solcast_<dach>_prognose_tag_6
+# ha_pv1_fc_d7: sensor.solcast_<dach>_prognose_tag_7

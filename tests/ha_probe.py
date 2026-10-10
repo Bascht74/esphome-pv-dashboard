@@ -40,7 +40,29 @@ Entitaet weg -> nur der Wert weg):
      bleiben sinnvoll, Unbekanntes kommt unveraendert durch
   N  Einspeisegrenze ohne Entitaet (ha_rule_limit none, ha-test.yaml): aus
      feed_limit_pct der Anlage, 60 -> "60 % aktiv"
+  O  Tageswerte aus der Statistik (ha-test.yaml, ha_<ziel>: statistik):
+     Flaeche 1 aus dem Mittel ihrer Leistung (Stunden + 5 min), Wasch-
+     maschine aus ha_dev2_energy_total, Einspeisung heute aus meter1_total
+     (change); die Probe rechnet aus ihren eigenen Antworten nach
+  P  Summen ohne Entitaet: Erzeugung heute = Summe der Wechselrichter
+     (Wert aendert sich mit, unavailable -> leer), Eigenverbrauch = WR 2..4
+     - Ueberschuss (docs/01) in "Gespart"
+  Q  Stoerung aus dem Statustext (ha_inv3_fault none, inv_fault_hold_s 4):
+     "FAULT" -> Meldung und roter Text, "Normal" -> haelt 4 s, dann weg;
+     Schleife Fault <-> Normal innerhalb der Haltezeit -> eine Meldung,
+     Anzahl 1; "Standby" -> keine
+  R  Prognose je Dach (Wunsch des Nutzers, 10.10.2026, ha-test.yaml): eine
+     Aktion liest Zustand, estimate10 und detailedForecast (Format wie die
+     echte Solcast-Integration: period_start als datetime) von
+     ha_pv<N>_fc_d1..7 -> Kacheln nur fuer Flaechen mit Wert heute, Titel
+     "bisher / Prognose kWh", Stundenbalken aus der Statistik, Tipp auf
+     Vorschau -> "6 Tage" mit der Summe der Folgetage; forecast_curve aus
+     der Summe der Daecher
   J  in keinem Label irgendwo "inf" oder "nan", ueber den ganzen Lauf
+  S  Ruhiger Start (Wunsch des Nutzers, 10.10.2026): nach dem Start und vor
+     dem ersten Wert aus HA ist im Schema nichts zu sehen -- kein Kasten,
+     keine Leitung, keine Kugel, auch nicht nach dem Anlauf der Animation;
+     mit den Referenzen erscheinen Geraete, Hausanschluss und Leitungen
 
 Liest keine secrets.yaml und nicht .pv-dashboard_anlage.yaml. Ergebnis:
 Exit-Code 0, wenn alle Faelle bestehen.
@@ -94,9 +116,11 @@ def today_at(s="00:00"):
 
 
 ATTR = {}
+STATE = {}
 env = ImmutableSandboxedEnvironment(undefined=StrictUndefined)
 env.globals.update(now=now, as_datetime=as_datetime, as_local=lambda d: d.astimezone(TZ), today_at=today_at,
-                   timedelta=dt.timedelta, state_attr=lambda e, a: ATTR.get((e, a)))
+                   timedelta=dt.timedelta, state_attr=lambda e, a: ATTR.get((e, a)),
+                   states=lambda e: STATE.get(e, "unknown"))
 env.filters["tojson"] = json.dumps
 
 
@@ -115,8 +139,34 @@ def E(name):
     return hb.NAMEN[name]["ent"]
 
 
+# Prognose je Dach (Fall R): IDs wie in tests/ha-test.yaml, Tageswerte P50 /
+# P10 in kWh nach dem Muster der echten Integration (Stand 10.10.2026)
+DACH = {
+    "sensor.solcast_test_sued_prognose_": [(6.9432, 3.112), (6.2651, 1.6718), (10.9892, 3.4028), (5.9857, 0.6437),
+                                           (7.0262, 1.6951), (11.1401, 3.3985), (7.5508, 1.2128)],
+    "sensor.solcast_test_west_prognose_": [(8.1593, 3.6992), (8.4717, 1.9855)],
+}
+DACH_TAG = ["heute", "morgen"] + [f"tag_{d}" for d in range(3, 8)]
+DACH_SPITZE = {"sensor.solcast_test_sued_prognose_": (1.4475, 13.0), "sensor.solcast_test_west_prognose_": (1.7, 15.0)}
+
+
+def dach_halbstunden(praefix, tag=0):
+    """detailedForecast wie Solcast: 48 Eintraege, period_start als datetime
+    in Ortszeit, pv_estimate / pv_estimate10 / pv_estimate90 in kW."""
+    spitze, mitte = DACH_SPITZE[praefix]
+    t0 = today_at("00:00") + dt.timedelta(days=tag)
+    aus = []
+    for i in range(48):
+        t = i / 2 + 0.25
+        p = round(max(0.0, spitze * (1 - ((t - mitte) / 5.5) ** 2)), 4) if 7.5 <= t <= 18.5 else 0.0
+        aus.append({"period_start": t0 + dt.timedelta(minutes=30 * i), "pv_estimate": p,
+                    "pv_estimate10": round(p * 0.45, 4), "pv_estimate90": round(p * 1.3, 4), "dampening_factor": 1.0})
+    return aus
+
+
 def zustaende():
-    state = {}
+    state = STATE
+    state.clear()
     for e in hb.TABELLE:
         ent = hb.entitaet(e)[1]
         v = e["demo"]
@@ -136,6 +186,13 @@ def zustaende():
     ATTR[("sun.sun", "next_rising")] = "2026-09-26T05:12:00+00:00"
     ATTR[("sun.sun", "next_setting")] = "2026-09-25T17:21:00+00:00"
     ATTR[(E("solcast_today"), "detailedForecast")] = parse(render(hb.DUMMY_DETAILED))
+    for praefix, tage in DACH.items():
+        for d, (p50, p10) in enumerate(tage):
+            ent = praefix + DACH_TAG[d]
+            state[ent] = str(p50)
+            ATTR[(ent, "estimate10")] = p10
+            ATTR[(ent, "detailedForecast")] = dach_halbstunden(praefix, d)
+    state["sensor.solcast_test_weg_prognose_heute"] = "unavailable"
     # Ausgangslage der Faelle
     del state[E("wb2_mode")]              # B: Referenz fehlt in HA ganz
     state[E("bat3_soc")] = "unavailable"  # C: Referenz nicht verfuegbar
@@ -145,7 +202,13 @@ def zustaende():
     return state
 
 
+SCHRITT = {"5minute": dt.timedelta(minutes=5), "hour": dt.timedelta(hours=1), "day": dt.timedelta(days=1)}
+FAKTOR = {"5minute": 1 / 12, "hour": 1, "day": 24, "month": 600}
+
+
 def statistik(data):
+    """Wie recorder.get_statistics: je ID Zeilen mit start, end, mean (W) und
+    change (kWh) -- beides fuer jede ID, die Vorlage nimmt, was sie braucht."""
     start = as_datetime(data["start_time"])
     per = data["period"]
     out = {}
@@ -155,13 +218,13 @@ def statistik(data):
             if per == "month":
                 nxt = t.replace(month=t.month + 1) if t.month < 12 else t.replace(year=t.year + 1, month=1)
             else:
-                nxt = t + (dt.timedelta(hours=1) if per == "hour" else dt.timedelta(days=1))
+                nxt = t + SCHRITT[per]
             if nxt > now():
                 break
             reihe.append({"start": t.astimezone(dt.timezone.utc).isoformat(),
                           "end": nxt.astimezone(dt.timezone.utc).isoformat(),
-                          "change": round((3 + n) * (1 + (i % 5) * 0.3)
-                                          * (24 if per == "day" else (600 if per == "month" else 1)) / 10, 2)})
+                          "mean": round(400 + 100 * n + 80 * (i % 5), 1),
+                          "change": round((3 + n) * (1 + (i % 5) * 0.3) * FAKTOR[per] / 10, 3)})
             t, i = nxt, i + 1
         out[sid] = reihe
     return {"statistics": out}
@@ -177,6 +240,7 @@ class FakeHA:
         self.select = []           # (entity_id, option) je select.select_option
         self.select_folgt = True   # HA uebernimmt die Option sofort in den Zustand
         self.select_fehler = False  # HA lehnt ab (wie eine unbekannte Option)
+        self.stat_heute = {}       # period -> letzte Antwort auf den Tagesabruf (types mean)
 
     async def verbinden(self, frist=60):
         self.cli = APIClient("127.0.0.1", PORT, None)
@@ -200,6 +264,14 @@ class FakeHA:
         v = ATTR.get((ent, attr)) if attr else self.state.get(ent)
         if v is not None:
             self.cli.send_home_assistant_state(ent, attr, v if isinstance(v, str) else str(v))
+
+    def heute(self, sid, art):
+        """Tageswert, wie das Panel ihn aus den eigenen Antworten rechnen muss."""
+        h = self.stat_heute.get("hour", {}).get("statistics", {}).get(sid, [])
+        m = self.stat_heute.get("5minute", {}).get("statistics", {}).get(sid, [])
+        if art == "m":
+            return sum(e["mean"] for e in h) / 1000 + sum(e["mean"] for e in m) / 12000
+        return sum(e["change"] for e in h) + sum(e["change"] for e in m)
 
     def setzen(self, name, wert):
         self.state[E(name)] = wert
@@ -226,6 +298,8 @@ class FakeHA:
                 resp = {data["entity_id"]: {"forecast": self.stunde if data["type"] == "hourly" else self.tag}}
             elif c.service == "recorder.get_statistics":
                 resp = statistik(data)
+                if "mean" in data.get("types", []):
+                    self.stat_heute[data["period"]] = resp
             else:
                 raise Exception(f"Action {c.service} not found")
             r = parse(render(c.response_template, response=resp)) if c.response_template else resp
@@ -235,9 +309,12 @@ class FakeHA:
             self.aktionen.append((c.service, False))
             self.cli.send_homeassistant_action_response(c.call_id, False, str(ex), b"")
 
-    async def bild(self, name):
+    async def bild(self, name, seite=None):
         if self.cli is None:
             return
+        if seite:
+            await self.dienst("probe_page", {"page": seite})
+            await asyncio.sleep(1.5)
         # snapshot.take ueberschreibt nie: alte Datei vorher weg
         (SHOTS / name).unlink(missing_ok=True)
         await self.dienst("probe_shot", {"name": name})
@@ -315,6 +392,12 @@ def bit(d, platz):
     return (d["dev"] >> dict(hb.PLAETZE)[platz]) & 1
 
 
+def zahl(text):
+    """Erste Zahl mit Dezimalkomma ("W · 6,0 kWh" -> 6.0), sonst None."""
+    m = re.search(r"-?\d+,\d+", text or "")
+    return float(m.group(0).replace(",", ".")) if m else None
+
+
 ERGEBNIS = []
 
 
@@ -324,6 +407,13 @@ def pruefe(fall, text, ok, info=""):
 
 
 async def ablauf(panel, ha, bilder):
+    # S: vor dem Verbinden, nach dem Anlauf der Flussanimation (150 Takte
+    # zu 20 ms) -- vorher stand dort nichts Pruefbares
+    d = await panel.warten(lambda d: d["ms"] > 6000, 30)
+    pruefe("S", "vor dem ersten Wert: kein Geraet, keine Leitung, keine Kugel im Schema",
+           d and d["dev"] == 0 and d["schema_vis"] == 0,
+           d and {k: d[k] for k in ("dev", "schema_vis", "schema_lines")})
+
     await ha.verbinden()
     print("verbunden", flush=True)
 
@@ -344,6 +434,10 @@ async def ablauf(panel, ha, bilder):
     pruefe("B", "Referenz fehlt in HA (Wallbox 2): Bit aus, Kasten weg", bit(d, "wb_2") == 0 and d["hid"]["wb2"] == 1)
     pruefe("B", "uebrige Geraete da", all(bit(d, p) for p, _ in hb.PLAETZE if p not in ("pv_8", "wb_2", "bat_3"))
            and d["hid"]["roof1"] == 0 and d["hid"]["wb1"] == 0 and d["hid"]["heatpump"] == 0, hex(d["dev"]))
+    # S: mit den Referenzen kommt das Schema
+    pruefe("S", "nach den Referenzen: Hausanschluss und Hausnetz da, Leitungen sichtbar",
+           bit(d, "grid") == 1 and d["hid"]["grid"] == 0 and d["hid"]["house"] == 0 and d["schema_lines"] > 20,
+           {k: d[k] for k in ("dev", "schema_vis", "schema_lines")})
     # C
     pruefe("C", "Referenz unavailable (Speicher 3): Bit aus, Kasten weg", bit(d, "bat_3") == 0 and d["hid"]["bat3"] == 1)
     # D
@@ -492,6 +586,123 @@ async def ablauf(panel, ha, bilder):
     ha.select_folgt = True
     if bilder:
         await ha.bild("probe_4_wallbox.bmp")
+
+    # O: Tageswerte aus der Statistik -- erst Stunden, dann 5 min ab deren Ende
+    ende = time.monotonic() + 60
+    while "5minute" not in ha.stat_heute and time.monotonic() < ende:
+        await asyncio.sleep(0.5)
+    pruefe("O", "Tagesabruf: Stunden, dann 5 min (types mean, change)",
+           "hour" in ha.stat_heute and "5minute" in ha.stat_heute, list(ha.stat_heute))
+    await asyncio.sleep(2.5)
+    for name, sid, art, feld in [
+            ("Flaeche 1 aus Mittel der Leistung", E("pv1_power"), "m", "pv_sub1"),
+            ("Waschmaschine aus ha_dev2_energy_total", "sensor.waschmaschine_energie_gesamt", "c", "dev2_d"),
+            ("Einspeisung heute aus meter1_total", E("meter1_total"), "c", "meter1_today")]:
+        soll = ha.heute(sid, art)
+        ist = zahl(panel.letzte["txt"][feld])
+        pruefe("O", f"{name}: {soll:.2f} kWh", ist is not None and soll > 0 and abs(ist - soll) <= 0.051,
+               repr(panel.letzte["txt"][feld]))
+    # P: Erzeugung heute = Summe der Wechselrichter, Eigenverbrauch nach docs/01
+    t = panel.letzte["txt"]
+    inv = [hb.NAMEN[f"inv{k}_energy"]["demo"] for k in range(1, 5)]
+    pruefe("P", f"Erzeugung heute ohne Entitaet: Summe WR {sum(inv):.1f}", t["val_gen"] == f"{sum(inv):.1f}".replace(
+        ".", ","), repr(t["val_gen"]))
+    eigen = sum(inv[1:]) - hb.NAMEN["meter4_today"]["demo"]
+    gespart = f"+{eigen * 0.30:.2f} €".replace(".", ",")
+    pruefe("P", f"Eigenverbrauch = WR 2..4 - Ueberschuss = {eigen:.1f} kWh -> Gespart {gespart}",
+           gespart in t["money_split"], repr(t["money_split"]))
+    ha.setzen("inv1_energy", "40.0")
+    soll = f"{40.0 + sum(inv[1:]):.1f}".replace(".", ",")
+    d = await panel.warten(lambda d: d["txt"]["val_gen"] == soll, 5)
+    pruefe("P", f"WR 1 aendert sich -> Summe {soll}", d, panel.letzte["txt"]["val_gen"])
+    ha.setzen("inv4_energy", "unavailable")
+    d = await panel.warten(lambda d: d["txt"]["val_gen"] == "", 5)
+    pruefe("P", "Tageswert eines WR unavailable -> Summe leer", d, repr(panel.letzte["txt"]["val_gen"]))
+    ha.setzen("inv4_energy", str(inv[3]))
+    d = await panel.warten(lambda d: d["txt"]["val_gen"] == soll, 5)
+    pruefe("P", "Wert kommt wieder -> Summe wieder da", d, panel.letzte["txt"]["val_gen"])
+    # R: Prognose je Dach
+    sued, west = DACH["sensor.solcast_test_sued_prognose_"], DACH["sensor.solcast_test_west_prognose_"]
+    k = lambda v: f"{v:.1f}".replace(".", ",")  # noqa: E731
+    d = await panel.warten(lambda d: d["fc"]["on"] == 3 and d["fc"]["tiles"] == 2, 30)
+    pruefe("R", "Kacheln nur fuer Flaechen mit Wert heute (1 und 2; 3 unavailable)", d, panel.letzte["fc"])
+    await asyncio.sleep(1.5)
+    fc = panel.letzte["fc"]
+    pruefe("R", "Kachel 1 heisst wie Flaeche 1", fc["t0n"] == "Dach Süd", repr(fc["t0n"]))
+    bisher = ha.heute(E("pv1_power"), "m")
+    m = re.match(r"^(\d+,\d) / (\d+,\d) kWh$", fc["t0"])
+    pruefe("R", f"Titel Flaeche 1: bisher {k(bisher)} / Prognose {k(sued[0][0])} kWh",
+           m and m.group(2) == k(sued[0][0]) and abs(float(m.group(1).replace(",", ".")) - bisher) <= 0.051,
+           repr(fc["t0"]))
+    pruefe("R", f"Kopfzeile: Prognose = Summe heute {k(sued[0][0] + west[0][0])} kWh",
+           f"/ Prognose {k(sued[0][0] + west[0][0])} kWh · Rest " in fc["total"], repr(fc["total"]))
+    pruefe("R", f"Stundenbalken aus der Statistik: {now().hour} volle Stunden je Dach",
+           fc["act"] == [now().hour, now().hour], fc["act"])
+    p = [dach_halbstunden(x) for x in DACH]
+    soll = sum((q[24]["pv_estimate"] + q[25]["pv_estimate"]) / 2 for q in p)
+    ist = panel.letzte["forecast_curve"].split(",")
+    pruefe("R", f"forecast_curve aus der Summe der Daecher (12 Uhr {soll:.2f})",
+           len(ist) == 16 and abs(float(ist[6]) - soll) <= 0.02, panel.letzte["forecast_curve"])
+    if bilder:
+        await ha.bild("probe_11_prognose.bmp", "forecast")
+    await ha.dienst("probe_fc_mode", {"mode": 1})
+    soll_t0 = "6 Tage " + k(sum(x for x, _ in sued[1:])) + " kWh"
+    soll_t1 = "6 Tage " + k(west[1][0]) + " kWh"
+    d = await panel.warten(lambda d: d["fc"]["mode"] == 1 and d["fc"]["t0"] == soll_t0, 4)
+    pruefe("R", f"Tipp Vorschau: Kachel 1 {soll_t0}", d, panel.letzte["fc"])
+    fc = panel.letzte["fc"]
+    pruefe("R", f"Vorschau: Kachel 2 nur morgen ({soll_t1})", fc["t1"] == soll_t1, repr(fc["t1"]))
+    pruefe("R", f"Vorschau: Kopfzeile Morgen {k(sued[1][0] + west[1][0])} kWh",
+           fc["total"].startswith(f"Morgen {k(sued[1][0] + west[1][0])} kWh · 6 Tage "), repr(fc["total"]))
+    if bilder:
+        await ha.bild("probe_12_prognose_vorschau.bmp", "forecast")
+    await ha.dienst("probe_fc_mode", {"mode": 0})
+    d = await panel.warten(lambda d: d["fc"]["mode"] == 0 and d["fc"]["t0"].endswith(f"/ {k(sued[0][0])} kWh"), 4)
+    pruefe("R", "Tipp Heute: zurueck auf bisher / Prognose", d, panel.letzte["fc"])
+
+    if bilder:
+        await ha.bild("probe_5_pv.bmp", "pv")
+        await ha.bild("probe_6_haus.bmp", "house")
+        await ha.bild("probe_7_netz.bmp", "grid")
+        await ha.bild("probe_8_uebersicht.bmp", "overview")
+
+    # Q: Stoerung aus dem Statustext (WR 3)
+    def stoerung(d):
+        return [a for a in d["alerts"] if a[0].lower().endswith(": fault")]
+
+    pruefe("Q", "Ausgang Normal: keine Stoerung WR 3", not stoerung(panel.letzte), panel.letzte["alerts"])
+    ha.setzen("inv3_status", "FAULT")
+    d = await panel.warten(lambda d: stoerung(d) and d["txt"]["inv_sub3"] == "FAULT", 4)
+    pruefe("Q", "Text FAULT (Gross-/Kleinschreibung egal) -> Meldung, Zweitzeile FAULT", d,
+           (panel.letzte["alerts"], panel.letzte["txt"]["inv_sub3"]))
+    if bilder:
+        await ha.bild("probe_9_meldungen.bmp", "alerts")
+        await ha.bild("probe_10_pv_stoerung.bmp", "pv")
+        await ha.dienst("probe_page", {"page": "overview"})
+    ha.setzen("inv3_status", "Normal")
+    await asyncio.sleep(2)
+    pruefe("Q", "Normal: Meldung haelt (inv_fault_hold_s 4)", stoerung(panel.letzte), panel.letzte["alerts"])
+    d = await panel.warten(lambda d: not stoerung(d) and d["txt"]["inv_sub3"].startswith("W ·"), 8)
+    pruefe("Q", "nach der Haltezeit: Meldung weg, Zweitzeile wieder normal", d,
+           (panel.letzte["alerts"], panel.letzte["txt"]["inv_sub3"]))
+    ha.setzen("inv3_status", "Fault")
+    d = await panel.warten(lambda d: stoerung(d), 4)
+    n0 = len(panel.alle)
+    anzahl = stoerung(panel.letzte)[0][1] if d else -1
+    for _ in range(3):
+        ha.setzen("inv3_status", "Normal")
+        await asyncio.sleep(1.2)
+        ha.setzen("inv3_status", "Fault")
+        await asyncio.sleep(1.2)
+    zeilen = panel.alle[n0:]
+    pruefe("Q", f"Schleife Fault <-> Normal: Meldung durchgehend offen, Anzahl bleibt {anzahl}",
+           d and zeilen and all(len(stoerung(x)) == 1 and stoerung(x)[0][1] == anzahl for x in zeilen),
+           [x["alerts"] for x in zeilen[-2:]])
+    ha.setzen("inv3_status", "Standby")
+    d = await panel.warten(lambda d: not stoerung(d), 9)
+    pruefe("Q", "Standby (kein Stoerungstext): nach der Haltezeit weg", d, panel.letzte["alerts"])
+    await asyncio.sleep(2)
+    pruefe("Q", "Standby bleibt ohne Meldung", not stoerung(panel.letzte), panel.letzte["alerts"])
 
     # H
     await ha.trennen()

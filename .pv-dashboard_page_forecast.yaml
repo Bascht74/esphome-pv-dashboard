@@ -1,269 +1,578 @@
 ##############################################################################
-# Package: Seite 3 -- Prognose (Solcast)
+# Package: Seite 3 -- Prognose je Dachflaeche (Solcast)
 #
-# Auf Wunsch des Nutzers (25.09.2026): die Solcast-Prognose, wie sie der
-# Blueprint ha-pv-optimizer (github.com/Bascht74/ha-pv-optimizer) benutzt.
-# Er liest aus der Solcast-Integration (HACS) die Tagesprognose mit dem
-# Attribut detailedForecast (Halbstunden, pv_estimate / pv_estimate10 /
-# pv_estimate90 in kW), die verbleibende Energie heute, die aktuelle
-# Leistung, die naechste Stunde und die Folgetage (morgen, Tag 3, Tag 4,
-# je mit estimate10). Diese Seite zeigt genau das:
+# Auf Wunsch des Nutzers (10.10.2026): je Dachflaeche eine kleine Grafik
+# wie das Energie-Dashboard von Home Assistant, dazu oben ein Umschalter
+# Heute / Vorschau. Quelle ist je Dach ein eigener Solcast-Eintrag
+# (ha_pv<N>_fc_d1 .. _d7, .pv-dashboard_ha.yaml); eine Kachel bekommt jede
+# Flaeche, deren Prognose "heute" einen Wert hat -- hoechstens sechs, in
+# der Reihenfolge der Flaechen 1..8.
 #
-#   Heute       P50 mit Spanne P10..P90, Rest heute, jetzt, naechste
-#               Stunde, Spitze mit Uhrzeit, Stand und API-Abrufe
-#   Verlauf     Halbstunden 05:00..22:00: Band P10..P90, Linie P50,
-#               Marke fuer jetzt
-#   Folgetage   sieben Tage: P50 als Balken, P10..P90 als Strich, dazu das
-#               Wetterbild des Tages (DWD, von der Seite Wetter)
+#   Heute     je Dach Stundenbalken der Ist-Leistung (Stundenmittel aus der
+#             Statistik in kW, laufende Stunde halb deckend), Linie P50
+#             (weiss, 3 px), Linie P10 (hell, 2 px, 70 %), Marke jetzt
+#             (cyan). Titel: Name, "bisher / Prognose kWh". Kopfzeile:
+#             Summe aller Kacheln -- bisher, Prognose, Rest, jetzt.
+#   Vorschau  je Dach die kommenden sechs Tage (morgen bis Tag 7) als
+#             Balken P50, darin der Teil bis P10 dunkel. Titel: Summe der
+#             sechs Tage. Kopfzeile: morgen und sechs Tage ueber alle Daecher.
 #
-# P10 ist die vorsichtige, P90 die mutige Schaetzung; der Blueprint mischt
-# P50 und P10 (blend_p50_anteil). Die Mischung rechnet der Blueprint,
-# hier stehen die Rohwerte.
+# P90 zeigt die Seite bewusst nicht (Wunsch des Nutzers): P50 ist die
+# Erwartung, P10 die vorsichtige Untergrenze.
 #
-# Drei Skripte gehoeren dazu; kuenftige Sensoren rufen nur diese auf, bis
-# dahin stehen Striche:
-#   fc_today   Kennzahlen heute       fc_slots  Halbstunden heute
-#   fc_day     ein Folgetag
+# Massstab: EIN Massstab fuer alle Kacheln (Heute in kW, Vorschau in kWh),
+# auf einen runden Wert aufgerundet und in der Legende genannt. So sind die
+# Daecher vergleichbar -- ein kleines Dach hat sichtbar kleinere Balken.
 #
-# Flaeche x 4..1276, y 84..736.
-#   Heute     x 4, y 84, 400 x 300, innen 378 x 278: Titel 0..17,
-#             P50 30..69 (f_val_xl 39), Einheit 71..88, Spanne 94..114,
-#             Linie 124, zwei Zeilen Kennzahlen: Beschriftung 134..154 /
-#             194..214, Wert 156..181 / 216..241, Uhrzeit der Spitze
-#             243..260, Stand 261..278
-#   Verlauf   x 412, y 84, 864 x 300, innen 842 x 278: Titel 0..17, Flaeche
-#             30..240 (210), Grundlinie 240, Uhrzeiten 248..265; 34 Plaetze
-#             je 24,8 px
-#   Tage      x 4, y 392, 1272 x 344, innen 1250 x 322: Titel 0..17, sieben
-#             Spalten je 178,6: Tag 28..50, Wetterbild 54..98 (f_wx_l),
-#             Balken 110..262 (152), P50 268..293 (f_val_m), P10..P90
-#             296..313 -> Reserve 9
+# Zeitachse Heute: volle Stunden um alle Halbstunden mit Prognose oder Ist
+# ueber 0 (gemeinsam fuer alle Kacheln), mindestens 8, hoechstens 20 Stunden.
+#
+# Skripte (kuenftige Quellen rufen nur diese auf; bis dahin bleibt die
+# Seite leer mit Hinweis):
+#   fc_roof_fc     Prognose eines Daches (Halbstunden heute, Tage 1..7)
+#   fc_roof_hours  Stundenmittel heute und laufende Stunde eines Daches
+#   fc_roof_live   Leistung jetzt und Ertrag heute eines Daches
+#   fc_mode_set    Heute (0) / Vorschau (1)
+#   fc_redraw      Kacheln anordnen und zeichnen (ruft fc_text)
+#   fc_text        nur die Texte (Kopfzeile, Kacheltitel)
+#
+# Flaeche x 4..1276, y 84..736:
+#   Kopfzeile y 84..128: Umschalter x 4, 220 x 44 (Pille wie Seite
+#             Wallboxen, Rahmen 1, zwei Teile je 108 x 38 bei x 2 / 110,
+#             y 2); Summen x 240, y 95, f_text 22 -> 95..117; Legende
+#             x 850..1276, y 97, f_unit 17 -> 97..114.
+#   Kacheln   y 136..736 (600), Abstand 8. Spalten je nach Zahl der Daecher
+#             n: 1 -> 1, 2 -> 2, 3 -> 3, 4 -> 2, 5/6 -> 3; eine Reihe 600
+#             hoch, zwei je 296 (136 / 440). Breite: Spalte c von
+#             4 + 1280 * c / Spalten bis 4 + 1280 * (c + 1) / Spalten - 8,
+#             gerundet: drei Spalten 419 / 418 / 419 (x 4, 431, 857), zwei
+#             632 (x 4, 644). Innen W = Breite - 22, H = Hoehe - 22
+#             (pad_tile 10, Rahmen 1): 397 x 274 bei sechs Kacheln.
+#   In der Kachel (Rechnung fuer H 274):
+#     Titel   Name 0..22 (f_text 22), Wert 1..22 (f_val_s 21), je halbe Breite
+#     Heute   Diagramm 32..B mit B = H - 26 = 248 (216 hoch), Uhrzeiten
+#             B + 6 .. B + 23 = 254..271 (f_unit 17) -> Reserve 3
+#     Vorschau Werte 30..50 (f_text_s 20), Balken 56..B2 mit B2 = H - 46 =
+#             228 (172 hoch), Tag B2 + 4 .. B2 + 24 = 232..252 (f_text_s
+#             20), P10 B2 + 26 .. B2 + 43 = 254..271 (f_unit 17) -> Reserve 3
+#   Die Kinder einer Kachel haben keine eigene id; die Skripte erreichen sie
+#   ueber die Reihenfolge (lv_obj_get_child), sie steht an den Bloecken.
+#   Geometrie in der Kachel rechnet fc_redraw zur Laufzeit; die Werte im
+#   YAML sind nur der Ausgangszustand fuer sechs Kacheln.
 ##############################################################################
 
 globals:
-  # Halbstunden heute (48 Plaetze ab 00:00, kW) fuer den Verlauf; die Marke
-  # "jetzt" braucht sie nicht, das Band aber beim Neuzeichnen.
-  # Start mit NAN (kein Wert), nicht 0: Sonst zeichnete das Intervall vor
-  # den ersten Daten eine Null-Linie statt leer zu bleiben.
-  - id: fc_p50
-    type: std::array<float, 48>
+  # 0 = Heute, 1 = Vorschau
+  - id: fc_mode
+    type: int
     restore_value: false
-    initial_value: '[] { std::array<float, 48> a; a.fill(NAN); return a; }()'
-  - id: fc_p10
-    type: std::array<float, 48>
+    initial_value: '0'
+  # Daecher mit Prognose (Bit k = Flaeche k + 1), gesetzt von fc_roof_fc
+  - id: fc_roof_on
+    type: uint32_t
     restore_value: false
-    initial_value: '[] { std::array<float, 48> a; a.fill(NAN); return a; }()'
-  - id: fc_p90
-    type: std::array<float, 48>
+    initial_value: '0'
+  # Je Dach: Halbstunden heute P50 / P10 in kW (48 Plaetze ab 00:00), Tage
+  # 1..7 P50 / P10 in kWh, Stundenmittel heute in kW (24 Plaetze), Mittel
+  # der laufenden Stunde in kW, Leistung jetzt in W, Ertrag heute in kWh.
+  # Start mit NAN = kein Wert.
+  - id: fc_r_p50
+    type: std::array<std::array<float, 48>, 8>
     restore_value: false
-    initial_value: '[] { std::array<float, 48> a; a.fill(NAN); return a; }()'
-  # Folgetage: je P50, P10, P90 in kWh, NAN = kein Wert
-  - id: fc_days
-    type: std::array<float, 21>
+    initial_value: '[] { std::array<std::array<float, 48>, 8> a; for (auto &r : a) r.fill(NAN); return a; }()'
+  - id: fc_r_p10
+    type: std::array<std::array<float, 48>, 8>
     restore_value: false
-    initial_value: '{NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN}'
+    initial_value: '[] { std::array<std::array<float, 48>, 8> a; for (auto &r : a) r.fill(NAN); return a; }()'
+  - id: fc_r_d50
+    type: std::array<std::array<float, 7>, 8>
+    restore_value: false
+    initial_value: '[] { std::array<std::array<float, 7>, 8> a; for (auto &r : a) r.fill(NAN); return a; }()'
+  - id: fc_r_d10
+    type: std::array<std::array<float, 7>, 8>
+    restore_value: false
+    initial_value: '[] { std::array<std::array<float, 7>, 8> a; for (auto &r : a) r.fill(NAN); return a; }()'
+  - id: fc_r_act
+    type: std::array<std::array<float, 24>, 8>
+    restore_value: false
+    initial_value: '[] { std::array<std::array<float, 24>, 8> a; for (auto &r : a) r.fill(NAN); return a; }()'
+  - id: fc_r_cur
+    type: std::array<float, 8>
+    restore_value: false
+    initial_value: '[] { std::array<float, 8> a; a.fill(NAN); return a; }()'
+  - id: fc_r_now
+    type: std::array<float, 8>
+    restore_value: false
+    initial_value: '[] { std::array<float, 8> a; a.fill(NAN); return a; }()'
+  - id: fc_r_done
+    type: std::array<float, 8>
+    restore_value: false
+    initial_value: '[] { std::array<float, 8> a; a.fill(NAN); return a; }()'
+  # Welche Flaeche (0..7) in Kachel 0..5 steht, -1 = keine (fc_redraw)
+  - id: fc_tile_roof
+    type: std::array<int, 6>
+    restore_value: false
+    initial_value: '{-1, -1, -1, -1, -1, -1}'
+  # Uhrzeit fuer die Seite in Minuten seit 0 Uhr, -1 = Uhr (dash_time).
+  # Nur der Screenshot-Lauf setzt sie, damit die Bilder nicht von der
+  # Uhrzeit des Laufs abhaengen.
+  - id: fc_clock
+    type: int
+    restore_value: false
+    initial_value: '-1'
+  # "a,,b" -> Zahlen; leeres Feld = NAN; hoechstens n Plaetze, Rest NAN
+  - id: fc_parse
+    type: std::function<void(const std::string &, float *, int)>
+    restore_value: false
+    initial_value: |-
+      [](const std::string &s, float *out, int n) {
+        for (int i = 0; i < n; i++)
+          out[i] = NAN;
+        size_t a = 0;
+        for (int i = 0; i < n && a <= s.size(); i++) {
+          size_t b = s.find(',', a);
+          if (b == std::string::npos)
+            b = s.size();
+          if (b > a) {
+            const std::string f = s.substr(a, b - a);
+            char *end = nullptr;
+            const float v = strtof(f.c_str(), &end);
+            if (end != f.c_str())
+              out[i] = v;
+          }
+          a = b + 1;
+        }
+      }
 
 script:
   # ---------------------------------------------------------------------
-  # Kennzahlen heute (Solcast-Integration):
-  #   p50, p10, p90  Tagesprognose in kWh (Zustand und Attribute
-  #                  estimate10 / estimate90 des Sensors "heute")
-  #   remaining      verbleibend heute in kWh
-  #   power_now      Leistung jetzt in W
-  #   next_hour      naechste Stunde in kWh
-  #   peak_kw        Spitze heute in kW, peak_time "HH:MM" (leer = keine)
-  #   updated        Zeit des letzten Abrufs "HH:MM" (leer = unbekannt)
-  #   api_used, api_limit  Abrufe heute; < 0 = unbekannt
-  #   NAN = kein Wert (Striche)
+  # Prognose eines Daches (Solcast-Eintrag der Flaeche):
+  #   roof    0..7 = Flaeche 1..8 (name_pv_1..8)
+  #   p50     48 kommagetrennte Halbstunden heute ab 00:00 in kW
+  #           (detailedForecast, pv_estimate); leeres Feld = kein Wert
+  #   p10     dasselbe fuer pv_estimate10
+  #   days    7 Tageswerte P50 in kWh (heute, morgen, Tag 3..7)
+  #   days10  7 Tageswerte P10 in kWh (Attribut estimate10)
+  # Hat "heute" keinen Wert, gilt das Dach als nicht da (keine Kachel).
+  # Zeichnet nicht selbst -- nach dem letzten Dach fc_redraw aufrufen.
   # ---------------------------------------------------------------------
-  - id: fc_today
+  - id: fc_roof_fc
     parameters:
-      p50: float
-      p10: float
-      p90: float
-      remaining: float
-      power_now: float
-      next_hour: float
-      peak_kw: float
-      peak_time: string
-      updated: string
-      api_used: int
-      api_limit: int
-    then:
-      - lambda: |-
-          auto &num = id(fmt_num);
-          lv_label_set_text(id(fc_val_p50), num(p50, "%.1f", "---,-").c_str());
-          const std::string span = "P10 bis P90: " + num(p10, "%.1f", "--,-") + " bis " + num(p90, "%.1f", "--,-") + " kWh";
-          lv_label_set_text(id(fc_val_span), span.c_str());
-          lv_label_set_text(id(fc_val_rest), num(remaining, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(fc_val_now), id(fmt_watt)(power_now, "--.---").c_str());
-          lv_label_set_text(id(fc_val_next), num(next_hour, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(fc_val_peak), num(peak_kw, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(fc_peak_time), peak_time.empty() ? "um --:-- Uhr" : ("um " + peak_time + " Uhr").c_str());
-          std::string foot = "Stand " + (updated.empty() ? std::string("--:--") : updated);
-          if (api_used >= 0)
-            foot += " · API " + std::to_string(api_used) + (api_limit > 0 ? " von " + std::to_string(api_limit) : std::string(""));
-          lv_label_set_text(id(fc_foot), foot.c_str());
-          id(data_seen)[6] = millis();
-
-  # ---------------------------------------------------------------------
-  # Halbstunden heute: je 48 kommagetrennte Werte in kW ab 00:00 (so
-  # liefert detailedForecast den Tag), p10 und p90 duerfen leer sein.
-  # Gezeigt werden 05:00 bis 22:00.
-  # ---------------------------------------------------------------------
-  - id: fc_slots
-    parameters:
+      roof: int
       p50: string
       p10: string
-      p90: string
+      days: string
+      days10: string
     then:
       - lambda: |-
-          auto parse = [](const std::string &s, std::array<float, 48> &out) {
-            out.fill(NAN);
-            int n = 0;
-            const char *q = s.c_str();
-            while (*q && n < 48) {
-              char *end = nullptr;
-              const float v = strtof(q, &end);
-              if (end == q)
-                break;
-              out[n++] = v;
-              q = end;
-              while (*q == ',' || *q == ' ')
-                q++;
-            }
-          };
-          parse(p50, id(fc_p50));
-          parse(p10, id(fc_p10));
-          parse(p90, id(fc_p90));
-      - script.execute: fc_redraw
-
-  # ---------------------------------------------------------------------
-  # Ein Folgetag:
-  #   day    0..6 (0 = heute, 1 = morgen, ...)
-  #   label  Beschriftung ("Heute", "Morgen", "Sa 27.09.")
-  #   cond   Wetterlage des Tages wie Home Assistant sie nennt ("sunny",
-  #          "partlycloudy", "rainy" ...), leer = kein Bild
-  #   p50, p10, p90  Tagesprognose in kWh, NAN = kein Wert
-  # ---------------------------------------------------------------------
-  - id: fc_day
-    parameters:
-      day: int
-      label: string
-      cond: string
-      p50: float
-      p10: float
-      p90: float
-    then:
-      - lambda: |-
-          if (day < 0 || day >= 7)
+          if (roof < 0 || roof > 7)
             return;
-          lv_obj_t *const lab[7] = {id(fc_day_0), id(fc_day_1), id(fc_day_2), id(fc_day_3), id(fc_day_4), id(fc_day_5), id(fc_day_6)};
-          lv_obj_t *const ico[7] = {id(fc_ico_0), id(fc_ico_1), id(fc_ico_2), id(fc_ico_3), id(fc_ico_4), id(fc_ico_5), id(fc_ico_6)};
-          lv_label_set_text(lab[day], label.c_str());
-          const auto c = id(wx_cond)(cond);
-          lv_label_set_text(ico[day], std::get<0>(c));
-          lv_obj_set_style_text_color(ico[day], lv_color_hex(std::get<1>(c)), 0);
-          auto &d = id(fc_days);
-          d[day * 3 + 0] = p50;
-          d[day * 3 + 1] = p10;
-          d[day * 3 + 2] = p90;
+          auto &parse = id(fc_parse);
+          parse(p50, id(fc_r_p50)[roof].data(), 48);
+          parse(p10, id(fc_r_p10)[roof].data(), 48);
+          parse(days, id(fc_r_d50)[roof].data(), 7);
+          parse(days10, id(fc_r_d10)[roof].data(), 7);
+          if (std::isfinite(id(fc_r_d50)[roof][0])) {
+            id(fc_roof_on) |= 1u << roof;
+            id(data_seen)[6] = millis();  // Datenalter, sys_refresh
+          } else {
+            id(fc_roof_on) &= ~(1u << roof);
+          }
+
+  # ---------------------------------------------------------------------
+  # Ist eines Daches aus der Statistik:
+  #   hours  24 kommagetrennte Stundenmittel heute in kW (Platz = Stunde
+  #          nach Ortszeit), leeres Feld = kein Wert
+  #   cur    Mittel der laufenden Stunde in kW, NAN = keins
+  # Zeichnet nicht selbst (fc_redraw).
+  # ---------------------------------------------------------------------
+  - id: fc_roof_hours
+    parameters:
+      roof: int
+      hours: string
+      cur: float
+    then:
+      - lambda: |-
+          if (roof < 0 || roof > 7)
+            return;
+          id(fc_parse)(hours, id(fc_r_act)[roof].data(), 24);
+          id(fc_r_cur)[roof] = cur;
+
+  # ---------------------------------------------------------------------
+  # Live-Werte eines Daches (Gruppe der Flaeche, jede Sekunde moeglich):
+  #   power   Leistung jetzt in W
+  #   energy  Ertrag heute in kWh ("bisher"); kein Wert -> Summe der
+  #           Stundenbalken
+  # Nur Texte, keine Geometrie (fc_text). Stempelt data_seen[6], wenn das
+  # Dach eine Prognose hat.
+  # ---------------------------------------------------------------------
+  - id: fc_roof_live
+    parameters:
+      roof: int
+      power: float
+      energy: float
+    then:
+      - lambda: |-
+          if (roof < 0 || roof > 7)
+            return;
+          id(fc_r_now)[roof] = power;
+          id(fc_r_done)[roof] = energy;
+          if ((id(fc_roof_on) >> roof) & 1u) {
+            // Datenalter Prognose: der Abruf kommt nur alle 30 min, die
+            // Leistung der Daecher mit Prognose haelt die Seite dazwischen frisch
+            id(data_seen)[6] = millis();
+            id(fc_text).execute();
+          }
+
+  # Umschalter Heute (0) / Vorschau (1): Teil leuchtet, Kacheln wechseln
+  - id: fc_mode_set
+    parameters:
+      mode: int
+    then:
+      - lambda: |-
+          id(fc_mode) = mode == 1 ? 1 : 0;
+          lv_obj_t *const S[2] = {id(fc_seg0), id(fc_seg1)};
+          lv_obj_t *const L[2] = {id(fc_seg0_lbl), id(fc_seg1_lbl)};
+          for (int i = 0; i < 2; i++) {
+            lv_obj_set_style_bg_opa(S[i], i == id(fc_mode) ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+            lv_obj_set_style_text_color(L[i], i == id(fc_mode) ? lv_color_hex($col_bg) : lv_color_hex($col_ink2), 0);
+          }
       - script.execute: fc_redraw
 
-  # Zeichnet Verlauf, Marke und Folgetage neu. Von Hand ruft es niemand;
-  # das interval unten zieht die Marke jede Minute nach.
+  # ---------------------------------------------------------------------
+  # Kacheln anordnen und zeichnen. Ruft das interval unten jede Minute
+  # (Marke jetzt, Rest), sonst nach neuen Daten bzw. dem Umschalter.
+  # ---------------------------------------------------------------------
   - id: fc_redraw
     then:
       - lambda: |-
-          // --- Verlauf 05:00..22:00 ---
-          lv_obj_t *const band[34] = {id(fc_band_00), id(fc_band_01), id(fc_band_02), id(fc_band_03), id(fc_band_04), id(fc_band_05), id(fc_band_06), id(fc_band_07), id(fc_band_08), id(fc_band_09), id(fc_band_10), id(fc_band_11), id(fc_band_12), id(fc_band_13), id(fc_band_14), id(fc_band_15), id(fc_band_16), id(fc_band_17), id(fc_band_18), id(fc_band_19), id(fc_band_20), id(fc_band_21), id(fc_band_22), id(fc_band_23), id(fc_band_24), id(fc_band_25), id(fc_band_26), id(fc_band_27), id(fc_band_28), id(fc_band_29), id(fc_band_30), id(fc_band_31), id(fc_band_32), id(fc_band_33)};
-          const auto &p50 = id(fc_p50), &p10 = id(fc_p10), &p90 = id(fc_p90);
-          float peak = 0.0f;
-          for (int i = 0; i < 34; i++) {
-            const int k = i + 10;
-            for (float v : {p50[k], p10[k], p90[k]})
-              if (std::isfinite(v))
-                peak = std::max(peak, v);
-          }
-          const bool known = peak > 0.0f;
-          if (!known)
-            peak = 1.0f;
-          const float H = 210.0f, BASE = 240.0f, SW = 24.7647f;
-          static lv_point_precise_t pts[34];
-          int np = 0;
-          for (int i = 0; i < 34; i++) {
-            const int k = i + 10;
-            const float lo = !std::isfinite(p10[k]) ? p50[k] : p10[k];
-            const float hi = !std::isfinite(p90[k]) ? p50[k] : p90[k];
-            if (!std::isfinite(lo) || !std::isfinite(hi)) {
-              lv_obj_add_flag(band[i], LV_OBJ_FLAG_HIDDEN);
-            } else {
-              const int y0 = (int) lroundf(BASE - hi / peak * H);
-              const int y1 = (int) lroundf(BASE - lo / peak * H);
-              lv_obj_set_y(band[i], y0);
-              lv_obj_set_height(band[i], std::max(y1 - y0, 2));
-              lv_obj_clear_flag(band[i], LV_OBJ_FLAG_HIDDEN);
-            }
-            if (std::isfinite(p50[k])) {
-              pts[np].x = (lv_value_precise_t) (SW * i + SW / 2);
-              pts[np].y = (lv_value_precise_t) (BASE - 30.0f - p50[k] / peak * H);  // Linie liegt bei y 30
-              np++;
-            }
-          }
-          lv_line_set_points(id(fc_line)->obj, pts, np);
-          if (np < 2)
-            lv_obj_add_flag(id(fc_line)->obj, LV_OBJ_FLAG_HIDDEN);
+          const uint32_t on = id(fc_roof_on);
+          const auto &P50 = id(fc_r_p50);
+          const auto &P10 = id(fc_r_p10);
+          const auto &D50 = id(fc_r_d50);
+          const auto &D10 = id(fc_r_d10);
+          const auto &ACT = id(fc_r_act);
+          const auto &CUR = id(fc_r_cur);
+          auto &num = id(fmt_num);
+          lv_obj_t *const T[6] = {id(fc_t0), id(fc_t1), id(fc_t2), id(fc_t3), id(fc_t4), id(fc_t5)};
+          static const char *const NAME[8] = {"${name_pv_1}", "${name_pv_2}", "${name_pv_3}", "${name_pv_4}",
+                                              "${name_pv_5}", "${name_pv_6}", "${name_pv_7}", "${name_pv_8}"};
+          static const char *const WTAG[7] = {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"};
+          const ESPTime jetzt = id(dash_time).now();
+          int m = id(fc_clock);
+          if (m < 0 && jetzt.is_valid())
+            m = jetzt.hour * 60 + jetzt.minute;
+          const int hnow = m >= 0 ? m / 60 : -1;
+          const bool vor = id(fc_mode) == 1;
+
+          // Welche Daecher: Flaechen 1..8 mit Prognose, hoechstens sechs
+          int roof[6], n = 0;
+          for (int k = 0; k < 8 && n < 6; k++)
+            if ((on >> k) & 1u)
+              roof[n++] = k;
+          for (int t = 0; t < 6; t++)
+            id(fc_tile_roof)[t] = t < n ? roof[t] : -1;
+          static const int COLS[7] = {1, 1, 2, 3, 2, 3, 3};
+          const int cols = COLS[n], rows = n > 3 ? 2 : 1;
+          if (n == 0)
+            lv_obj_clear_flag(id(fc_empty), LV_OBJ_FLAG_HIDDEN);
           else
-            lv_obj_clear_flag(id(fc_line)->obj, LV_OBJ_FLAG_HIDDEN);
-          lv_label_set_text(id(fc_scale), known ? ("Skala bis " + id(fmt_num)(peak, "%.1f", "--") + " kW").c_str() : "");
+            lv_obj_add_flag(id(fc_empty), LV_OBJ_FLAG_HIDDEN);
 
-          // Marke jetzt
-          auto now = id(dash_time).now();
-          const float pos = now.is_valid() ? (now.hour * 60 + now.minute - 300) / 30.0f : -1.0f;
-          if (pos < 0.0f || pos >= 34.0f) {
-            lv_obj_add_flag(id(fc_now), LV_OBJ_FLAG_HIDDEN);
+          // Zeitachse Heute: volle Stunden um alles ueber 0
+          int first = 48, last = -1;
+          for (int t = 0; t < n; t++) {
+            const int k = roof[t];
+            for (int i = 0; i < 48; i++) {
+              const float a = P50[k][i], b = P10[k][i];
+              if ((std::isfinite(a) && a > 0.0f) || (std::isfinite(b) && b > 0.0f)) {
+                first = std::min(first, i);
+                last = std::max(last, i);
+              }
+            }
+            for (int h = 0; h < 24; h++) {
+              if (std::isfinite(ACT[k][h]) && ACT[k][h] > 0.0f) {
+                first = std::min(first, 2 * h);
+                last = std::max(last, 2 * h + 1);
+              }
+            }
+          }
+          int h0 = first <= last ? first / 2 : 6, h1 = first <= last ? (last + 2) / 2 : 20;
+          while (h1 - h0 < 8) {
+            if (h0 > 0)
+              h0--;
+            if (h1 - h0 < 8 && h1 < 24)
+              h1++;
+          }
+          if (h1 - h0 > 20)
+            h1 = h0 + 20;
+          const int L = h1 - h0;
+
+          // Gemeinsame Massstaebe: Heute kW, Vorschau kWh
+          float top = 0.0f, dtop = 0.0f;
+          for (int t = 0; t < n; t++) {
+            const int k = roof[t];
+            for (int i = 2 * h0; i < 2 * h1; i++)
+              for (float v : {P50[k][i], P10[k][i]})
+                if (std::isfinite(v))
+                  top = std::max(top, v);
+            for (int h = h0; h < h1; h++) {
+              const float v = h == hnow ? CUR[k] : (hnow >= 0 && h > hnow ? NAN : ACT[k][h]);
+              if (std::isfinite(v))
+                top = std::max(top, v);
+            }
+            for (int d = 1; d < 7; d++)
+              for (float v : {D50[k][d], D10[k][d]})
+                if (std::isfinite(v))
+                  dtop = std::max(dtop, v);
+          }
+          auto rund = [](float v) -> float {
+            static const float S[] = {0.5f, 1, 1.5f, 2, 2.5f, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80,
+                                      100, 120, 150, 200, 250, 300, 400, 500};
+            for (float s : S)
+              if (v <= s)
+                return s;
+            return v;
+          };
+          const float sc = rund(top > 0.0f ? top * 1.04f : 1.0f), dsc = rund(dtop > 0.0f ? dtop * 1.04f : 1.0f);
+          lv_label_set_text(id(fc_scale_h), ("Skala " + num(sc, "%g", "--") + " kW").c_str());
+          lv_label_set_text(id(fc_scale_v), ("Skala " + num(dsc, "%g", "--") + " kWh").c_str());
+          if (vor) {
+            lv_obj_add_flag(id(fc_leg_h), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(id(fc_leg_v), LV_OBJ_FLAG_HIDDEN);
           } else {
-            lv_obj_set_x(id(fc_now), (int) lroundf(pos * SW) - 1);
-            lv_obj_clear_flag(id(fc_now), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(id(fc_leg_h), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(fc_leg_v), LV_OBJ_FLAG_HIDDEN);
           }
 
-          // --- Folgetage ---
-          lv_obj_t *const bar[7] = {id(fc_bar_0), id(fc_bar_1), id(fc_bar_2), id(fc_bar_3), id(fc_bar_4), id(fc_bar_5), id(fc_bar_6)};
-          lv_obj_t *const rng[7] = {id(fc_rng_0), id(fc_rng_1), id(fc_rng_2), id(fc_rng_3), id(fc_rng_4), id(fc_rng_5), id(fc_rng_6)};
-          lv_obj_t *const val[7] = {id(fc_dval_0), id(fc_dval_1), id(fc_dval_2), id(fc_dval_3), id(fc_dval_4), id(fc_dval_5), id(fc_dval_6)};
-          lv_obj_t *const sub[7] = {id(fc_dsub_0), id(fc_dsub_1), id(fc_dsub_2), id(fc_dsub_3), id(fc_dsub_4), id(fc_dsub_5), id(fc_dsub_6)};
-          const auto &d = id(fc_days);
-          float dpeak = 0.0f;
-          for (int i = 0; i < 21; i++)
-            if (std::isfinite(d[i]))
-              dpeak = std::max(dpeak, d[i]);
-          if (dpeak <= 0.0f)
-            dpeak = 1.0f;
-          const float DH = 150.0f, DBASE = 262.0f;
-          for (int i = 0; i < 7; i++) {
-            const float v = d[i * 3], lo = d[i * 3 + 1], hi = d[i * 3 + 2];
-            lv_label_set_text(val[i], id(fmt_num)(v, "%.1f", "--,-").c_str());
-            if (!std::isfinite(v)) {
-              lv_obj_add_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
-            } else {
-              const int h = std::max((int) lroundf(v / dpeak * DH), 2);
-              lv_obj_set_y(bar[i], (int) DBASE - h);
-              lv_obj_set_height(bar[i], h);
-              lv_obj_clear_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
+          // Beschriftung der Tage 1..6 (morgen ..), von 12 Uhr aus gerechnet
+          std::string tag[7];
+          for (int d = 1; d < 7; d++) {
+            if (!jetzt.is_valid()) {
+              tag[d] = "Tag " + std::to_string(d + 1);
+              continue;
             }
-            if (!std::isfinite(lo) || !std::isfinite(hi)) {
-              lv_obj_add_flag(rng[i], LV_OBJ_FLAG_HIDDEN);
-              lv_label_set_text(sub[i], (std::isinf(lo) || std::isinf(hi)) ? "" : "P10 bis P90 --");
+            const time_t mittag = jetzt.timestamp - (jetzt.hour * 3600 + jetzt.minute * 60 + jetzt.second) + 12 * 3600;
+            const ESPTime x = ESPTime::from_epoch_local(mittag + (time_t) d * 86400);
+            char b[16];
+            snprintf(b, sizeof(b), "%s %d.", WTAG[x.day_of_week - 1], x.day_of_month);
+            tag[d] = b;
+          }
+
+          static lv_point_precise_t pts[6][2][40];
+          auto show = [](lv_obj_t *o, bool s) {
+            if (s)
+              lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
+            else
+              lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+          };
+          for (int t = 0; t < 6; t++) {
+            lv_obj_t *tile = T[t];
+            if (t >= n) {
+              show(tile, false);
+              continue;
+            }
+            // Platz im Raster
+            const int r = t / cols, c = t % cols;
+            const int x0 = 4 + (int) lroundf(c * 1280.0f / cols), x1 = 4 + (int) lroundf((c + 1) * 1280.0f / cols) - 8;
+            const int y0 = rows == 1 ? 136 : 136 + r * 304, hh = rows == 1 ? 600 : 296;
+            lv_obj_set_pos(tile, x0, y0);
+            lv_obj_set_size(tile, x1 - x0, hh);
+            show(tile, true);
+            const int W = x1 - x0 - 22, H = hh - 22, k = roof[t];
+            lv_obj_t *name = lv_obj_get_child(tile, 0), *val = lv_obj_get_child(tile, 1);
+            lv_obj_t *ch = lv_obj_get_child(tile, 2), *cv = lv_obj_get_child(tile, 3);
+            lv_obj_set_width(name, W / 2 - 4);
+            lv_obj_set_x(val, W / 2);
+            lv_obj_set_width(val, W - W / 2);
+            lv_label_set_text(name, NAME[k]);
+            lv_obj_set_size(ch, W, H);
+            lv_obj_set_size(cv, W, H);
+            show(ch, !vor);
+            show(cv, vor);
+
+            // --- Heute: Balken, Linien, Marke, Uhrzeiten ---
+            const int CT = 32, B = H - 26, CH = B - CT;
+            const float SW = (float) W / L;
+            const int bw = std::max(2, (int) lroundf(SW * 0.62f));
+            lv_obj_t *base = lv_obj_get_child(ch, 0);
+            lv_obj_set_pos(base, 0, B);
+            lv_obj_set_width(base, W);
+            for (int j = 0; j < 20; j++) {
+              lv_obj_t *bar = lv_obj_get_child(ch, 1 + j);
+              const int h = h0 + j;
+              const bool lauf = h == hnow;
+              const float v = j >= L ? NAN : (lauf ? CUR[k] : (hnow >= 0 && h > hnow ? NAN : ACT[k][h]));
+              if (!std::isfinite(v) || v <= 0.0f) {
+                show(bar, false);
+                continue;
+              }
+              const int bh = std::max(1, (int) lroundf(std::min(v / sc, 1.0f) * CH));
+              lv_obj_set_pos(bar, (int) lroundf(j * SW + (SW - bw) * 0.5f), B - bh);
+              lv_obj_set_size(bar, bw, bh);
+              lv_obj_set_style_bg_opa(bar, lauf ? LV_OPA_50 : LV_OPA_COVER, 0);
+              show(bar, true);
+            }
+            for (int s = 0; s < 2; s++) {
+              const auto &A = s == 0 ? P10[k] : P50[k];
+              int np = 0;
+              for (int i = 2 * h0; i < 2 * h1 && np < 40; i++) {
+                if (!std::isfinite(A[i]))
+                  continue;
+                pts[t][s][np].x = (lv_value_precise_t) ((i - 2 * h0 + 0.5f) * SW * 0.5f);
+                pts[t][s][np].y = (lv_value_precise_t) (B - std::min(std::max(A[i], 0.0f) / sc, 1.0f) * CH);
+                np++;
+              }
+              lv_obj_t *line = lv_obj_get_child(ch, 21 + s);
+              lv_line_set_points(line, pts[t][s], np);
+              show(line, np >= 2);
+            }
+            lv_obj_t *mark = lv_obj_get_child(ch, 23);
+            if (m >= h0 * 60 && m <= h1 * 60) {
+              lv_obj_set_pos(mark, std::min((int) lroundf((m - h0 * 60) / 60.0f * SW) - 1, W - 2), CT);
+              lv_obj_set_height(mark, CH);
+              show(mark, true);
             } else {
-              const int y0 = (int) lroundf(DBASE - hi / dpeak * DH);
-              const int y1 = (int) lroundf(DBASE - lo / dpeak * DH);
-              lv_obj_set_y(rng[i], y0);
-              lv_obj_set_height(rng[i], std::max(y1 - y0, 2));
-              lv_obj_clear_flag(rng[i], LV_OBJ_FLAG_HIDDEN);
-              const std::string s = "P10 bis P90 " + id(fmt_num)(lo, "%.0f", "--") + " bis " + id(fmt_num)(hi, "%.0f", "--");
-              lv_label_set_text(sub[i], s.c_str());
+              show(mark, false);
+            }
+            const int step = L <= 8 ? 2 : (L <= 14 ? 3 : 4);
+            int li = 0;
+            for (int h = ((h0 + step - 1) / step) * step; h <= h1 && li < 7; h += step, li++) {
+              lv_obj_t *lab = lv_obj_get_child(ch, 24 + li);
+              const int cx = (int) lroundf((h - h0) * SW);
+              lv_obj_set_pos(lab, std::max(0, std::min(cx - 16, W - 32)), B + 6);
+              char b[4];
+              snprintf(b, sizeof(b), "%02d", h % 24);
+              lv_label_set_text(lab, b);
+              show(lab, true);
+            }
+            for (; li < 7; li++)
+              show(lv_obj_get_child(ch, 24 + li), false);
+
+            // --- Vorschau: sechs Tage, Balken P50 mit dunklem Teil bis P10 ---
+            const int VT = 56, B2 = H - 46, DH = B2 - VT;
+            const float CW = W / 6.0f;
+            const int dbw = (int) lroundf(CW * 0.56f);
+            lv_obj_t *base2 = lv_obj_get_child(cv, 0);
+            lv_obj_set_pos(base2, 0, B2);
+            lv_obj_set_width(base2, W);
+            for (int d = 0; d < 6; d++) {
+              const float v = D50[k][d + 1], q = D10[k][d + 1];
+              const int x = (int) lroundf(d * CW), cw = (int) lroundf((d + 1) * CW) - x;
+              const int bx = (int) lroundf(d * CW + (CW - dbw) * 0.5f);
+              int bh = 0;
+              lv_obj_t *bar = lv_obj_get_child(cv, 1 + d), *qb = lv_obj_get_child(cv, 7 + d);
+              if (std::isfinite(v) && v > 0.0f) {
+                bh = std::max(2, (int) lroundf(std::min(v / dsc, 1.0f) * DH));
+                lv_obj_set_pos(bar, bx, B2 - bh);
+                lv_obj_set_size(bar, dbw, bh);
+                show(bar, true);
+              } else {
+                show(bar, false);
+              }
+              if (std::isfinite(q) && q > 0.0f) {
+                const int qh = std::max(2, (int) lroundf(std::min(q / dsc, 1.0f) * DH));
+                lv_obj_set_pos(qb, bx, B2 - qh);
+                lv_obj_set_size(qb, dbw, qh);
+                show(qb, true);
+              } else {
+                show(qb, false);
+              }
+              lv_obj_t *vl = lv_obj_get_child(cv, 13 + d), *dl = lv_obj_get_child(cv, 19 + d);
+              lv_obj_t *pl = lv_obj_get_child(cv, 25 + d);
+              lv_obj_set_pos(vl, x, 30);
+              lv_obj_set_width(vl, cw);
+              // ab 100 kWh ohne Nachkommastelle, sonst wird die Spalte zu eng.
+              // Tag ohne Wert (nicht belegt oder nicht verfuegbar): leer
+              lv_label_set_text(vl, std::isfinite(v) ? num(v, v >= 99.95f ? "%.0f" : "%.1f", "").c_str() : "");
+              lv_obj_set_pos(dl, x, B2 + 4);
+              lv_obj_set_width(dl, cw);
+              lv_label_set_text(dl, tag[d + 1].c_str());
+              lv_obj_set_pos(pl, x, B2 + 26);
+              lv_obj_set_width(pl, cw);
+              lv_label_set_text(pl, std::isfinite(q) ? ("P10 " + num(q, q >= 99.95f ? "%.0f" : "%.1f", "")).c_str() : "");
             }
           }
+      - script.execute: fc_text
+
+  # Nur die Texte: Kopfzeile (Summen ueber die gezeigten Daecher) und die
+  # Werte in den Kacheltiteln. Rest = P50 der Halbstunden ab jetzt (die
+  # laufende anteilig); bisher = Ertrag heute, ohne Wert die Summe der
+  # Stundenbalken.
+  - id: fc_text
+    then:
+      - lambda: |-
+          auto &num = id(fmt_num);
+          const auto &P50 = id(fc_r_p50);
+          const auto &D50 = id(fc_r_d50);
+          const auto &D10 = id(fc_r_d10);
+          const auto &ACT = id(fc_r_act);
+          lv_obj_t *const T[6] = {id(fc_t0), id(fc_t1), id(fc_t2), id(fc_t3), id(fc_t4), id(fc_t5)};
+          const ESPTime jetzt = id(dash_time).now();
+          int m = id(fc_clock);
+          if (m < 0 && jetzt.is_valid())
+            m = jetzt.hour * 60 + jetzt.minute;
+          const int hnow = m >= 0 ? m / 60 : -1;
+          const bool vor = id(fc_mode) == 1;
+          auto add = [](float &a, float v) {
+            if (std::isfinite(v))
+              a = std::isfinite(a) ? a + v : v;
+          };
+          float done_s = NAN, prog_s = NAN, rest_s = NAN, now_s = NAN, d1_s = NAN, six_s = NAN, six10_s = NAN;
+          int n = 0;
+          for (int t = 0; t < 6; t++) {
+            const int k = id(fc_tile_roof)[t];
+            if (k < 0)
+              continue;
+            n++;
+            float done = id(fc_r_done)[k];
+            if (!std::isfinite(done)) {
+              done = NAN;
+              for (int h = 0; h < 24 && h < hnow; h++)
+                add(done, ACT[k][h]);
+              if (hnow >= 0)
+                add(done, id(fc_r_cur)[k] * (m % 60) / 60.0f);
+            }
+            float prog = D50[k][0];
+            if (!std::isfinite(prog)) {
+              prog = NAN;
+              for (int i = 0; i < 48; i++)
+                add(prog, P50[k][i] * 0.5f);
+            }
+            float rest = NAN;
+            if (m >= 0) {
+              for (int i = 0; i < 48; i++) {
+                const int ende = (i + 1) * 30;
+                if (ende > m)
+                  add(rest, P50[k][i] * 0.5f * std::min(1.0f, (ende - m) / 30.0f));
+              }
+            }
+            float six = NAN, six10 = NAN;
+            for (int d = 1; d < 7; d++) {
+              add(six, D50[k][d]);
+              add(six10, D10[k][d]);
+            }
+            add(done_s, done);
+            add(prog_s, prog);
+            add(rest_s, rest);
+            add(now_s, id(fc_r_now)[k] * 0.001f);
+            add(d1_s, D50[k][1]);
+            add(six_s, six);
+            add(six10_s, six10);
+            const std::string v = vor ? "6 Tage " + num(six, "%.1f", "--,-") + " kWh"
+                                      : num(done, "%.1f", "--,-") + " / " + num(prog, "%.1f", "--,-") + " kWh";
+            lv_label_set_text(lv_obj_get_child(T[t], 1), v.c_str());
+          }
+          std::string s;
+          if (n == 0)
+            s = "";
+          else if (vor)
+            s = "Morgen " + num(d1_s, "%.1f", "--,-") + " kWh · 6 Tage " + num(six_s, "%.1f", "--,-") + " kWh · P10 " +
+                num(six10_s, "%.1f", "--,-") + " kWh";
+          else
+            s = "bisher " + num(done_s, "%.1f", "--,-") + " / Prognose " + num(prog_s, "%.1f", "--,-") + " kWh · Rest " +
+                num(rest_s, "%.1f", "--,-") + " kWh · jetzt " + num(now_s, "%.1f", "--,-") + " kW";
+          lv_label_set_text(id(fc_total), s.c_str());
 
 interval:
   - interval: 60s
@@ -277,163 +586,761 @@ lvgl:
       scrollable: false
       scroll_dir: NONE
       widgets:
-        # ---------------- Heute ---------------------------------------------
+        # ---------------- Kopfzeile: Umschalter, Summen, Legende ----------
         - obj:
-            styles: st_tile
-            scrollbar_mode: 'off'
-            scrollable: false
-            scroll_dir: NONE
             x: 4
             y: 84
-            width: 400
-            height: 300
-            widgets:
-              - label: { x: 0, y: 0, width: 378, height: 17, long_mode: DOT, styles: st_label, text: "SOLCAST · HEUTE" }
-              - label: { id: fc_val_p50, x: 0, y: 30, width: 378, height: 39, long_mode: DOT, text: "---,-", text_font: f_val_xl, text_color: $col_solar }
-              - label: { x: 0, y: 71, width: 378, height: 17, long_mode: DOT, text: "kWh erwartet (P50)", styles: st_unit }
-              - label: { id: fc_val_span, x: 0, y: 94, width: 378, height: 20, long_mode: DOT, text: "P10 bis P90: --,- bis --,- kWh", text_font: f_text_s, text_color: $col_ink2 }
-              - obj: { x: 0, y: 124, width: 378, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { x: 0, y: 134, width: 184, height: 20, long_mode: DOT, text: "Rest heute in kWh", text_font: f_text_s, text_color: $col_ink3 }
-              - label: { id: fc_val_rest, x: 0, y: 156, width: 184, height: 25, long_mode: DOT, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { x: 194, y: 134, width: 184, height: 20, long_mode: DOT, text: "Jetzt in W", text_font: f_text_s, text_color: $col_ink3 }
-              - label: { id: fc_val_now, x: 194, y: 156, width: 184, height: 25, long_mode: DOT, text: "--.---", text_font: f_val_m, text_color: $col_ink }
-              - label: { x: 0, y: 194, width: 184, height: 20, long_mode: DOT, text: "Nächste Stunde in kWh", text_font: f_text_s, text_color: $col_ink3 }
-              - label: { id: fc_val_next, x: 0, y: 216, width: 184, height: 25, long_mode: DOT, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { x: 194, y: 194, width: 184, height: 20, long_mode: DOT, text: "Spitze in kW", text_font: f_text_s, text_color: $col_ink3 }
-              - label: { id: fc_val_peak, x: 194, y: 216, width: 184, height: 25, long_mode: DOT, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { id: fc_peak_time, x: 194, y: 243, width: 184, height: 17, long_mode: DOT, text: "um --:-- Uhr", styles: st_unit }
-              - label: { id: fc_foot, x: 0, y: 261, width: 378, height: 17, long_mode: DOT, text: "Stand --:--", styles: st_unit }
-        # ---------------- Verlauf heute -------------------------------------
-        - obj:
-            styles: st_tile
+            width: 220
+            height: 44
+            radius: 22
+            bg_opa: TRANSP
+            border_color: $col_line
+            border_width: 1
+            pad_all: 0
             scrollbar_mode: 'off'
             scrollable: false
             scroll_dir: NONE
-            x: 412
-            y: 84
-            width: 864
-            height: 300
             widgets:
-              - label: { x: 0, y: 0, width: 400, height: 17, long_mode: DOT, styles: st_label, text: "HEUTE IM HALBSTUNDENTAKT" }
-              - obj: { x: 420, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_solar_deep, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { x: 438, y: 0, width: 90, height: 17, long_mode: DOT, text: "P10 bis P90", styles: st_unit }
-              - obj: { x: 532, y: 8, width: 16, height: 3, radius: 1, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { x: 554, y: 0, width: 40, height: 17, long_mode: DOT, text: "P50", styles: st_unit }
-              - obj: { x: 600, y: 1, width: 2, height: 16, radius: 0, bg_color: $col_ink, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { x: 608, y: 0, width: 40, height: 17, long_mode: DOT, text: "jetzt", styles: st_unit }
-              - label: { id: fc_scale, x: 650, y: 0, width: 192, height: 17, long_mode: DOT, text_align: RIGHT, text: "", styles: st_unit }
-              - obj: { x: 0, y: 240, width: 842, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_00, x: 4, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_01, x: 29, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_02, x: 54, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_03, x: 79, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_04, x: 103, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_05, x: 128, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_06, x: 153, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_07, x: 178, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_08, x: 202, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_09, x: 227, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_10, x: 252, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_11, x: 277, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_12, x: 302, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_13, x: 326, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_14, x: 351, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_15, x: 376, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_16, x: 401, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_17, x: 425, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_18, x: 450, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_19, x: 475, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_20, x: 500, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_21, x: 524, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_22, x: 549, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_23, x: 574, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_24, x: 599, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_25, x: 624, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_26, x: 648, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_27, x: 673, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_28, x: 698, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_29, x: 723, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_30, x: 747, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_31, x: 772, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_32, x: 797, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_band_33, x: 822, y: 238, width: 16, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - line:
-                  id: fc_line
-                  x: 0
-                  y: 30
-                  line_color: $col_solar
-                  line_width: 3
-                  line_rounded: true
-                  hidden: true
-                  points:
-                    - [12, 210]
-                    - [830, 210]
-              - obj: { id: fc_now, x: 0, y: 30, width: 2, height: 210, radius: 0, bg_color: $col_ink, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { x: 30, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "06" }
-              - label: { x: 129, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "08" }
-              - label: { x: 228, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "10" }
-              - label: { x: 327, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "12" }
-              - label: { x: 426, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "14" }
-              - label: { x: 525, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "16" }
-              - label: { x: 624, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "18" }
-              - label: { x: 723, y: 248, width: 40, height: 17, text_align: CENTER, styles: st_unit, text: "20" }
-              - label: { x: 802, y: 248, width: 40, height: 17, text_align: RIGHT, styles: st_unit, text: "22" }
-        # ---------------- Folgetage -----------------------------------------
+              - obj:
+                  id: fc_seg0
+                  x: 2
+                  y: 2
+                  width: 108
+                  height: 38
+                  radius: 19
+                  bg_color: $col_solar
+                  bg_opa: COVER
+                  border_width: 0
+                  pad_all: 0
+                  scrollable: false
+                  pressed:
+                    bg_opa: 50%
+                  on_click:
+                    - script.execute: { id: fc_mode_set, mode: 0 }
+                  widgets:
+                    - label: { id: fc_seg0_lbl, align: CENTER, text: "Heute", text_font: f_text_s, text_color: $col_bg }
+              - obj:
+                  id: fc_seg1
+                  x: 110
+                  y: 2
+                  width: 108
+                  height: 38
+                  radius: 19
+                  bg_color: $col_solar
+                  bg_opa: TRANSP
+                  border_width: 0
+                  pad_all: 0
+                  scrollable: false
+                  pressed:
+                    bg_opa: 50%
+                  on_click:
+                    - script.execute: { id: fc_mode_set, mode: 1 }
+                  widgets:
+                    - label: { id: fc_seg1_lbl, align: CENTER, text: "Vorschau", text_font: f_text_s, text_color: $col_ink2 }
+        - label: { id: fc_total, x: 240, y: 95, width: 600, height: 22, long_mode: DOT, text: "", text_font: f_text, text_color: $col_ink }
+        # Legende Heute (x 850..1276): Ist, P50, P10, jetzt, Skala rechtsbuendig
         - obj:
-            styles: st_tile
-            scrollbar_mode: 'off'
+            id: fc_leg_h
+            x: 850
+            y: 97
+            width: 426
+            height: 17
+            bg_opa: TRANSP
+            border_width: 0
+            radius: 0
+            pad_all: 0
+            clickable: false
             scrollable: false
-            scroll_dir: NONE
+            scrollbar_mode: 'off'
+            widgets:
+              - obj: { x: 0, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 18, y: 0, width: 30, height: 17, long_mode: CLIP, text: "Ist", styles: st_unit }
+              - obj: { x: 50, y: 7, width: 16, height: 3, radius: 1, bg_color: $col_ink, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 72, y: 0, width: 30, height: 17, long_mode: CLIP, text: "P50", styles: st_unit }
+              - obj: { x: 108, y: 8, width: 16, height: 2, radius: 1, bg_color: $col_ink3, bg_opa: 70%, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 130, y: 0, width: 30, height: 17, long_mode: CLIP, text: "P10", styles: st_unit }
+              - obj: { x: 168, y: 1, width: 2, height: 16, radius: 0, bg_color: $col_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 176, y: 0, width: 40, height: 17, long_mode: CLIP, text: "jetzt", styles: st_unit }
+              - label: { id: fc_scale_h, x: 226, y: 0, width: 200, height: 17, long_mode: DOT, text_align: RIGHT, text: "", styles: st_unit }
+        # Legende Vorschau: P50, P10, Skala
+        - obj:
+            id: fc_leg_v
+            x: 850
+            y: 97
+            width: 426
+            height: 17
+            hidden: true
+            bg_opa: TRANSP
+            border_width: 0
+            radius: 0
+            pad_all: 0
+            clickable: false
+            scrollable: false
+            scrollbar_mode: 'off'
+            widgets:
+              - obj: { x: 0, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 18, y: 0, width: 30, height: 17, long_mode: CLIP, text: "P50", styles: st_unit }
+              - obj: { x: 56, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_solar_deep, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - label: { x: 74, y: 0, width: 30, height: 17, long_mode: CLIP, text: "P10", styles: st_unit }
+              - label: { id: fc_scale_v, x: 226, y: 0, width: 200, height: 17, long_mode: DOT, text_align: RIGHT, text: "", styles: st_unit }
+        # Ohne eine einzige Prognose je Dach
+        - label:
+            id: fc_empty
             x: 4
-            y: 392
+            y: 400
             width: 1272
-            height: 344
+            height: 44
+            long_mode: WRAP
+            text_align: CENTER
+            text: "Keine Prognose je Dach.\nIn der Anlage ha_pv<N>_fc_d1 mit dem Solcast-Sensor \"heute\" der Fläche belegen."
+            text_font: f_text_s
+            text_color: $col_ink3
+        # ---------------- sechs Kacheln (fc_redraw ordnet sie an) ------------
+        - obj:
+            id: fc_t0
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            hidden: true
+            x: 4
+            y: 136
+            width: 419
+            height: 296
             widgets:
-              - label: { x: 0, y: 0, width: 600, height: 17, long_mode: DOT, styles: st_label, text: "PROGNOSE DER NÄCHSTEN TAGE · kWh" }
-              - obj: { x: 900, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_solar, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { x: 918, y: 0, width: 60, height: 17, long_mode: DOT, text: "P50", styles: st_unit }
-              - obj: { x: 990, y: 1, width: 4, height: 16, radius: 1, bg_color: $col_ink2, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { x: 1000, y: 0, width: 250, height: 17, long_mode: DOT, text: "P10 bis P90", styles: st_unit }
-              - obj: { x: 0, y: 262, width: 1250, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { id: fc_day_0, x: 4, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
-              - label: { id: fc_ico_0, x: 4, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
-              - obj: { id: fc_bar_0, x: 61, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_rng_0, x: 87, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { id: fc_dval_0, x: 4, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { id: fc_dsub_0, x: 4, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
-              - label: { id: fc_day_1, x: 183, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
-              - label: { id: fc_ico_1, x: 183, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
-              - obj: { id: fc_bar_1, x: 240, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_rng_1, x: 266, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { id: fc_dval_1, x: 183, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { id: fc_dsub_1, x: 183, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
-              - label: { id: fc_day_2, x: 361, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
-              - label: { id: fc_ico_2, x: 361, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
-              - obj: { id: fc_bar_2, x: 418, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_rng_2, x: 444, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { id: fc_dval_2, x: 361, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { id: fc_dsub_2, x: 361, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
-              - label: { id: fc_day_3, x: 540, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
-              - label: { id: fc_ico_3, x: 540, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
-              - obj: { id: fc_bar_3, x: 597, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_rng_3, x: 623, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { id: fc_dval_3, x: 540, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { id: fc_dsub_3, x: 540, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
-              - label: { id: fc_day_4, x: 718, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
-              - label: { id: fc_ico_4, x: 718, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
-              - obj: { id: fc_bar_4, x: 776, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_rng_4, x: 802, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { id: fc_dval_4, x: 718, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { id: fc_dsub_4, x: 718, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
-              - label: { id: fc_day_5, x: 897, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
-              - label: { id: fc_ico_5, x: 897, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
-              - obj: { id: fc_bar_5, x: 954, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_rng_5, x: 980, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { id: fc_dval_5, x: 897, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { id: fc_dsub_5, x: 897, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
-              - label: { id: fc_day_6, x: 1075, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
-              - label: { id: fc_ico_6, x: 1075, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
-              - obj: { id: fc_bar_6, x: 1133, y: 260, width: 56, height: 2, radius: 4, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - obj: { id: fc_rng_6, x: 1159, y: 260, width: 4, height: 2, radius: 1, bg_color: $col_ink2, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
-              - label: { id: fc_dval_6, x: 1075, y: 268, width: 171, height: 25, long_mode: DOT, text_align: CENTER, text: "--,-", text_font: f_val_m, text_color: $col_ink }
-              - label: { id: fc_dsub_6, x: 1075, y: 296, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "P10 bis P90 --", styles: st_unit }
+              # 0 Name, 1 Wert (bisher / Prognose bzw. Summe der Tage)
+              - label: { x: 0, y: 0, width: 194, height: 22, long_mode: DOT, text: "", text_font: f_text, text_color: $col_ink }
+              - label: { x: 198, y: 1, width: 199, height: 21, long_mode: DOT, text_align: RIGHT, text: "", text_font: f_val_s, text_color: $col_ink }
+              # 2 Heute: 0 Grundlinie, 1..20 Stundenbalken, 21 Linie P10, 22 Linie P50,
+              #   23 Marke jetzt, 24..30 Uhrzeiten
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 397
+                  height: 274
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 248, width: 397, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 5, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 34, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 62, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 90, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 119, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 175, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 204, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 232, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 260, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 289, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 317, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 374, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - line: { x: 0, y: 0, line_color: $col_ink3, line_width: 2, line_opa: 70%, line_rounded: true, hidden: true, points: [[0, 248], [397, 248]] }
+                    - line: { x: 0, y: 0, line_color: $col_ink, line_width: 3, line_rounded: true, hidden: true, points: [[0, 248], [397, 248]] }
+                    - obj: { x: 0, y: 32, width: 2, height: 216, radius: 0, bg_color: $col_batt, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+              # 3 Vorschau: 0 Grundlinie, 1..6 Balken P50, 7..12 Balken P10, 13..18 Werte,
+              #   19..24 Tage, 25..30 P10
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 397
+                  height: 274
+                  hidden: true
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 228, width: 397, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 15, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 81, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 213, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 279, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 15, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 81, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 213, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 279, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 66, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 132, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 198, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 265, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 331, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 0, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 66, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 132, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 198, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 265, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 331, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 0, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 66, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 132, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 198, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 265, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 331, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+        - obj:
+            id: fc_t1
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            hidden: true
+            x: 431
+            y: 136
+            width: 418
+            height: 296
+            widgets:
+              # 0 Name, 1 Wert (bisher / Prognose bzw. Summe der Tage)
+              - label: { x: 0, y: 0, width: 194, height: 22, long_mode: DOT, text: "", text_font: f_text, text_color: $col_ink }
+              - label: { x: 198, y: 1, width: 198, height: 21, long_mode: DOT, text_align: RIGHT, text: "", text_font: f_val_s, text_color: $col_ink }
+              # 2 Heute: 0 Grundlinie, 1..20 Stundenbalken, 21 Linie P10, 22 Linie P50,
+              #   23 Marke jetzt, 24..30 Uhrzeiten
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 396
+                  height: 274
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 248, width: 396, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 5, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 33, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 62, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 90, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 118, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 175, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 203, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 231, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 260, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 288, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 316, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 373, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - line: { x: 0, y: 0, line_color: $col_ink3, line_width: 2, line_opa: 70%, line_rounded: true, hidden: true, points: [[0, 248], [396, 248]] }
+                    - line: { x: 0, y: 0, line_color: $col_ink, line_width: 3, line_rounded: true, hidden: true, points: [[0, 248], [396, 248]] }
+                    - obj: { x: 0, y: 32, width: 2, height: 216, radius: 0, bg_color: $col_batt, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+              # 3 Vorschau: 0 Grundlinie, 1..6 Balken P50, 7..12 Balken P10, 13..18 Werte,
+              #   19..24 Tage, 25..30 P10
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 396
+                  height: 274
+                  hidden: true
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 228, width: 396, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 14, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 80, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 146, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 212, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 278, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 344, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 14, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 80, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 146, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 212, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 278, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 344, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 66, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 132, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 198, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 264, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 330, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 0, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 66, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 132, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 198, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 264, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 330, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 0, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 66, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 132, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 198, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 264, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 330, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+        - obj:
+            id: fc_t2
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            hidden: true
+            x: 857
+            y: 136
+            width: 419
+            height: 296
+            widgets:
+              # 0 Name, 1 Wert (bisher / Prognose bzw. Summe der Tage)
+              - label: { x: 0, y: 0, width: 194, height: 22, long_mode: DOT, text: "", text_font: f_text, text_color: $col_ink }
+              - label: { x: 198, y: 1, width: 199, height: 21, long_mode: DOT, text_align: RIGHT, text: "", text_font: f_val_s, text_color: $col_ink }
+              # 2 Heute: 0 Grundlinie, 1..20 Stundenbalken, 21 Linie P10, 22 Linie P50,
+              #   23 Marke jetzt, 24..30 Uhrzeiten
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 397
+                  height: 274
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 248, width: 397, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 5, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 34, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 62, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 90, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 119, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 175, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 204, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 232, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 260, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 289, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 317, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 374, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - line: { x: 0, y: 0, line_color: $col_ink3, line_width: 2, line_opa: 70%, line_rounded: true, hidden: true, points: [[0, 248], [397, 248]] }
+                    - line: { x: 0, y: 0, line_color: $col_ink, line_width: 3, line_rounded: true, hidden: true, points: [[0, 248], [397, 248]] }
+                    - obj: { x: 0, y: 32, width: 2, height: 216, radius: 0, bg_color: $col_batt, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+              # 3 Vorschau: 0 Grundlinie, 1..6 Balken P50, 7..12 Balken P10, 13..18 Werte,
+              #   19..24 Tage, 25..30 P10
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 397
+                  height: 274
+                  hidden: true
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 228, width: 397, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 15, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 81, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 213, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 279, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 15, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 81, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 213, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 279, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 66, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 132, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 198, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 265, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 331, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 0, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 66, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 132, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 198, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 265, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 331, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 0, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 66, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 132, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 198, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 265, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 331, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+        - obj:
+            id: fc_t3
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            hidden: true
+            x: 4
+            y: 440
+            width: 419
+            height: 296
+            widgets:
+              # 0 Name, 1 Wert (bisher / Prognose bzw. Summe der Tage)
+              - label: { x: 0, y: 0, width: 194, height: 22, long_mode: DOT, text: "", text_font: f_text, text_color: $col_ink }
+              - label: { x: 198, y: 1, width: 199, height: 21, long_mode: DOT, text_align: RIGHT, text: "", text_font: f_val_s, text_color: $col_ink }
+              # 2 Heute: 0 Grundlinie, 1..20 Stundenbalken, 21 Linie P10, 22 Linie P50,
+              #   23 Marke jetzt, 24..30 Uhrzeiten
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 397
+                  height: 274
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 248, width: 397, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 5, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 34, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 62, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 90, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 119, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 175, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 204, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 232, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 260, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 289, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 317, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 374, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - line: { x: 0, y: 0, line_color: $col_ink3, line_width: 2, line_opa: 70%, line_rounded: true, hidden: true, points: [[0, 248], [397, 248]] }
+                    - line: { x: 0, y: 0, line_color: $col_ink, line_width: 3, line_rounded: true, hidden: true, points: [[0, 248], [397, 248]] }
+                    - obj: { x: 0, y: 32, width: 2, height: 216, radius: 0, bg_color: $col_batt, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+              # 3 Vorschau: 0 Grundlinie, 1..6 Balken P50, 7..12 Balken P10, 13..18 Werte,
+              #   19..24 Tage, 25..30 P10
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 397
+                  height: 274
+                  hidden: true
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 228, width: 397, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 15, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 81, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 213, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 279, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 15, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 81, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 213, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 279, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 66, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 132, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 198, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 265, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 331, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 0, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 66, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 132, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 198, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 265, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 331, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 0, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 66, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 132, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 198, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 265, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 331, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+        - obj:
+            id: fc_t4
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            hidden: true
+            x: 431
+            y: 440
+            width: 418
+            height: 296
+            widgets:
+              # 0 Name, 1 Wert (bisher / Prognose bzw. Summe der Tage)
+              - label: { x: 0, y: 0, width: 194, height: 22, long_mode: DOT, text: "", text_font: f_text, text_color: $col_ink }
+              - label: { x: 198, y: 1, width: 198, height: 21, long_mode: DOT, text_align: RIGHT, text: "", text_font: f_val_s, text_color: $col_ink }
+              # 2 Heute: 0 Grundlinie, 1..20 Stundenbalken, 21 Linie P10, 22 Linie P50,
+              #   23 Marke jetzt, 24..30 Uhrzeiten
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 396
+                  height: 274
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 248, width: 396, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 5, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 33, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 62, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 90, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 118, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 175, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 203, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 231, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 260, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 288, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 316, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 373, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - line: { x: 0, y: 0, line_color: $col_ink3, line_width: 2, line_opa: 70%, line_rounded: true, hidden: true, points: [[0, 248], [396, 248]] }
+                    - line: { x: 0, y: 0, line_color: $col_ink, line_width: 3, line_rounded: true, hidden: true, points: [[0, 248], [396, 248]] }
+                    - obj: { x: 0, y: 32, width: 2, height: 216, radius: 0, bg_color: $col_batt, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+              # 3 Vorschau: 0 Grundlinie, 1..6 Balken P50, 7..12 Balken P10, 13..18 Werte,
+              #   19..24 Tage, 25..30 P10
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 396
+                  height: 274
+                  hidden: true
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 228, width: 396, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 14, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 80, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 146, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 212, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 278, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 344, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 14, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 80, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 146, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 212, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 278, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 344, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 66, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 132, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 198, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 264, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 330, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 0, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 66, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 132, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 198, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 264, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 330, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 0, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 66, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 132, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 198, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 264, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 330, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+        - obj:
+            id: fc_t5
+            styles: st_tile
+            scrollbar_mode: 'off'
+            scrollable: false
+            scroll_dir: NONE
+            hidden: true
+            x: 857
+            y: 440
+            width: 419
+            height: 296
+            widgets:
+              # 0 Name, 1 Wert (bisher / Prognose bzw. Summe der Tage)
+              - label: { x: 0, y: 0, width: 194, height: 22, long_mode: DOT, text: "", text_font: f_text, text_color: $col_ink }
+              - label: { x: 198, y: 1, width: 199, height: 21, long_mode: DOT, text_align: RIGHT, text: "", text_font: f_val_s, text_color: $col_ink }
+              # 2 Heute: 0 Grundlinie, 1..20 Stundenbalken, 21 Linie P10, 22 Linie P50,
+              #   23 Marke jetzt, 24..30 Uhrzeiten
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 397
+                  height: 274
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 248, width: 397, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 5, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 34, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 62, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 90, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 119, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 175, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 204, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 232, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 260, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 289, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 317, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 374, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 0, y: 246, width: 18, height: 2, radius: 2, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - line: { x: 0, y: 0, line_color: $col_ink3, line_width: 2, line_opa: 70%, line_rounded: true, hidden: true, points: [[0, 248], [397, 248]] }
+                    - line: { x: 0, y: 0, line_color: $col_ink, line_width: 3, line_rounded: true, hidden: true, points: [[0, 248], [397, 248]] }
+                    - obj: { x: 0, y: 32, width: 2, height: 216, radius: 0, bg_color: $col_batt, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+                    - label: { x: 0, y: 254, width: 32, height: 17, text_align: CENTER, styles: st_unit, text: "", hidden: true }
+              # 3 Vorschau: 0 Grundlinie, 1..6 Balken P50, 7..12 Balken P10, 13..18 Werte,
+              #   19..24 Tage, 25..30 P10
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 397
+                  height: 274
+                  hidden: true
+                  bg_opa: TRANSP
+                  border_width: 0
+                  radius: 0
+                  pad_all: 0
+                  clickable: false
+                  scrollable: false
+                  scrollbar_mode: 'off'
+                  widgets:
+                    - obj: { x: 0, y: 228, width: 397, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 15, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 81, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 213, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 279, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 15, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 81, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 147, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 213, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 279, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - obj: { x: 345, y: 226, width: 37, height: 2, radius: 3, bg_color: $col_solar_deep, bg_opa: COVER, hidden: true, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+                    - label: { x: 0, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 66, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 132, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 198, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 265, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 331, y: 30, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink }
+                    - label: { x: 0, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 66, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 132, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 198, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 265, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 331, y: 232, width: 66, height: 20, long_mode: DOT, text_align: CENTER, text: "", text_font: f_text_s, text_color: $col_ink2 }
+                    - label: { x: 0, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 66, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 132, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 198, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 265, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }
+                    - label: { x: 331, y: 254, width: 66, height: 17, long_mode: DOT, text_align: CENTER, text: "", styles: st_unit }

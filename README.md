@@ -32,7 +32,7 @@ Uhr und Systemsymbolen (WLAN, Home Assistant, Daten aktuell) und eine Meldungsze
 | --- | --- |
 | Übersicht | Anlagenschema mit Flussanimation, rechte Kennzahlenspalte, Ringe und Tagesertrag in Euro (auch als Sensoren für Home Assistant) |
 | PV & Prognose | Leistung und Tageswert je Wechselrichter und Fläche, getrennt nach Volleinspeisung und Hausnetz, Status mit Fehlertext und Temperatur; Tagesverlauf Ist gegen Prognose mit vier Kennzahlen |
-| Prognose | Solcast: heute P50 mit P10 bis P90, Rest, jetzt, Spitze; Halbstunden als Band mit Linie; sieben Tage mit Wetterbild |
+| Prognose | Solcast je Dachfläche, Umschalter Heute / Vorschau: heute Ist-Stundenbalken mit Linien P50 und P10 und Marke jetzt, bisher / Prognose je Dach; Vorschau die kommenden sechs Tage je Dach (P50, darin P10) |
 | Wetter | DWD: jetzt mit Wind, Feuchte, Druck, Sonne; nächste 24 Stunden mit Temperaturkurve und Regen; sieben Tage; DWD-Warnung |
 | Speicher | Tabelle mit Zellwerten, drei SoC-Ringe |
 | Wallboxen | im Stil von evcc: je Wallbox Modus, Leistung mit Phasen, Geladen, Sonnenanteil, Ladedauer, Fahrzeug mit Ladestand, Ladeplan und Limit; Monatswerte |
@@ -42,13 +42,14 @@ Uhr und Systemsymbolen (WLAN, Home Assistant, Daten aktuell) und eine Meldungsze
 | Statistik | Woche, Monat, Jahr: Erzeugung gegen Verbrauch, Autarkie, Eigenverbrauch, Ertrag |
 | Meldungen | Bestehende Meldungen, neueste oben; gleiche zusammengefasst („×3 seit 08:12“), Zähler je Schweregrad als Filter, Quittieren per Antippen; oben die schwerste in ihrer Farbe |
 
-Dazu drei Fenster über der Oberfläche: Sprachassistent (`voice_panel`),
-Firmware-Update mit Fortschrittsbalken (`ota_panel`) und System (`sys_panel`,
-Tipp auf die Symbole oben rechts) mit dem Alter der Werte je Quelle.
+Dazu zwei Fenster über der Oberfläche: Firmware-Update mit Fortschrittsbalken
+(`ota_panel`) und System (`sys_panel`, Tipp auf die Symbole oben rechts) mit dem
+Alter der Werte je Quelle und dem Schalter „Diagnose“ (Bildzeit, Takt der
+Flussanimation; `docs/03`).
 
 **Anbindung.** Die Oberfläche wird über feste Skript-Schnittstellen gefüttert
 (`alert_push`, `alert_clear`, `storage_update`, `pv_update`, `pv_status`,
-`money_update`, `fc_today`, `fc_slots`, `fc_day`, `wx_now`, `wx_hour`, `wx_day`,
+`money_update`, `fc_roof_fc`, `fc_roof_hours`, `fc_roof_live`, `wx_now`, `wx_hour`, `wx_day`,
 `wx_warning`, `grid_update`, `grid_phase`, `grid_meter`, `grid_rules`,
 `stats_update`, `wallbox_update`, `wallbox_month`, `heatpump_update`,
 `heatpump_extra`, `house_flow`, `house_battery`, `house_loadpoint`, `house_update`,
@@ -66,7 +67,11 @@ Ladestand): Liefert sie keinen gültigen Wert, verschwindet die ganze Grafik des
 Geräts, die übrigen bleiben an ihrem Platz. Jede andere Entität, die fehlt oder
 nicht verfügbar ist, lässt nur ihren Wert leer. Was es nicht gibt, bekommt statt
 einer ID `none` (auch `false`, `off`, `""`); zusätzliche Entitäten braucht es
-nicht. Einzelheiten in `docs/03`
+nicht. Fehlt ein Tageswert in Home Assistant, rechnet das Panel ihn mit
+`statistik` statt einer ID aus der Statistik (Fläche aus ihrer Leistung,
+Verbraucher und Zähler aus dem Zählerstand); Erzeugung und Eigenverbrauch heute
+ergeben sich ohne Entität aus den Wechselrichtern, eine Störung auf Wunsch aus
+dem Statustext. Einzelheiten in `docs/03`
 („Datenweg von Home Assistant“), Offenes in `docs/06`.
 
 Beispielwerte gibt es nur im Screenshot-Lauf (`shots_run` in
@@ -207,7 +212,7 @@ API-Schlüssel im Klartext.
 | `.pv-dashboard_ui.yaml` | Kern der Oberfläche: Tagesreihen, gemeinsame Skripte, `lvgl:`-Basis, Stile, Verläufe, `top_layer`; bindet die elf Seiten ein |
 | `.pv-dashboard_page_overview.yaml` | Seite 1 Übersicht: Anlagenschema, Kennzahlenspalte, `money_update`, Eingabeskripte `ov_*`, erzeugter Flussanimations-Block |
 | `.pv-dashboard_page_pv.yaml` | Seite 2 PV & Prognose: Wechselrichter und Flächen je Kreis, Tagesverlauf mit Kennzahlen, `pv_status` / `pv_update` / `pv_redraw_curve` |
-| `.pv-dashboard_page_forecast.yaml` | Seite 3 Prognose: Solcast heute, Halbstunden, sieben Tage, `fc_*` |
+| `.pv-dashboard_page_forecast.yaml` | Seite 3 Prognose je Dachfläche: Heute / Vorschau, `fc_*` |
 | `.pv-dashboard_page_weather.yaml` | Seite 4 Wetter: DWD jetzt, 24 Stunden, sieben Tage, Warnung, `wx_*` |
 | `.pv-dashboard_page_battery.yaml` | Seite 5 Speicher: SoC-Ringe, Zelltabelle, `storage_update` |
 | `.pv-dashboard_page_wallbox.yaml` | Seite 6 Wallboxen: Ladepunkt-Karten nach evcc mit bedienbarem Modus-Schalter, Monatskachel, `wallbox_update` / `wallbox_mode_set` / `wallbox_month` |
@@ -217,7 +222,6 @@ API-Schlüssel im Klartext.
 | `.pv-dashboard_page_stats.yaml` | Seite 10 Statistik: Woche / Monat / Jahr, `stats_update` / `stats_show` |
 | `.pv-dashboard_page_alerts.yaml` | Seite 11 Meldungen: Liste, Zähler mit Filter, `alert_push` / `alert_ack` / `alert_clear` / `alert_refresh` |
 | `.pv-dashboard_display.yaml` | Nur Gerät: I2C, Backlight, MIPI-DSI-Panel, GT911, Drehung |
-| `.pv-dashboard_audio.yaml` | Nur Gerät: ES8311/ES7210, Voice Assistant, I2S-Halbduplex |
 | `pv-dashboard-sim.yaml` | Simulator: `host:`-Plattform mit SDL-Fenster und SDL-Touchscreen |
 | `pv-dashboard-shots.yaml` | Headless-Screenshots aller Seiten, bindet den Simulator als Package ein |
 | `pv-dashboard-demo.yaml` | Prototyp: drei Bewegungsmuster für die Flussrichtung nebeneinander |
@@ -235,10 +239,10 @@ API-Schlüssel im Klartext.
 
 Gerät und Simulator binden `utility` und `ui` gemeinsam ein: Eine Änderung an
 der Oberfläche, an den Schriften oder an den Farben wirkt auf beiden Seiten.
-Nur am Gerät hängen `display`, `audio`, `core` und `ha`.
+Nur am Gerät hängen `display`, `core` und `ha` (Audio ist seit dem 10.10.2026 entfernt).
 
 Die Oberfläche liegt in **zwölf** Dateien: dem Kern `.pv-dashboard_ui.yaml`
-(1381 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
+(1583 Zeilen) und je einer Datei pro Seite. Der Kern bindet die Seiten über einen
 eigenen `packages:`-Block ein — **diese Reihenfolge ist die Reihenfolge der
 Seiten**. Jedes Skript liegt bei der Seite, die es benutzt; im Kern bleiben nur
 `sys_refresh`, `record_hour` und `update_clock`, die kein Seiten-Widget anfassen,
@@ -267,7 +271,7 @@ von `esphome config` stehen in `docs/03` unter „Packages aus dem GitHub-Repo�
   ist der Aufbau, nicht eine bestimmte Anlage.
 - **[docs/02 — Hardware und Panel](docs/02-hardware-und-panel.md)** — Board und
   ECO2-Silizium, Takt, Toolchain, Display und Touch, C6-Co-Prozessor, BLE,
-  Audio-Hardware, serielle Schnittstellen, Kamera, Bauen und Flashen.
+  Audio-Hardware (ungenutzt), serielle Schnittstellen, Kamera, Bauen und Flashen.
 - **[docs/03 — Aufbau des Dashboards](docs/03-dashboard-aufbau.md)** — Packages,
   Einstieg in Kern und Seitendateien, Seitenaufbau, Tokens und Stile, Verläufe,
   Skripte und ihre Schnittstellen, Flussanimation, Simulator und Screenshots
@@ -277,7 +281,7 @@ von `esphome config` stehen in `docs/03` unter „Packages aus dem GitHub-Repo�
   bis zum Rendering.
 - **[docs/05 — Umstieg auf ESPHome 2026.9](docs/05-esphome-2026-9-umstieg.md)** —
   `min_version`, Device Builder und Bauumgebungen, OTA auf Noise in zwei
-  Schritten, Audio-Halbduplex, der LVGL-`list`-Fehler.
+  Schritten, Audio-Halbduplex (seit 10.10.2026 entfernt), der LVGL-`list`-Fehler.
 - **[docs/06 — Offene Punkte und Pläne](docs/06-offene-punkte-und-plaene.md)** —
   geplante Detailseiten, echte Daten anbinden, BMS, Modbus-Regeln, Kamera, was
   sich nur am Gerät prüfen lässt.

@@ -37,6 +37,7 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
       entsprechend umgestellt; die Seite bleibt grafisch.
 - [x] **Seiten Prognose (Solcast) und Wetter (DWD)**, auf Zuruf des Nutzers. Siehe
       „Prognose und Wetter“. Menüleiste mit elf Reitern, der PV-Reiter heißt „PV“.
+      Die Prognose ist seit dem 10.10.2026 je Dachfläche aufgebaut (Heute / Vorschau).
 
 **Erledigt am 25.09.2026, später Tag** (auf Zuruf des Nutzers)
 
@@ -83,10 +84,15 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
 
 **Am Gerät zu erledigen**
 
-- [ ] **OTA-Schritt 2** — `password:` durch `encryption: {}` ersetzen, erst nach der
-      ersten erfolgreichen OTA-Installation einer 9.0-Firmware.
-- [ ] **Audio-Halbduplex testen** — achtstufiger Testplan in Dokument 05.
-- [ ] **Farbwirkung im Tageslicht, Bildzeit, Touch und Scrollen** prüfen.
+- [x] ~~**OTA-Schritt 2**~~ — erledigt am 10.10.2026: OTA nur noch mit `encryption: {}`,
+      das Gerät wurde seriell geflasht.
+- [x] ~~**Audio-Halbduplex testen**~~ — entfallen, Audio ist seit dem 10.10.2026 entfernt.
+- [ ] **Farbwirkung im Tageslicht, Touch und Scrollen** prüfen.
+- [ ] **Bildzeit messen** — Schalter „Diagnose“ einschalten und die Sensoren
+      ansehen (Dokument 03, „Diagnose“); vor allem, ob „LVGL-Fläche max“ nach
+      `LV_INV_BUF_SIZE` 128 noch den vollen Schirm (1.024.000 px) zeigt.
+- [ ] **Co-Prozessor-Update automatisch** — beim ersten Mal im Log verfolgen
+      (Dokument 02, „Funk: C6-Co-Prozessor“).
 
 **Entscheidungen, die noch niemand getroffen hat**
 
@@ -245,18 +251,13 @@ dieser Generalisierung. Am 20.09.2026 hat der Nutzer nach Vorlage der Einzelheit
 entschieden, daran nichts zu ändern. **Entscheidungsstand: entschieden, nicht erneut
 vorschlagen.**
 
-Ein weiterer Punkt bleibt offen; er blockiert das Öffentlichmachen nicht:
-
-- **Der Beispieltext des Sprachassistenten** in `pv-dashboard-shots.yaml` nennt
-  „Wallbox 1" im Fließtext. Er ist absichtlich nicht auf `${name_wb_1}` umgestellt:
-  Der Satz hat einen Artikel davor („Die Wallbox 1 meldet …"), bei einem frei
-  gewählten Namen würde der Satz grammatisch schief. Demo-Prosa, nur im
-  Screenshot-Lauf, nie auf dem Gerät.
+Der frühere Restpunkt, der Beispieltext des Sprachassistenten im
+Screenshot-Lauf, ist mit dem Sprachfenster am 10.10.2026 weggefallen.
 
 ## Erledigt: Packages kommen aus dem Repo
 
 Seit dem 20.09.2026 lädt `pv-dashboard.yaml` die Packages aus dem GitHub-Repo
-(`ref: main`, `refresh: 1d`); die lokale Variante steht auskommentiert als
+(`ref: main`, seit 10.10.2026 `refresh: always` statt `1d`); die lokale Variante steht auskommentiert als
 Rückfall daneben (Dokument 03).
 
 Folgen, beide in Dokument 03 belegt: Das Gerät baut aus dem geschobenen Stand,
@@ -318,7 +319,46 @@ der der Netzbetreiber die Einspeisung fernsteuern kann. Keine Rechtsberatung.
 Seiten `page_forecast` und `page_weather`, gebaut am 25.09.2026 auf Zuruf des
 Nutzers. Aufbau und Skripte in Dokument 03.
 
-**Prognose (Solcast).** Welche Werte, hat der Nutzer vorgegeben: die, die sein
+**Prognose je Dachfläche (seit 10.10.2026).** Auf Wunsch des Nutzers zeigt die
+Seite Prognose nicht mehr die Anlage als Ganzes, sondern je Dachfläche eine
+kleine Grafik wie das Energie-Dashboard von Home Assistant (Ist als
+Stundenbalken, P50 und P10 als Linien, Marke jetzt) und über einen Umschalter
+„Vorschau“ je Dach die kommenden sechs Tage; P90 ist entfallen. Quelle ist die
+Solcast-Integration mit **einem Eintrag je Dach** (beim Nutzer sechs:
+Süd, West, Carport innen, Nord, Carport außen, Ost; Sensoren
+`sensor.solcast_<dach>_prognose_heute`, `_morgen`, `_tag_3` … `_tag_7`, je
+mit `estimate10` und 48 Halbstunden in `detailedForecast`, am 10.10.2026 in
+seinem Home Assistant nachgesehen). Zuordnung über `ha_pv<N>_fc_d1` …
+`_d7` in `.pv-dashboard_anlage.yaml` (Vorlage `.pv-dashboard_anlage.yaml.example`),
+Fläche N wie in der Übersicht. Die alte Fassung (eine Kachel „Solcast ·
+heute“, Halbstundenband P10 bis P90, sieben Tage mit Wetterbild) und mit ihr
+die Schlüssel `ha_solcast_today_p10`/`_p90`, `_power_now`, `_next_hour`,
+`_peak`, `_peak_time`, `_last_poll`, `_api_used`, `_api_limit` und
+`_d2` … `_d7` samt P10/P90 sind entfernt; stehen sie noch in der eigenen
+Anlage, schaden sie nicht (ungenutzte Substitution). Geblieben sind
+`ha_solcast_today` (nur noch sein `detailedForecast` für `forecast_curve`,
+solange es keine Prognose je Dach gibt) und `ha_solcast_remaining`
+(Statusleiste „Restprognose“, Seite Haus).
+
+Offen bzw. bewusst so:
+
+- Mehr als sechs Dächer mit Prognose: die ersten sechs in Flächenreihenfolge
+  bekommen eine Kachel, der Rest fehlt auch in den Summen der Kopfzeile.
+- Die Kachel hängt nur an der Prognose, nicht an `dev_present`: Fällt die
+  Leistung einer Fläche aus, bleibt die Kachel mit Prognose, ohne Ist.
+- Die Restprognose der Statusleiste kommt weiter aus `ha_solcast_remaining`
+  (beim Nutzer nur vier der sechs Dächer); die Kopfzeile der Seite Prognose
+  rechnet ihren Rest selbst aus den Halbstunden aller Dächer. Auf Zuruf
+  ließe sich die Statusleiste auf diese Summe umstellen.
+- Datenalter „Prognose“ im Systemfenster: Der Abruf kommt alle 30 min, die
+  Leistung der Dächer hält den Stempel dazwischen frisch; nachts, wenn
+  sich keine Leistung ändert, kann nach `data_stale_s` (300 s) eine Warnung
+  „Keine Daten von Prognose“ kommen. Am Gerät beobachten.
+- Ein echter Lauf gegen das eigene Home Assistant steht aus; die Vorlage je
+  Dach ist am 10.10.2026 in seinem Home Assistant (nur lesend, Template-Test)
+  mit allen sechs Dächern fehlerfrei gelaufen (Antwort 4,3 kB).
+
+**Prognose (Solcast), Fassung vom 25.09.2026.** Welche Werte, hat der Nutzer vorgegeben: die, die sein
 Blueprint `ha-pv-optimizer` (github.com/Bascht74/ha-pv-optimizer, am 25.09.2026
 gelesen) benutzt. Das sind aus der Solcast-Integration (HACS) der Sensor „heute“
 mit dem Attribut `detailedForecast` (Halbstunden mit `pv_estimate`,
@@ -408,12 +448,28 @@ Offen am Datenweg:
       PV, Speicher, Wallboxen, Wärmepumpe, Haus).
 - [ ] **Laufende Stunde** fehlt in `house_history` und `day_curve`, bis Home Assistant
       die Stundenstatistik geschrieben hat (Minute 2 der Folgestunde).
+- [x] **Fehlende Tageswerte ohne Helfer** (10.10.2026, Abgleich mit dem eigenen Home
+      Assistant): `ha_<ziel>: statistik` rechnet `ha_pv<N>_energy` aus dem Mittel von
+      `ha_pv<N>_power`, `ha_dev<N>_energy` aus `ha_dev<N>_energy_total` und
+      `ha_meter<N>_today` aus `ha_meter<N>_total` (Stunden ab 0 Uhr plus 5 min der
+      laufenden Stunde, alle 5 min, Verzug bis etwa 6 min); `ha_pv_energy_today` und
+      `ha_selfuse_energy_today` ergeben sich ohne Entität aus den Wechselrichtern
+      (Eigenverbrauch nach Dokument 01); `ha_inv<N>_fault` darf aus dem Statustext
+      kommen (`inv_fault_texts`, Haltezeit `inv_fault_hold_s`). Einzelheiten in
+      Dokument 03, „Datenweg“. Geprüft nur gegen das nachgebaute Home Assistant.
+- [ ] **Am echten Home Assistant prüfen:** Form der Statistik-Antwort (`start`/`end` als
+      Text, fehlt `change`/`mean` bei 0?), `period: 5minute` mit `start_time` aus dem
+      Panel, Größe der Antwort; Flächenwerte aus Stundenmitteln der MPPT-Leistung sind
+      DC und liegen um die Wandlungsverluste über dem AC-Tagesertrag des Wechselrichters.
+- [ ] **Summe mehrerer Statistik-IDs je Reihe** (für `ha_pv_energy_total`, falls es
+      keine einzelne Gesamt-Entität gibt) – nicht gebaut, Rückfrage offen.
 
 **Tagesreihe.** In `record_hour` steht eine einzige auskommentierte Quellzeile für die
 Erzeugung der abgelaufenen Stunde in kWh: `// kwh = id(<Erzeugungssensor>).state;`. Solange
 sie auskommentiert ist, wird 0 eingetragen. Am Gerät schreibt der Datenweg `day_curve`
 stündlich ganz neu aus der Statistik (Erzeugung heute 06 bis 22 Uhr) und `forecast_curve`
-aus den Solcast-Halbstunden; die Quellzeile bleibt für eine native Quelle.
+aus den Solcast-Halbstunden (seit 10.10.2026 aus der Summe der Dächer, wenn es
+Prognosen je Dach gibt); die Quellzeile bleibt für eine native Quelle.
 
 **Speicher.** `storage_update(...)` füllt Tabellenspalte und Ring der Speicherseite;
 Signatur und Sonderwerte stehen in Dokument 03. Künftige BMS-Sensoren rufen nur dieses
@@ -594,23 +650,67 @@ Simulator und Screenshots decken Layout und Logik ab, diese Punkte nicht:
   zeigt erst das Panel. Dasselbe gilt für die Stufen in den Verläufen: LVGL 9 dithert bei
   `LV_COLOR_DEPTH 16` nicht. Die Entscheidung dazu steht in Dokument 03; geprüft wird in jedem Screenshot.
 - **Bildzeit auf dem P4.** Die Flussanimation läuft in einem `interval: 20ms` über 37
-  Teilstrecken (28 Leitungen, 20 Übergänge — Zahlen aus der Ausgabe von
-  `tools/flow_animation.py`). Eine Messung auf dem Panel gibt es nicht.
+  Teilstrecken (37 Leitungen, 20 Übergänge — Zahlen aus der Ausgabe von
+  `tools/flow_animation.py`). Seit dem 10.10.2026 misst die Diagnose am Panel
+  (Dokument 03); Analyse und Vorschläge im Abschnitt „Ruckeln der Kugeln“.
 - **Touch und Scrollen.** Dass `scrollable: false` das Verschieben wirklich unterbindet, ist
   bisher per Quelltext-Prüfung (11.09.2026) und im Simulator belegt, nicht mit dem Finger auf
   dem GT911.
-- **Audio-Halbduplex.** Umgesetzt am 11.09.2026, **Hardware-Test steht aus** — siehe die
-  zwei offenen Punkte im nächsten Abschnitt.
+
+## Ruckeln der Kugeln (Analyse 10.10.2026)
+
+Erstes Log am Panel: `lvgl took a long time for an operation` 536, 712 und
+763 ms, `esp32_hosted.update` 597 ms, `esp32_ble` 297 ms, `interval` 67 bis
+142 ms. Solange eine Komponente `loop()` hält, steht das 20-ms-Intervall der
+Kugeln — sie bleiben stehen. Was der Code dazu zeigt:
+
+- **Voller Schirm durch Überlauf der Flächenliste — behoben.** LVGL hält
+  32 ungültige Flächen je Bild, darüber zeichnet es alles neu
+  (`lv_refr.c`, `lv_inv_area`). Die Kugeln nehmen bis zu 26 (Regel 8 in
+  `tools/flow_animation.py`, `MAXMOVE = 13`), der Datenweg setzt jede Sekunde
+  viele Werte (`interval: 1s` in `.pv-dashboard_ha.yaml`). Im Simulator
+  nachgestellt: mit Kugeln und Wertschwall jedes 10-s-Fenster ein Bild über
+  1.024.000 px, ohne Kugeln höchstens 138.000 px, mit 128 Flächen höchstens
+  140.000 px. Abhilfe `LV_INV_BUF_SIZE=128` im Kern (Dokument 03).
+- **Volles Bild ist teuer.** `buffer_size: 100%` (`.pv-dashboard_ui.yaml`,
+  `lvgl:`) mit einem einzigen Puffer: ESPHome legt ihn und den Drehpuffer
+  (`rotation: 90`, `.pv-dashboard_display.yaml`) je 2 MB ins PSRAM
+  (`lvgl_esphome.cpp`, `setup()`); gezeichnet wird in PSRAM, danach dreht
+  die PPA blockierend (`ppa_rotate_`, `PPA_TRANS_MODE_BLOCKING`) und
+  `esp_lcd_panel_draw_bitmap` kopiert in den Bildspeicher des Panels. Kein
+  zweiter Puffer, also kein Zeichnen während der Ausgabe. Beim Start und bei
+  jedem Seitenwechsel ist ein volles Bild unvermeidlich — die gemessenen
+  536 bis 763 ms passen dazu. Vorschlag, nicht umgesetzt: erst messen
+  (Sensor „LVGL-Ausgabe max“ gegen „LVGL-Bild max“), dann gegebenenfalls
+  einen kleineren Puffer (`buffer_size: 25%`) gegen die volle Fläche
+  abwägen; ESPHome versucht kleine Puffer zuerst im internen RAM.
+- **Verläufe.** Viele Kacheln haben `bg_grad`; Software-Verläufe kosten bei
+  jedem Neuzeichnen der Fläche. Nur relevant, wenn die Kacheln oft neu
+  gezeichnet werden — mit dem größeren Flächenpuffer selten.
+- **Viele Labels je Schwall.** Die Eingabeskripte setzen jeden Text bei
+  jedem Aufruf neu, auch wenn er gleich bleibt; jeder Aufruf macht das Label
+  ungültig. Vorschlag: in den Skripten nur bei geändertem Text setzen (würde
+  die 140.000 px je Schwall weiter senken). Nicht umgesetzt, betrifft alle
+  Seiten.
+- **`esp32_hosted.update`** (597 ms): Die Prüfung holt das Manifest per HTTP
+  blockierend, alle 6 h und einmal nach dem Start (`update_interval: 6h`,
+  `.pv-dashboard_core.yaml`). Selten, kein Grund für regelmäßiges Ruckeln.
+- **`esp32_ble`** (297 ms): Der Bluetooth-Proxy (`bluetooth_proxy: active:
+  true`). Wird er nicht gebraucht, wäre Abschalten der einfachste Gewinn;
+  sonst `active: false`. Nicht geändert — er dient Home Assistant, nicht dem
+  Audio.
+- **`interval`** (67 bis 142 ms): Alle Intervalle zählen unter diesem Namen.
+  Kandidaten: der Datenweg (1 s, ruft je Gruppe die Seitenskripte) und
+  `sys_refresh` (10 s). Der Block der Kugeln selbst braucht im Simulator unter
+  1 ms; am Panel zeigt es „Flussanimation Laufzeit max“.
+- **`micro_wake_word`**: lief mit drei Modellen dauernd und meldete
+  Pufferüberlauf — mit Audio entfernt.
 
 ## Offen aus dem 9.0-Umstieg
 
-Vom 9.0-Umstieg sind noch **zwei** Punkte offen, beide in Dokument 05 beschrieben:
-
-- **Schritt 2 des OTA-Umstiegs** — `password:` durch `encryption: {}` ersetzen, erst nach
-  der ersten erfolgreichen OTA-Installation einer 9.0-Firmware. Auf dem Panel läuft laut
-  Device Builder noch 2026.7.3, der Schritt ist also nicht fällig.
-- **Der Hardware-Test des Audio-Halbduplex** — umgesetzt am 11.09.2026, am Gerät nie
-  gelaufen. Achtstufiger Testplan und die zwei bekannten ESPHome-Grenzen in Dokument 05.
+Vom 9.0-Umstieg ist nichts mehr offen: Der Audio-Test ist mit dem Entfernen von Audio
+am 10.10.2026 entfallen, OTA läuft seit demselben Tag nur noch verschlüsselt
+(`encryption: {}`), ohne Passwort.
 
 Der LVGL-`list`-Bug ist mit 2026.9.0 erledigt.
 
@@ -634,7 +734,7 @@ Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Stand: 10.10.2026 (Seite Prognose je Dachfläche, offene Punkte dazu unter „Prognose und Wetter“; Audio entfernt, ruhiger Start, Diagnose und Analyse „Ruckeln der Kugeln“, Co-Prozessor-Update automatisch, `refresh: always`); davor 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
 Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc

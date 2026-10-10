@@ -1047,83 +1047,6 @@ input_number:
     step: 0.1
     initial: 12.6
     mode: box
-  pvd_solcast_power_now:
-    name: "PVD solcast_power_now"
-    min: -30000
-    max: 30000
-    step: 1
-    initial: 9600
-    mode: box
-  pvd_solcast_next_hour:
-    name: "PVD solcast_next_hour"
-    min: 0
-    max: 100000
-    step: 1
-    initial: 7100
-    mode: box
-  pvd_solcast_peak:
-    name: "PVD solcast_peak"
-    min: -30000
-    max: 30000
-    step: 1
-    initial: 22000
-    mode: box
-  pvd_solcast_api_used:
-    name: "PVD solcast_api_used"
-    min: -100000
-    max: 100000
-    step: 0.01
-    initial: 6
-    mode: box
-  pvd_solcast_api_limit:
-    name: "PVD solcast_api_limit"
-    min: -100000
-    max: 100000
-    step: 0.01
-    initial: 10
-    mode: box
-  pvd_solcast_d2:
-    name: "PVD solcast_d2"
-    min: 0
-    max: 100000
-    step: 0.1
-    initial: 171.2
-    mode: box
-  pvd_solcast_d3:
-    name: "PVD solcast_d3"
-    min: 0
-    max: 100000
-    step: 0.1
-    initial: 48.6
-    mode: box
-  pvd_solcast_d4:
-    name: "PVD solcast_d4"
-    min: 0
-    max: 100000
-    step: 0.1
-    initial: 72.3
-    mode: box
-  pvd_solcast_d5:
-    name: "PVD solcast_d5"
-    min: 0
-    max: 100000
-    step: 0.1
-    initial: 121.8
-    mode: box
-  pvd_solcast_d6:
-    name: "PVD solcast_d6"
-    min: 0
-    max: 100000
-    step: 0.1
-    initial: 66.0
-    mode: box
-  pvd_solcast_d7:
-    name: "PVD solcast_d7"
-    min: 0
-    max: 100000
-    step: 0.1
-    initial: 158.4
-    mode: box
   pvd_wx_sun:
     name: "PVD wx_sun"
     min: 0
@@ -1863,8 +1786,6 @@ template:
         unit_of_measurement: "kWh"
         state: "{{ states('input_number.pvd_solcast_today') | float(0) }}"
         attributes:
-          estimate10: 128.4
-          estimate90: 171.9
           detailedForecast: >-
             {%- set ns = namespace(l=[]) -%}
             {%- for i in range(48) -%}
@@ -1877,77 +1798,6 @@ template:
         name: "solcast_pv_forecast_prognose_verbleibende_leistung_heute"
         unit_of_measurement: "kWh"
         state: "{{ states('input_number.pvd_solcast_remaining') | float(0) }}"
-      - default_entity_id: sensor.solcast_pv_forecast_aktuelle_leistung
-        unique_id: pvd_solcast_power_now
-        name: "solcast_pv_forecast_aktuelle_leistung"
-        unit_of_measurement: "W"
-        state: "{{ states('input_number.pvd_solcast_power_now') | float(0) }}"
-      - default_entity_id: sensor.solcast_pv_forecast_prognose_nachste_stunde
-        unique_id: pvd_solcast_next_hour
-        name: "solcast_pv_forecast_prognose_nachste_stunde"
-        unit_of_measurement: "Wh"
-        state: "{{ states('input_number.pvd_solcast_next_hour') | float(0) }}"
-      - default_entity_id: sensor.solcast_pv_forecast_prognose_spitzenleistung_heute
-        unique_id: pvd_solcast_peak
-        name: "solcast_pv_forecast_prognose_spitzenleistung_heute"
-        unit_of_measurement: "W"
-        state: "{{ states('input_number.pvd_solcast_peak') | float(0) }}"
-      - default_entity_id: sensor.solcast_pv_forecast_verwendete_api_abrufe
-        unique_id: pvd_solcast_api_used
-        name: "solcast_pv_forecast_verwendete_api_abrufe"
-        state: "{{ states('input_number.pvd_solcast_api_used') | float(0) }}"
-      - default_entity_id: sensor.solcast_pv_forecast_max_api_abrufe
-        unique_id: pvd_solcast_api_limit
-        name: "solcast_pv_forecast_max_api_abrufe"
-        state: "{{ states('input_number.pvd_solcast_api_limit') | float(0) }}"
-      - default_entity_id: sensor.solcast_pv_forecast_prognose_morgen
-        unique_id: pvd_solcast_d2
-        name: "solcast_pv_forecast_prognose_morgen"
-        unit_of_measurement: "kWh"
-        state: "{{ states('input_number.pvd_solcast_d2') | float(0) }}"
-        attributes:
-          estimate10: 150.3
-          estimate90: 180.6
-      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_3
-        unique_id: pvd_solcast_d3
-        name: "solcast_pv_forecast_prognose_tag_3"
-        unit_of_measurement: "kWh"
-        state: "{{ states('input_number.pvd_solcast_d3') | float(0) }}"
-        attributes:
-          estimate10: 22.1
-          estimate90: 90.4
-      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_4
-        unique_id: pvd_solcast_d4
-        name: "solcast_pv_forecast_prognose_tag_4"
-        unit_of_measurement: "kWh"
-        state: "{{ states('input_number.pvd_solcast_d4') | float(0) }}"
-        attributes:
-          estimate10: 41.0
-          estimate90: 118.2
-      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_5
-        unique_id: pvd_solcast_d5
-        name: "solcast_pv_forecast_prognose_tag_5"
-        unit_of_measurement: "kWh"
-        state: "{{ states('input_number.pvd_solcast_d5') | float(0) }}"
-        attributes:
-          estimate10: 80.5
-          estimate90: 152.7
-      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_6
-        unique_id: pvd_solcast_d6
-        name: "solcast_pv_forecast_prognose_tag_6"
-        unit_of_measurement: "kWh"
-        state: "{{ states('input_number.pvd_solcast_d6') | float(0) }}"
-        attributes:
-          estimate10: 30.2
-          estimate90: 124.9
-      - default_entity_id: sensor.solcast_pv_forecast_prognose_tag_7
-        unique_id: pvd_solcast_d7
-        name: "solcast_pv_forecast_prognose_tag_7"
-        unit_of_measurement: "kWh"
-        state: "{{ states('input_number.pvd_solcast_d7') | float(0) }}"
-        attributes:
-          estimate10: 112.0
-          estimate90: 175.3
       - default_entity_id: sensor.dwd_station_sonnenscheindauer_heute
         unique_id: pvd_wx_sun
         name: "dwd_station_sonnenscheindauer_heute"
@@ -2050,16 +1900,6 @@ template:
         unique_id: pvd_hp_compressor
         name: "nilan_kompressor"
         state: "Warmwasser"
-      - default_entity_id: sensor.solcast_pv_forecast_zeitpunkt_spitzenleistung_heute
-        unique_id: pvd_solcast_peak_time
-        name: "solcast_pv_forecast_zeitpunkt_spitzenleistung_heute"
-        device_class: timestamp
-        state: "{{ today_at('13:00').isoformat() }}"
-      - default_entity_id: sensor.solcast_pv_forecast_zeitpunkt_letzter_api_abruf
-        unique_id: pvd_solcast_last_poll
-        name: "solcast_pv_forecast_zeitpunkt_letzter_api_abruf"
-        device_class: timestamp
-        state: "{{ now().replace(minute=0, second=0, microsecond=0).isoformat() }}"
   - select:
       - default_entity_id: select.evcc_wallbox_1_mode
         unique_id: pvd_wb1_mode

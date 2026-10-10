@@ -8,11 +8,6 @@
 #
 #   Abschnitt 1  Schriften und Bilder  (frueher .pv-dashboard_fonts.yaml)
 #   Abschnitt 2  Farben und Masse      (frueher .pv-dashboard_tokens.yaml)
-#
-# Ein dritter Abschnitt Audio war geplant, geht aber nicht: i2s_audio,
-# audio_dac und micro_wake_word verlangen die Plattform esp32, und der
-# Simulator laeuft auf host. Audio bleibt deshalb in
-# .pv-dashboard_audio.yaml, das nur das Geraet einbindet.
 ##############################################################################
 
 ##############################################################################

@@ -100,7 +100,7 @@ festen Zeichenbreiten.
 
 Jedes Label in enger Fläche braucht `width:` **plus** `long_mode`. Ohne Breite
 wachsen LVGL-Labels beliebig weit über ihren Container hinaus. Deutsche Wörter
-sind lang: "EIGENVERBRAUCH", oder der Entitätsname `"Lautsprecher-Verstaerker"`.
+sind lang: "EIGENVERBRAUCH", oder ein Entitätsname wie `"Diagnose Takt Flussanimation max"`.
 Gelöst ist der erste Fall heute durch einen Umbruch im Text selbst: Die Kachel
 trägt `text: "EIGEN-\nVERBRAUCH"` mit `long_mode: WRAP`.
 
@@ -250,7 +250,7 @@ Ecken eine Tasche.
 
 ---
 
-Stand: 25.09.2026 (dreizehn Schriften, `f_wx_l`/`f_wx_xl` ergänzt;
+Stand: 10.10.2026 (Beispiel-Entitätsname nach dem Entfernen von Audio); davor 25.09.2026 (dreizehn Schriften, `f_wx_l`/`f_wx_xl` ergänzt;
 MDI-Web-Font auf v7.4.47 festgelegt); davor 20.09.2026 (Zeilenhöhen aus
 `main.cpp` und `size:` aus `.pv-dashboard_utility.yaml`, alle damals zwölf
 neu abgelesen; Punkt 3 um die einstellbaren Beschriftungen ergänzt).

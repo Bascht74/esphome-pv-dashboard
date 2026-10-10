@@ -90,6 +90,43 @@ SO LAEUFT EIN WERT (docs/03, Abschnitt "Datenweg"):
    staende laufen mit der Zeit hoch (fuer recorder.get_statistics), Texte
    und Zeitpunkte fest, dazu eine Template-Wetter-Entitaet mit Vorhersagen.
 
+7. TAGESWERTE OHNE ENTITAET (Wunsch des Nutzers, 10.10.2026: keine neuen
+   Helfer in Home Assistant).
+   a) Aus der Statistik (TAGES_STAT): ha_<ziel>: statistik statt einer ID
+      (Gross-/Kleinschreibung egal) fuer ha_pv<N>_energy (Mittel von
+      ha_pv<N>_power, W), ha_dev<N>_energy (Zuwachs von
+      ha_dev<N>_energy_total, Standard none) und ha_meter<N>_today
+      (Zuwachs von ha_meter<N>_total). Der Sensor des Ziels hoert dann auf
+      die Ersatz-ID; ha_fetch_today holt alle 5 min (ab Minute 1) die
+      vollen Stunden ab 0 Uhr (period hour) und danach die laufende Stunde
+      (period 5minute, ab dem Ende der letzten Stunde) und schreibt die
+      Summe mit publish_state in den Sensor -- durch dessen Faktor, mit
+      dessen Gruppenbit. Leistung: Summe mean / 1000 bzw. / 12000 = kWh.
+      Abgefragt werden nur die Quellen der Ziele auf statistik (zur
+      Compile-Zeit), die Antwort ist eine Zahl je Platz.
+   b) Gruppe Tageswerte: ha_pv_energy_today nicht belegt -> Summe der
+      belegten Wechselrichter, deren Geraet da ist (keiner -> leer);
+      ha_selfuse_energy_today nicht belegt -> nach docs/01
+      Hybrid-Erzeugung (WR 2..4) - Ueberschuss, ohne WR 2..4 Erzeugung -
+      Volleinspeisung - Ueberschuss, nie unter 0.
+
+8. STOERUNG AUS DEM STATUSTEXT: ha_inv<N>_fault nicht belegt und
+   ha_inv<N>_status belegt -> ein Text aus inv_fault_texts (Standard
+   "Fault,Alarm", ganzer Text, Gross-/Kleinschreibung egal) ist eine
+   Stoerung wie ein "an" der Entitaet (pv_status, Meldung). Sie haelt
+   inv_fault_hold_s (Standard 300 s) ueber den letzten Treffer hinaus:
+   Eine Schleife Normal <-> Fault bleibt eine Meldung.
+
+9. PROGNOSE JE DACH (Wunsch des Nutzers, 10.10.2026: Seite Prognose je
+   Dachflaeche). ha_pv<N>_fc_d1..7 = Solcast-Tagesprognosen der Flaeche N
+   (heute, morgen, Tag 3..7), Standard none. Keine Sensoren: ha_fetch_fc
+   liest Zustand (P50), estimate10 (P10) und bei d1 detailedForecast mit
+   einer Antwortvorlage (jinja_dach) und gibt sie an fc_roof_fc. Die
+   Stundenbalken (Ist) kommen aus dem Tagesabruf (Punkt 7a): Stundenmittel
+   von ha_pv<N>_power, auch ohne ha_pv<N>_energy: statistik. Live-Leistung
+   und Tagesertrag kommen mit der Gruppe der Flaeche (fc_roof_live). Gibt
+   es Prognosen je Dach, entsteht forecast_curve aus ihrer Summe.
+
 Kennzeichen in der Tabelle: [A] = Annahme bzw. Vorschlag (Name, Einheit oder
 Vorzeichen nicht am eigenen Home Assistant geprueft), Quelle der Vorschlaege:
 Recherche vom 25.09.2026 (datenweg/entitaeten.md im Claude-Projekt).
@@ -111,6 +148,9 @@ PLAETZE = (
     + [(f"inv_{k}", 7 + k) for k in range(1, 5)]
     + [(f"bat_{n}", 11 + n) for n in range(1, 4)]
     + [("wb_1", 15), ("wb_2", 16), ("heatpump", 17), ("meter_pv", 18), ("meter_house", 19)]
+    # Hausnetz, Sonstige und Hausanschluss samt Leitungen (Ruhiger Start,
+    # 10.10.2026): erst sichtbar, wenn der Hausanschluss liefert
+    + [("grid", 20)]
 )
 
 # Referenz je Platz: Name der Tabellenzeile, deren Wert "Geraet da" heisst
@@ -120,7 +160,8 @@ REFERENZ = dict(
     + [(f"bat_{n}", f"bat{n}_soc") for n in range(1, 4)]
     + [("wb_1", "wb1_mode"), ("wb_2", "wb2_mode"),   # "WB-Status": Modus aus evcc
        ("heatpump", "hp_dhw"),                         # Warmwasser oben (Nilan)
-       ("meter_pv", "meter_pv_power"), ("meter_house", "meter_house_power")]
+       ("meter_pv", "meter_pv_power"), ("meter_house", "meter_house_power"),
+       ("grid", "grid_power")]                         # Hausanschluss (Shelly)
 )
 FREI_WERTE = "['none', 'false', 'off', 'null', '']"
 ERSATZ_ID = "sensor.pv_dashboard_nicht_belegt"
@@ -132,11 +173,46 @@ def frei(sub):
 
 
 def j_entity(sub):
+    if sub[3:] in STAT_ZIEL:
+        # Tageswert aus der Statistik: kein eigener Sensor in HA (Punkt 7)
+        return f"${{ '{ERSATZ_ID}' if {frei(sub)} or {stat(sub)} else {sub} }}"
     return f"${{ '{ERSATZ_ID}' if {frei(sub)} else {sub} }}"
 
 
 def j_belegt(sub):
     return f"${{ 'false' if {frei(sub)} else 'true' }}"
+
+
+# ---------------------------------------------------------------------------
+# Tageswerte aus der Statistik (Punkt 7). ha_<ziel>: statistik heisst: das
+# Panel rechnet den Tageswert aus recorder.get_statistics einer anderen
+# Entitaet -- m = Mittel einer Leistung in W (Summe der Stundenmittel / 1000),
+# c = Zuwachs eines Zaehlerstands in kWh. Reihenfolge = Platz in den Reihen.
+# ---------------------------------------------------------------------------
+STAT_WERT = "statistik"
+TAGES_STAT = ([(f"pv{i}_energy", f"pv{i}_power", "m") for i in range(1, 9)]
+              + [(f"dev{d}_energy", f"dev{d}_energy_total", "c") for d in range(1, 6)]
+              + [(f"meter{m}_today", f"meter{m}_total", "c") for m in range(5)])
+STAT_ZIEL = {z_ for z_, _, _ in TAGES_STAT}
+
+
+def stat(sub):
+    """Jinja-Bedingung: Substitution sub steht auf statistik."""
+    return f"({sub} | string | lower | trim) == '{STAT_WERT}'"
+
+
+def stat_an(ziel, quelle):
+    """Jinja-Bedingung: Ziel aus der Statistik, Quelle belegt."""
+    return f"({stat('ha_' + ziel)}) and not ({frei('ha_' + quelle)})"
+
+
+def j_stat_quelle(ziel, quelle):
+    """Statistik-ID der Quelle, wenn das Ziel aus der Statistik kommt, sonst ''."""
+    return f"${{ ha_{quelle} if {stat_an(ziel, quelle)} else '' }}"
+
+
+def j_stat_an(ziel, quelle):
+    return f"${{ 'true' if {stat_an(ziel, quelle)} else 'false' }}"
 
 # ---------------------------------------------------------------------------
 # Gruppen: Bit in ha_dirty, Geraetemaske (0 = immer), Name, C++-Aufruf.
@@ -162,13 +238,18 @@ for i in range(8):
     n = i + 1
     gruppe(i, 1 << i, f"Flaeche {n}", f"""
 id(pv_update).execute(-1, {i}, @pv{n}_power, @pv{n}_energy);
-id(ov_roof).execute({i}, @pv{n}_power, @pv{n}_energy);""")
+id(ov_roof).execute({i}, @pv{n}_power, @pv{n}_energy);
+id(fc_roof_live).execute({i}, @pv{n}_power, @pv{n}_energy);""")
 for k in range(4):
     n = k + 1
     gruppe(8 + k, 1 << (8 + k), f"Wechselrichter {n}", f"""
 id(pv_update).execute({k}, -1, @inv{n}_power, @inv{n}_energy);
 id(ov_inverter).execute({k}, @inv{n}_power, @inv{n}_energy);
-id(pv_status).execute({k}, !@inv{n}_fault, @inv{n}_status, @inv{n}_temp);""")
+{{
+  // Stoerung: an/aus-Entitaet, sonst der Statustext (ha_inv_fault_txt, Punkt 8)
+  const bool f = B_inv{n}_fault ? @inv{n}_fault : ((id(ha_inv_fault_txt) >> {k}) & 1u);
+  id(pv_status).execute({k}, !f, (f && !B_inv{n}_fault) ? id(ha_inv_fault_msg)[{k}] : @inv{n}_status, @inv{n}_temp);
+}}""")
 for k in range(3):
     n = k + 1
     gruppe(12 + k, 1 << (12 + k), f"Speicher {n}", f"""
@@ -247,20 +328,48 @@ gruppe(25, 0, "Tageswerte", """
   const float full = da(18) ? @meter2_today : 0.0f;
   const float feed = @meter1_today;
   const float surplus = da(19) ? @meter4_today : sub(feed, full);
-  id(ov_totals).execute(@pv_energy_today, @home_energy_today, feed, @meter0_today, full, surplus, @solcast_remaining);
-  id(money_update).execute(full, surplus, @selfuse_energy_today, @meter0_today);
+  // Ohne eigene Entitaet (nicht belegt, Punkt 7): Erzeugung = Summe der
+  // belegten Wechselrichter, deren Geraet da ist (keiner -> leer);
+  // Eigenverbrauch nach docs/01 = Hybrid-Erzeugung - Ueberschuss; die
+  // Hybrid-Erzeugung ist die Summe der WR 2..4 (alles ausser der
+  // Volleinspeisung), ohne sie Erzeugung - Volleinspeisung
+  float gen = @pv_energy_today, hyb = NAN;
+  {
+    float s = NAN;
+    bool alle = false, haus = false;
+    if (B_inv1_energy && da(8)) {
+      s = add(s, @inv1_energy);
+      alle = true;
+    }
+    if (B_inv2_energy && da(9)) {
+      const float e = @inv2_energy;
+      s = add(s, e);
+      hyb = add(hyb, e);
+      alle = haus = true;
+    }
+    if (B_inv3_energy && da(10)) {
+      const float e = @inv3_energy;
+      s = add(s, e);
+      hyb = add(hyb, e);
+      alle = haus = true;
+    }
+    if (B_inv4_energy && da(11)) {
+      const float e = @inv4_energy;
+      s = add(s, e);
+      hyb = add(hyb, e);
+      alle = haus = true;
+    }
+    if (!B_pv_energy_today)
+      gen = alle ? s : LEER;
+    if (!haus)
+      hyb = sub(gen, full);
+  }
+  const float own = B_selfuse_energy_today ? @selfuse_energy_today : pos(sub(hyb, surplus));
+  id(ov_totals).execute(gen, @home_energy_today, feed, @meter0_today, full, surplus, @solcast_remaining);
+  id(money_update).execute(full, surplus, own, @meter0_today);
 }""")
-gruppe(26, 0, "Prognose", """
-{
-  id(fc_today).execute(@solcast_today, @solcast_today_p10, @solcast_today_p90, @solcast_remaining,
-                       @solcast_power_now, @solcast_next_hour, @solcast_peak, when(@solcast_peak_time, false),
-                       when(@solcast_last_poll, false), I(@solcast_api_used, -1), I(@solcast_api_limit, -1));
-  const float p50[7] = {@solcast_today, """ + ", ".join(f"@solcast_d{d}" for d in range(2, 8)) + """};
-  const float p10[7] = {@solcast_today_p10, """ + ", ".join(f"@solcast_d{d}_p10" for d in range(2, 8)) + """};
-  const float p90[7] = {@solcast_today_p90, """ + ", ".join(f"@solcast_d{d}_p90" for d in range(2, 8)) + """};
-  for (int d = 0; d < 7; d++)
-    id(fc_day).execute(d, id(ha_day_label)(d, jetzt), id(ha_wx_cond)[d], p50[d], p10[d], p90[d]);
-}""")
+# Bit 26 (Prognose) ist frei: Die Seite Prognose bekommt ihre Werte je Dach
+# ueber ha_fetch_fc (fc_roof_fc) und die Flaechen-Gruppen (fc_roof_live).
 gruppe(27, 0, "Wetter jetzt", """
 {
   const auto &t = id(ha_wx_today);
@@ -301,13 +410,17 @@ for i in range(1, 9):
     w, m = (i - 1) // 2 + 1, (i - 1) % 2 + 1
     z(f"pv{i}_power", "n", f"sensor.wr{w}_pv{m}_leistung", [i - 1], "W", PV_DEMO[i - 1][0],
       hin="W, Flaeche/Modul am Wechselrichter %d, MPPT %d [A]" % (w, m))
-    z(f"pv{i}_energy", "n", f"sensor.wr{w}_pv{m}_ertrag_heute", [i - 1], "kWh", PV_DEMO[i - 1][1], hin="kWh heute [A]")
+    z(f"pv{i}_energy", "n", f"sensor.wr{w}_pv{m}_ertrag_heute", [i - 1], "kWh", PV_DEMO[i - 1][1],
+      hin="kWh heute [A]; statistik: aus pv%d_power" % i)
 INV_DEMO = [(6214, 38.5, 41.5), (588, 3.9, 38.0), (7835, 58.2, 39.2), (5231, 46.4, 40.1)]
 for k in range(1, 5):
     b = 7 + k
     z(f"inv{k}_power", "n", f"sensor.wr{k}_leistung", [b], "W", INV_DEMO[k - 1][0], hin="W [A]")
-    z(f"inv{k}_energy", "n", f"sensor.wr{k}_ertrag_heute", [b], "kWh", INV_DEMO[k - 1][1], hin="kWh heute [A]")
-    z(f"inv{k}_fault", "b", f"binary_sensor.wr{k}_stoerung", [b], demo=False, hin="an = Stoerung [A]")
+    # auch Tageswerte: Summe, wenn ha_pv_energy_today nicht belegt ist
+    z(f"inv{k}_energy", "n", f"sensor.wr{k}_ertrag_heute", [b, G["Tageswerte"]], "kWh", INV_DEMO[k - 1][1],
+      hin="kWh heute [A]")
+    z(f"inv{k}_fault", "b", f"binary_sensor.wr{k}_stoerung", [b], demo=False,
+      hin="an = Stoerung [A]; nicht belegt: Statustext, inv_fault_texts")
     z(f"inv{k}_status", "t", f"sensor.wr{k}_status", [b], demo="Normal", hin="Fehlertext [A]")
     z(f"inv{k}_temp", "n", f"sensor.wr{k}_temperatur", [b], "°C", INV_DEMO[k - 1][2], hin="[A]")
 
@@ -415,7 +528,11 @@ for d, (geraet, w, kwh) in enumerate(
         [("backofen", 0, 1.2), ("waschmaschine", 0, 0.8), ("spuelmaschine", 0, 1.1), ("trockner", 0, 0.0),
          ("grundlast", 312, 7.5)], start=1):
     z(f"dev{d}_power", "n", f"sensor.{geraet}_leistung", [VB] + ([HN] if d == 5 else []), "W", w, hin="[A]")
-    z(f"dev{d}_energy", "n", f"sensor.{geraet}_energie_heute", [VB], "kWh", kwh, hin="[A]")
+    z(f"dev{d}_energy", "n", f"sensor.{geraet}_energie_heute", [VB], "kWh", kwh,
+      hin="[A]; statistik: aus dev%d_energy_total" % d)
+for d in range(1, 6):
+    # Zaehlerstand nur fuer ha_dev<N>_energy: statistik (Punkt 7), Standard none
+    z(f"dev{d}_energy_total", "z", "none", [], "kWh", 0.1, hin="kWh, Zaehler fuer ha_dev%d_energy: statistik" % d)
 
 # --- Netz (Shelly Pro 3EM, Geraetename "hausanschluss" [A]) --------------------
 NZ = [G["Netz"]]
@@ -445,7 +562,8 @@ ZW_NAME = ["Hausanschluss Bezug", "Hausanschluss Einspeisung", "PV-Zaehler Einsp
            "Hauszaehler Einspeisung"]
 for m, (stand, heute, demo, rate) in enumerate(ZAEHLER):
     z(f"meter{m}_total", "z", stand, ZW, "kWh", rate, hin=f"kWh, {ZW_NAME[m]} [A]")
-    z(f"meter{m}_today", "n", heute, ZW + [TW], "kWh", demo, hin="utility_meter-Helfer [A]")
+    z(f"meter{m}_today", "n", heute, ZW + [TW], "kWh", demo,
+      hin="utility_meter-Helfer [A]; statistik: aus meter%d_total" % m)
 z("meter_pv_power", "n", "sensor.pv_zaehler_leistung", ZW, "W", 6214, hin="W, + = Einspeisung [A]")
 z("meter_house_power", "n", "sensor.hauszaehler_leistung", ZW, "W", 5126, hin="W, + = Einspeisung [A]")
 
@@ -463,28 +581,27 @@ z("pv_energy_total", "z", "sensor.pv_erzeugung_gesamt", [], "kWh", 6.1, hin="nur
 z("home_energy_total", "z", "sensor.hausverbrauch_gesamt", [], "kWh", 0.9, hin="nur Statistik [A]")
 
 # --- Prognose (Solcast, deutsche IDs) -----------------------------------------
-FC = [G["Prognose"]]
+# Nur noch zwei Werte fuer die ganze Anlage: Tagesprognose heute (ihr Attribut
+# detailedForecast ergibt die Tagesreihe forecast_curve der Seite PV, falls
+# keine Prognose je Dach belegt ist) und Rest heute (Statusleiste, Haus).
+# Die Seite Prognose zeigt die Daecher einzeln (ha_pv<N>_fc_d<T>, unten).
 SC = "sensor.solcast_pv_forecast_"
-z("solcast_today", "n", SC + "prognose_heute", FC, "kWh", 155.0)
-z("solcast_today_p10", "n", "solcast_today", FC, demo=128.4, attr="estimate10")
-z("solcast_today_p90", "n", "solcast_today", FC, demo=171.9, attr="estimate90")
-z("solcast_remaining", "n", SC + "prognose_verbleibende_leistung_heute", FC + [TW, HN], "kWh", 12.6)
-z("solcast_power_now", "n", SC + "aktuelle_leistung", FC, "W", 9600)
-z("solcast_next_hour", "n", SC + "prognose_nachste_stunde", FC, "Wh", 7100, mul=0.001, hin="Wh -> kWh")
-z("solcast_peak", "n", SC + "prognose_spitzenleistung_heute", FC, "W", 22000, mul=0.001, hin="W -> kW")
-z("solcast_peak_time", "t", SC + "zeitpunkt_spitzenleistung_heute", FC, demo="{{ today_at('13:00').isoformat() }}")
-z("solcast_last_poll", "t", SC + "zeitpunkt_letzter_api_abruf", FC,
-  demo="{{ now().replace(minute=0, second=0, microsecond=0).isoformat() }}")
-z("solcast_api_used", "n", SC + "verwendete_api_abrufe", FC, "", 6)
-z("solcast_api_limit", "n", SC + "max_api_abrufe", FC, "", 10)
-FC_DEMO = [(171.2, 150.3, 180.6), (48.6, 22.1, 90.4), (72.3, 41.0, 118.2), (121.8, 80.5, 152.7),
-           (66.0, 30.2, 124.9), (158.4, 112.0, 175.3)]
-for d in range(2, 8):
-    ent = SC + ("prognose_morgen" if d == 2 else f"prognose_tag_{d}")
-    p50, p10, p90 = FC_DEMO[d - 2]
-    z(f"solcast_d{d}", "n", ent, FC, "kWh", p50, hin="ab Tag 3 ab Werk aus" if d == 3 else "")
-    z(f"solcast_d{d}_p10", "n", f"solcast_d{d}", FC, demo=p10, attr="estimate10")
-    z(f"solcast_d{d}_p90", "n", f"solcast_d{d}", FC, demo=p90, attr="estimate90")
+z("solcast_today", "n", SC + "prognose_heute", [], "kWh", 155.0,
+  hin="nur Attribut detailedForecast (forecast_curve)")
+z("solcast_remaining", "n", SC + "prognose_verbleibende_leistung_heute", [TW, HN], "kWh", 12.6)
+
+# --- Prognose je Dach (Seite Prognose, Wunsch des Nutzers 10.10.2026) ---------
+# Je Flaeche N ein Solcast-Eintrag (eigene Anlage in Solcast), Tag T = 1
+# (heute) .. 7. Standard none: Nur Flaechen mit belegtem ha_pv<N>_fc_d1
+# bekommen eine Kachel. Gelesen werden Zustand (P50 in kWh), Attribut
+# estimate10 (P10) und bei T = 1 detailedForecast (Halbstunden in kW) -- alles
+# ueber EINE Aktion mit Antwortvorlage (ha_fetch_fc), keine Sensoren.
+FC_TAGE = 7
+for i in range(1, 9):
+    for d in range(1, FC_TAGE + 1):
+        z(f"pv{i}_fc_d{d}", "n", "none", [], "kWh",
+          hin=("Solcast-Prognose heute dieser Flaeche (mit detailedForecast)" if d == 1 else
+               "morgen" if d == 2 else f"Tag {d}") if i == 1 or d == 1 else "")
 
 # --- Wetter (DWD; Station und Warnzelle sind Platzhalter [A]) -----------------
 WX = [G["Wetter jetzt"]]
@@ -581,22 +698,20 @@ JINJA_TAG = """
 
 
 def jinja_solcast(quelle):
+    """Halbstunden P50 heute (48 Plaetze ab 00:00, kW) der ganzen Anlage --
+    nur noch fuer die Tagesreihe forecast_curve (Seite PV, Uebersicht)."""
     return ("{%- set src = " + quelle + " -%}\n" + """
-{%- set o = namespace(a=['nan'] * 48, b=['nan'] * 48, c=['nan'] * 48) -%}
+{%- set o = namespace(a=['nan'] * 48) -%}
 {%- for x in src -%}
 {%- set ps = x.get('period_start') -%}
 {%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}
 {%- if t and t.date() == now().date() -%}
 {%- set i = t.hour * 2 + t.minute // 30 -%}
 {%- set o.a = o.a[:i] + [A] + o.a[i + 1:] -%}
-{%- set o.b = o.b[:i] + [B] + o.b[i + 1:] -%}
-{%- set o.c = o.c[:i] + [C] + o.c[i + 1:] -%}
 {%- endif -%}
 {%- endfor -%}
-{{ {'a': o.a | join(','), 'b': o.b | join(','), 'c': o.c | join(',')} | tojson }}
-""".replace("[A]", "[" + j_n("x.get('pv_estimate')", 2) + "]").replace(
-        "[B]", "[" + j_n("x.get('pv_estimate10')", 2) + "]").replace(
-        "[C]", "[" + j_n("x.get('pv_estimate90')", 2) + "]")).strip("\n")
+{{ {'a': o.a | join(',')} | tojson }}
+""".replace("[A]", "[" + j_n("x.get('pv_estimate')", 2) + "]")).strip("\n")
 
 
 JINJA_SOLCAST = jinja_solcast("response.get('data') or []")
@@ -646,6 +761,135 @@ def jinja_statistik(zr):
     aus = ", ".join(f"'{k}': o_{k}.l | join(',')" for k, _ in STAT_REIHEN)
     teile.append(f"{{{{ {{'per': {zr['per']}, 'lab': {zr['lab']}, {aus}}} | tojson }}}}")
     return "\n".join(teile)
+
+
+def j_id(sub):
+    """Entity-ID der Substitution sub, '' wenn nicht belegt (fuer Jinja-Listen)."""
+    return f"${{ '' if {frei(sub)} else {sub} }}"
+
+
+def kurve_an(i):
+    """Jinja-Bedingung: Flaeche i hat eine Prognose (fc_d1) und eine Leistung --
+    dann holt der Tagesabruf ihre Stundenmittel fuer die Seite Prognose."""
+    return f"not ({frei(f'ha_pv{i}_fc_d1')}) and not ({frei(f'ha_pv{i}_power')})"
+
+
+def j_kurve(i):
+    return f"${{ ha_pv{i}_power if {kurve_an(i)} else '' }}"
+
+
+def j_kurve_an(i):
+    return f"${{ 'true' if {kurve_an(i)} else 'false' }}"
+
+
+def stat_ids():
+    """statistic_ids des Tagesabrufs: die Quellen der Ziele auf statistik und
+    die Leistung jeder Flaeche mit Prognose (Stundenbalken der Seite Prognose)."""
+    ids = [f"'{j_stat_quelle(z_, q)}'" for z_, q, _ in TAGES_STAT] + [f"'{j_kurve(i)}'" for i in range(1, 9)]
+    return "{{ [" + ", ".join(ids) + "] | select | unique | list }}"
+
+
+def jinja_heute(teiler):
+    """Tageswerte aus der Statistik (Punkt 7): je Platz von TAGES_STAT die
+    Summe der Mittel (m, W -> kWh mit teiler) bzw. der Zuwaechse (c, kWh),
+    '' ohne Zeile; dazu das Ende der letzten Zeile (Start des 5-min-Abrufs).
+    Ausserdem c: je Flaeche 1..8 (';' getrennt) die Stundenmittel in kW, 24
+    Plaetze nach Ortszeit (Stunden-Abruf) bzw. das Mittel der laufenden
+    Stunde in kW (5-min-Abruf); '' = kein Wert oder Flaeche ohne Prognose."""
+    stunde = teiler == 1000
+    q = ",\n".join(f"['{j_stat_quelle(z_, quelle)}', '{art}']" for z_, quelle, art in TAGES_STAT)
+    ende = [
+        "{%- set t = e.get('end') -%}",
+        "{%- set t = as_datetime(t) if t is string else t -%}",
+        "{%- if t and t > o.end -%}",
+        "{%- set o.end = t -%}",
+        "{%- endif -%}",
+    ]
+    if stunde:
+        kurve = [
+            "{%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}",
+            "{%- set h.v = h.v[:s.hour] + ['%.3g' | format(w / 1000)] + h.v[s.hour + 1:] -%}",
+        ]
+        kurve_aus = "{%- set c.l = c.l + [(h.v | join(',')) if x else ''] -%}"
+    else:
+        kurve = ["{%- set h.s = h.s + w -%}", "{%- set h.n = h.n + 1 -%}"]
+        kurve_aus = "{%- set c.l = c.l + [('%.3g' | format(h.s / h.n / 1000)) if h.n else ''] -%}"
+    return "\n".join([
+        "{%- set q = [",
+        q,
+        "] -%}",
+        "{%- set o = namespace(v=[], end=today_at('00:00')) -%}",
+        "{%- for x in q -%}",
+        "{%- set ns = namespace(s=0, n=0) -%}",
+        "{%- for e in (response.statistics.get(x[0], []) if x[0] else []) -%}",
+        "{%- set w = e.get('mean') if x[1] == 'm' else e.get('change') -%}",
+        "{%- set ns.n = ns.n + 1 -%}",
+        "{%- if w is number -%}",
+        "{%- set ns.s = ns.s + w -%}",
+        "{%- endif -%}",
+    ] + ende + [
+        "{%- endfor -%}",
+        f"{{%- set o.v = o.v + [(((ns.s / {teiler}) if x[1] == 'm' else ns.s) | round(3)) if ns.n else ''] -%}}",
+        "{%- endfor -%}",
+        "{%- set k = [" + ", ".join(f"'{j_kurve(i)}'" for i in range(1, 9)) + "] -%}",
+        "{%- set c = namespace(l=[]) -%}",
+        "{%- for x in k -%}",
+        "{%- set h = namespace(v=[''] * 24, s=0, n=0) -%}",
+        "{%- for e in (response.statistics.get(x, []) if x else []) -%}",
+        "{%- set w = e.get('mean') -%}",
+        "{%- if w is number -%}",
+    ] + kurve + ["{%- endif -%}"] + ende + [
+        "{%- endfor -%}",
+        kurve_aus,
+        "{%- endfor -%}",
+        "{{ {'v': o.v | join(','), 'end': o.end.isoformat(), 'c': c.l | join(';')} | tojson }}",
+    ])
+
+
+# Prognose je Dach (Seite Prognose): eine Aktion liest fuer jede Flaeche mit
+# belegtem ha_pv<N>_fc_d1 die Halbstunden heute (detailedForecast: pv_estimate
+# und pv_estimate10 in kW, 48 Plaetze ab 00:00) und die Tage 1..7 (Zustand =
+# P50, Attribut estimate10 = P10, kWh). Antwort je Flaeche N: aN, bN
+# (Halbstunden P50, P10), dN, eN (Tage P50, P10); '' = kein Wert. Zahlen mit
+# drei bzw. vier gueltigen Stellen ('%g'), Nachtwerte "0": fuer sechs Daecher
+# rund 2 kB. Flaechen ohne Prognose fehlen in der Antwort.
+def jinja_dach():
+    q = ",\n".join("[" + ", ".join(f"'{j_id(f'ha_pv{i}_fc_d{d}')}'" for d in range(1, FC_TAGE + 1)) + "]"
+                   for i in range(1, 9))
+    return "\n".join([
+        "{%- set q = [",
+        q,
+        "] -%}",
+        "{%- set o = namespace(l=[]) -%}",
+        "{%- for k in range(q | length) -%}",
+        "{%- set ids = q[k] -%}",
+        "{%- if ids[0] -%}",
+        "{%- set h = namespace(a=[''] * 48, b=[''] * 48) -%}",
+        "{%- for x in state_attr(ids[0], 'detailedForecast') or [] -%}",
+        "{%- set ps = x.get('period_start') -%}",
+        "{%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}",
+        "{%- if t and t.date() == now().date() -%}",
+        "{%- set i = t.hour * 2 + t.minute // 30 -%}",
+        "{%- set a = x.get('pv_estimate') -%}",
+        "{%- set b = x.get('pv_estimate10') -%}",
+        "{%- set h.a = h.a[:i] + [('%.3g' | format(a)) if a is number else ''] + h.a[i + 1:] -%}",
+        "{%- set h.b = h.b[:i] + [('%.3g' | format(b)) if b is number else ''] + h.b[i + 1:] -%}",
+        "{%- endif -%}",
+        "{%- endfor -%}",
+        "{%- set d = namespace(p=[], q=[]) -%}",
+        "{%- for e in ids -%}",
+        "{%- set v = (states(e) | float(none)) if e else none -%}",
+        "{%- set w = (state_attr(e, 'estimate10') | float(none)) if e else none -%}",
+        "{%- set d.p = d.p + [('%.4g' | format(v)) if v is number else ''] -%}",
+        "{%- set d.q = d.q + [('%.4g' | format(w)) if w is number else ''] -%}",
+        "{%- endfor -%}",
+        "{%- set n = (k + 1) | string -%}",
+        "{%- set o.l = o.l + [['a' ~ n, h.a | join(',')], ['b' ~ n, h.b | join(',')], ['d' ~ n, d.p | join(',')],"
+        " ['e' ~ n, d.q | join(',')]] -%}",
+        "{%- endif -%}",
+        "{%- endfor -%}",
+        "{{ dict(o.l) | tojson }}",
+    ])
 
 
 STUNDEN_T0 = "now().replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)"
@@ -767,26 +1011,60 @@ for (size_t k = 0; k < d.size(); k++) {
   // sun_duration in Sekunden [A], nur mit der DWD-Option fuer Zusatzwerte
   id(wx_day).execute(tag, id(ha_day_label)(tag, jetzt), lage, F(hi, k), F(lo, k), F(rr, k), F(p, k),
                      F(s, k) / 3600.0f, F(w, k));
-  id(ha_wx_cond)[tag] = lage;
   if (tag == 0)
     id(ha_wx_today) = {F(hi, k), F(lo, k), F(rr, k)};
 }
 id(ha_wx_stamp) = jetzt.is_valid() ? jetzt.strftime("%H:%M") : std::string();
-id(ha_dirty) |= (1u << 26) | (1u << 27);"""
+id(ha_dirty) |= 1u << 27;"""
+
+# Tagesreihe Prognose (06..22 Uhr, kWh je Stunde = Mittel zweier Halbstunden
+# in kW) fuer die Seiten PV und Uebersicht. Gibt es Prognosen je Dach
+# (fc_roof_on), rechnet ERFOLG_DACH die Reihe aus deren Summe; dann bleibt
+# dieser Weg (ganze Anlage) still.
+KURVE_SETZEN = """
+{
+  char buf[128];
+  int n = 0;
+  for (int h = 6; h < 22 && n >= 0 && n < (int) sizeof(buf); h++) {
+    float v = (P[2 * h] + P[2 * h + 1]) * 0.5f;
+    v = std::isfinite(v) ? std::clamp(v, 0.0f, 999.0f) : 0.0f;
+    n += snprintf(buf + n, sizeof(buf) - n, h > 6 ? ",%.2f" : "%.2f", v);
+  }
+  if (id(forecast_curve).state != buf)
+    id(forecast_curve).make_call().set_value(buf).perform();
+}"""
 
 ERFOLG_SOLCAST = """
-id(fc_slots).execute(S("a"), S("b"), S("c"));
-// Tagesreihe Prognose (06..22 Uhr, kWh je Stunde) aus den Halbstunden
-const auto &p = id(fc_p50);
-char buf[128];
-int n = 0;
-for (int h = 6; h < 22 && n >= 0 && n < (int) sizeof(buf); h++) {
-  float v = (p[2 * h] + p[2 * h + 1]) * 0.5f;
-  v = std::isfinite(v) ? std::clamp(v, 0.0f, 999.0f) : 0.0f;
-  n += snprintf(buf + n, sizeof(buf) - n, h > 6 ? ",%.2f" : "%.2f", v);
+if (id(fc_roof_on) != 0)
+  return;
+const auto a = L(S("a"));
+std::array<float, 48> P;
+for (size_t i = 0; i < 48; i++)
+  P[i] = F(a, i);""" + KURVE_SETZEN
+
+ERFOLG_DACH = """
+// Prognose je Dach -> Seite Prognose (fc_roof_fc speichert nur, fc_redraw
+// zeichnet einmal am Ende); Flaechen ohne Schluessel in der Antwort: weg
+for (int k = 0; k < 8; k++) {
+  const std::string n = std::to_string(k + 1);
+  id(fc_roof_fc).execute(k, S(("a" + n).c_str()), S(("b" + n).c_str()), S(("d" + n).c_str()),
+                         S(("e" + n).c_str()));
 }
-if (id(forecast_curve).state != buf)
-  id(forecast_curve).make_call().set_value(buf).perform();"""
+id(fc_redraw).execute();
+if (id(fc_roof_on) == 0)
+  return;
+// forecast_curve aus der Summe der Daecher (P50)
+std::array<float, 48> P;
+P.fill(NAN);
+for (int k = 0; k < 8; k++) {
+  if (!((id(fc_roof_on) >> k) & 1u))
+    continue;
+  for (int i = 0; i < 48; i++) {
+    const float v = id(fc_r_p50)[k][i];
+    if (std::isfinite(v))
+      P[i] = std::isfinite(P[i]) ? P[i] + v : v;
+  }
+}""" + KURVE_SETZEN
 
 
 def erfolg_statistik(rng):
@@ -819,6 +1097,108 @@ if (!dc.empty() && jetzt.is_valid() && dc != id(day_curve).state) {
   id(curve_day) = jetzt.year * 1000 + jetzt.day_of_year;
   id(day_curve).make_call().set_value(dc).perform();
 }"""
+
+
+N_STAT = len(TAGES_STAT)
+
+# Stoerung aus dem Statustext (Punkt 8), im 1-s-Intervall vor der Drosselung
+STOERTEXT = einr("""// Stoerung aus dem Statustext: ha_inv<N>_fault nicht belegt, ha_inv<N>_status
+// belegt. Ein Text aus inv_fault_texts (ganzer Text, ohne Gross-/Klein-
+// schreibung) setzt das Bit sofort; es faellt erst, wenn inv_fault_hold_s
+// lang keiner kam. Aenderung -> Gruppe des Wechselrichters neu.
+{
+  constexpr bool AUS_TEXT[4] = {""" + ", ".join(f"!B_inv{n}_fault && B_inv{n}_status" for n in range(1, 5)) + """};
+  static std::vector<std::string> liste;
+  static uint32_t zuletzt[4] = {0, 0, 0, 0};
+  auto klein = [](const std::string &s) -> std::string {
+    const size_t a = s.find_first_not_of(" \\t"), b = s.find_last_not_of(" \\t");
+    std::string t = a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
+    for (auto &c : t)
+      c = tolower((unsigned char) c);
+    return t;
+  };
+  if (liste.empty()) {
+    for (const auto &x : id(ha_split)("${inv_fault_texts}"))
+      if (!klein(x).empty())
+        liste.push_back(klein(x));
+    if (liste.empty())
+      liste.push_back(std::string("\\x01"));  // leere Liste: nie ein Treffer
+  }
+  text_sensor::TextSensor *const st[4] = {""" + ", ".join(f"id(ha_inv{n}_status)" for n in range(1, 5)) + """};
+  const uint32_t ms = millis();
+  for (int k = 0; k < 4; k++) {
+    if (!AUS_TEXT[k])
+      continue;
+    const bool hit = T_ok(st[k]) && std::find(liste.begin(), liste.end(), klein(st[k]->state)) != liste.end();
+    if (hit) {
+      zuletzt[k] = ms | 1u;
+      id(ha_inv_fault_msg)[k] = st[k]->state;
+    }
+    const bool f = zuletzt[k] != 0 && (hit || ms - zuletzt[k] < (uint32_t) (${inv_fault_hold_s}) * 1000u);
+    if (!f)
+      zuletzt[k] = 0;
+    if (f != (bool) ((id(ha_inv_fault_txt) >> k) & 1u)) {
+      id(ha_inv_fault_txt) ^= 1u << k;
+      id(ha_dirty) |= 1u << (8 + k);
+    }
+  }
+}""", 10)
+
+ERFOLG_HEUTE_H = f"""
+// Volle Stunden ab 0 Uhr; dann die 5-min-Werte ab dem Ende der letzten Stunde
+const auto v = L(S("v"));
+for (size_t k = 0; k < {N_STAT}; k++)
+  id(ha_stat_h)[k] = F(v, k);
+id(ha_stat_end) = S("end");
+id(ha_fc_h) = S("c");
+id(ha_fetch_today_5min).execute();"""
+
+ERFOLG_HEUTE_M = f"""
+const auto v = L(S("v"));
+for (size_t k = 0; k < {N_STAT}; k++)
+  id(ha_stat_m)[k] = F(v, k);
+id(ha_fc_m) = S("c");
+id(ha_stat_today_set).execute();"""
+
+FEHLER_HEUTE_M = """- lambda: |-
+    ESP_LOGW("ha", "Tageswerte 5 min: %s", error.c_str());
+    id(ha_stat_m).fill(NAN);
+    id(ha_fc_m).clear();
+- script.execute: ha_stat_today_set"""
+
+
+def stat_setzen():
+    """Skript ha_stat_today_set: Stunden + 5 min in die Sensoren der Ziele."""
+    an = ", ".join(j_stat_an(z_, q) for z_, q, _ in TAGES_STAT)
+    kurve = ", ".join(j_kurve_an(i) for i in range(1, 9))
+    ziele = ", ".join(f"id(ha_{z_})" for z_, _, _ in TAGES_STAT)
+    return f"""
+  # Tageswerte aus der Statistik in die Sensoren der Ziele (ha_<ziel>:
+  # statistik): volle Stunden + laufende Stunde; beide ohne Zeile -> NAN
+  # (leer). publish_state laeuft durch den Faktor des Ziels und setzt sein
+  # Gruppenbit wie ein Wert aus Home Assistant. Danach die Stundenbalken je
+  # Flaeche mit Prognose an die Seite Prognose (fc_roof_hours).
+  - id: ha_stat_today_set
+    then:
+      - lambda: |-
+          constexpr bool AN[{N_STAT}] = {{{an}}};
+          sensor::Sensor *const ZIEL[{N_STAT}] = {{{ziele}}};
+          for (size_t k = 0; k < {N_STAT}; k++) {{
+            if (!AN[k])
+              continue;
+            const float h = id(ha_stat_h)[k], m = id(ha_stat_m)[k];
+            ZIEL[k]->publish_state(std::isnan(h) ? m : (std::isnan(m) ? h : h + m));
+          }}
+          // Stundenbalken der Seite Prognose: je Flaeche 24 Stundenmittel und
+          // das Mittel der laufenden Stunde in kW (';' trennt die Flaechen)
+          constexpr bool KURVE[8] = {{{kurve}}};
+          const auto h = id(ha_split_by)(id(ha_fc_h), ';'), m = id(ha_split_by)(id(ha_fc_m), ';');
+          for (size_t k = 0; k < 8; k++) {{
+            if (KURVE[k])
+              id(fc_roof_hours).execute(k, k < h.size() ? h[k] : std::string(),
+                                        k < m.size() && !m[k].empty() ? strtof(m[k].c_str(), nullptr) : NAN);
+          }}
+          id(fc_redraw).execute();"""
 
 
 MODUS_SET = '''
@@ -912,7 +1292,8 @@ def panel_bauen():
 #     verfuegbar oder 10 s nach dem Verbinden ohne Wert ist, zeigt ihren Wert
 #     leer statt mit Strichen (val_leer bzw. " "). Vor dem Verbinden: Striche.
 #   - Listen (Wetter stuendlich und taeglich, Solcast-Halbstunden,
-#     Statistik, Hausverbrauch 24 h) holt homeassistant.action mit
+#     Prognose je Dach, Statistik, Hausverbrauch 24 h) holt
+#     homeassistant.action mit
 #     capture_response; die Jinja-Vorlage rechnet sie in Home Assistant auf
 #     kurze Reihen zusammen. Abruf 20 s / 30 s nach dem Verbinden, dann
 #     Prognosen alle 30 min, Statistik stuendlich ab Minute 2.
@@ -951,6 +1332,21 @@ def panel_bauen():
     for e in TABELLE:
         if mit_faktor(e):
             w(f'  {faktor_sub(e)}: "1"')
+    w("  # Tageswert aus der Statistik: ha_<ziel>: statistik statt einer ID\n"
+      "  # (Gross-/Kleinschreibung egal). Das Panel rechnet ihn dann aus\n"
+      "  # recorder.get_statistics, ab 0 Uhr, alle 5 min (Stand: letzte volle\n"
+      "  # 5 min); Faktor des Ziels gilt weiter. Ziel und Quelle:")
+    w("  #   ha_pv<N>_energy   Mittel von ha_pv<N>_power in W, Summe der\n"
+      "  #                     Stundenmittel / 1000 = kWh\n"
+      "  #   ha_dev<N>_energy  Zuwachs von ha_dev<N>_energy_total (Zaehlerstand)\n"
+      "  #   ha_meter<N>_today Zuwachs von ha_meter<N>_total")
+    w("  # Stoerung aus dem Statustext: Ist ha_inv<N>_fault nicht belegt und\n"
+      "  # ha_inv<N>_status belegt, gilt ein Text aus dieser Liste (kommagetrennt,\n"
+      "  # ganzer Text, Gross-/Kleinschreibung egal) als Stoerung. Sie endet erst,\n"
+      "  # wenn inv_fault_hold_s Sekunden lang keiner davon kam -- eine Schleife\n"
+      "  # Normal <-> Fault bleibt so eine Meldung.")
+    w('  inv_fault_texts: "Fault,Alarm"')
+    w('  inv_fault_hold_s: "300"')
     w("")
     # --- globals
     w("""globals:
@@ -967,8 +1363,7 @@ def panel_bauen():
     restore_value: false
     initial_value: 'false'
   # Aus den Vorhersagen (weather.get_forecasts): heute Hoechst, Tiefst,
-  # Regen; naechste Stunde Boeen, Bewoelkung; Lage je Tag fuer fc_day;
-  # Uhrzeit des Abrufs
+  # Regen; naechste Stunde Boeen, Bewoelkung; Uhrzeit des Abrufs
   - id: ha_wx_today
     type: std::array<float, 3>
     restore_value: false
@@ -977,11 +1372,38 @@ def panel_bauen():
     type: std::array<float, 2>
     restore_value: false
     initial_value: '{NAN, NAN}'
-  - id: ha_wx_cond
-    type: std::array<std::string, 7>
-    restore_value: false
   - id: ha_wx_stamp
     type: std::string
+    restore_value: false
+  # Tageswerte aus der Statistik (ha_<ziel>: statistik), Plaetze wie
+  # TAGES_STAT im Werkzeug: volle Stunden ab 0 Uhr, laufende Stunde aus
+  # 5-min-Werten, Ende der letzten vollen Stunde (Start des 5-min-Abrufs)
+  - id: ha_stat_h
+    type: std::array<float, @N_STAT@>
+    restore_value: false
+  - id: ha_stat_m
+    type: std::array<float, @N_STAT@>
+    restore_value: false
+  - id: ha_stat_end
+    type: std::string
+    restore_value: false
+  # Stundenmittel je Flaeche mit Prognose (Seite Prognose), wie sie der
+  # Tagesabruf liefert: volle Stunden ("kW,kW,...;..." je Flaeche) und das
+  # Mittel der laufenden Stunde
+  - id: ha_fc_h
+    type: std::string
+    restore_value: false
+  - id: ha_fc_m
+    type: std::string
+    restore_value: false
+  # Stoerung aus dem Statustext (ha_inv<N>_fault nicht belegt): Bit je
+  # Wechselrichter, gehalten fuer inv_fault_hold_s; letzter Stoerungstext
+  - id: ha_inv_fault_txt
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: ha_inv_fault_msg
+    type: std::array<std::string, 4>
     restore_value: false
   # "a,b,c" -> {"a", "b", "c"}
   - id: ha_split
@@ -995,6 +1417,25 @@ def panel_bauen():
         size_t a = 0;
         while (true) {
           const size_t b = s.find(',', a);
+          v.push_back(s.substr(a, b == std::string::npos ? std::string::npos : b - a));
+          if (b == std::string::npos)
+            break;
+          a = b + 1;
+        }
+        return v;
+      }
+  # wie ha_split, aber mit eigenem Trennzeichen
+  - id: ha_split_by
+    type: std::function<std::vector<std::string>(const std::string &, char)>
+    restore_value: false
+    initial_value: |-
+      [](const std::string &s, char sep) -> std::vector<std::string> {
+        std::vector<std::string> v;
+        if (s.empty())
+          return v;
+        size_t a = 0;
+        while (true) {
+          const size_t b = s.find(sep, a);
           v.push_back(s.substr(a, b == std::string::npos ? std::string::npos : b - a));
           if (b == std::string::npos)
             break;
@@ -1059,7 +1500,7 @@ def panel_bauen():
         snprintf(b, sizeof(b), "%s %02d.%02d.", TAG_NAME[(t.day_of_week + 6) % 7], t.day_of_month, t.month);
         return std::string(b);
       }
-""")
+""".replace("@N_STAT@", str(N_STAT)))
     # --- Sensoren
     teile = {"n": [], "z": [], "t": [], "b": []}
     for e in TABELLE:
@@ -1096,8 +1537,9 @@ def panel_bauen():
     w("")
     # --- Skripte fuer die Abrufe
     w("""script:
-  # Prognosen: Wetter stuendlich und taeglich, Solcast-Halbstunden. Die drei
-  # Aktionen laufen nebeneinander, jede Antwort kommt fuer sich.
+  # Prognosen: Wetter stuendlich und taeglich, Solcast-Halbstunden der Anlage,
+  # Solcast je Dach. Die vier Aktionen laufen nebeneinander, jede Antwort
+  # kommt fuer sich.
   - id: ha_fetch_fc
     then:""")
     w(aktion("weather.get_forecasts", [("entity_id", "${ha_weather}"), ("type", "hourly")], [],
@@ -1112,6 +1554,11 @@ def panel_bauen():
              JINJA_SOLCAST, ERFOLG_SOLCAST, "solcast_solar.query_forecast_data",
              fehler_extra="- lambda: 'ESP_LOGD(\"ha\", \"solcast_solar.query_forecast_data: %s -- lese "
                           "detailedForecast\", error.c_str());'\n- script.execute: ha_fetch_solcast_attr"))
+    w("      # Prognose je Dach (Seite Prognose): Zustand, estimate10 und\n"
+      "      # detailedForecast von ha_pv<N>_fc_d1..7 -- die Vorlage liest sie selbst,\n"
+      "      # weather.get_forecasts ist nur der Traeger einer Antwort")
+    w(aktion("weather.get_forecasts", [("entity_id", "${ha_weather}"), ("type", "daily")], [],
+             jinja_dach(), ERFOLG_DACH, "Prognose je Dach"))
     w("""
   # Ersatzweg fuer die Solcast-Halbstunden: das Attribut detailedForecast der
   # Tagesprognose. Die Vorlage braucht irgendeine Aktion mit Antwort --
@@ -1141,6 +1588,28 @@ def panel_bauen():
               ("start_time", "{{ (" + STUNDEN_T0 + ").isoformat() }}"),
               ("types", "{{ ['change'] }}"), ("units", "{{ {'energy': 'kWh'} }}")],
              JINJA_STUNDEN, ERFOLG_STUNDEN, "Statistik 24 h"))
+    w("""
+  # Tageswerte aus der Statistik (ha_<ziel>: statistik, Liste unter
+  # substitutions): erst die vollen Stunden ab 0 Uhr (Leistung: mean in W,
+  # Zaehler: change in kWh), dann ab dem Ende der letzten Stunde die
+  # 5-min-Werte der laufenden Stunde. Nur die Quellen der Ziele auf
+  # statistik werden abgefragt; die Antwort ist eine Zahl je Platz. Dazu
+  # die Leistung jeder Flaeche mit Prognose (ha_pv<N>_fc_d1 belegt): ihre
+  # Stundenmittel werden die Balken der Seite Prognose.
+  - id: ha_fetch_today
+    then:""")
+    daten = [("statistic_ids", stat_ids()), ("types", "{{ ['mean', 'change'] }}"),
+             ("units", "{{ {'energy': 'kWh', 'power': 'W'} }}")]
+    w(aktion("recorder.get_statistics", [("period", "hour")],
+             [daten[0], ("start_time", "{{ today_at('00:00').isoformat() }}")] + daten[1:],
+             jinja_heute(1000), ERFOLG_HEUTE_H, "Tageswerte Stunden"))
+    w("""
+  - id: ha_fetch_today_5min
+    then:""")
+    w(aktion("recorder.get_statistics",
+             [("period", "5minute"), ("start_time", "!lambda 'return id(ha_stat_end);'")],
+             daten, jinja_heute(12000), ERFOLG_HEUTE_M, "Tageswerte 5 min", fehler_extra=FEHLER_HEUTE_M))
+    w(stat_setzen())
     w(MODUS_SET % {"b1": j_belegt("ha_wb1_mode"), "b2": j_belegt("ha_wb2_mode"),
                    "dirty": (1 << G["Wallbox 1"]) | (1 << G["Wallbox 2"])})
     # --- Intervalle
@@ -1191,6 +1660,7 @@ def panel_bauen():
             id(dev_apply).execute();
             id(ha_dirty) = 0xFFFFFFFFu;
           }
+@STOERTEXT@
           const uint32_t d = id(ha_dirty);
           if (d == 0)
             return;
@@ -1217,7 +1687,7 @@ def panel_bauen():
           auto when = [](const std::string &s, bool mit_tag) -> std::string {
             return s == " " ? s : id(ha_when)(s, mit_tag);
           };
-          const ESPTime jetzt = id(dash_time).now();""")
+          const ESPTime jetzt = id(dash_time).now();""".replace("@STOERTEXT@", STOERTEXT))
     for g in GRUPPEN:
         mit = [e for e in TABELLE if g["bit"] in e["gr"]]
         if not mit:
@@ -1235,19 +1705,21 @@ def panel_bauen():
     w("""  # Abrufe: 20 s nach dem Verbinden die Prognosen, 30 s danach die
   # Statistik; dann Prognosen alle 30 min, Statistik zu jeder neuen Stunde
   # ab Minute 2 (Home Assistant schreibt die Stundenstatistik kurz nach der
-  # vollen Stunde). Beim Trennen beginnt alles von vorn.
+  # vollen Stunde), Tageswerte aus der Statistik alle 5 min ab Minute 1.
+  # Beim Trennen beginnt alles von vorn.
   - interval: 10s
     then:
       - lambda: |-
           static bool war = false;
           static uint32_t seit = 0, fc_zuletzt = 0;
-          static int stat_schluessel = -1;
+          static int stat_schluessel = -1, heute_schluessel = -1;
           const bool ist = api::global_api_server != nullptr && api::global_api_server->is_connected_with_state_subscription();
           if (ist != war) {
             war = ist;
             seit = millis();
             fc_zuletzt = 0;
             stat_schluessel = -1;
+            heute_schluessel = -1;
           }
           const bool bereit = ist && millis() - seit >= 10000;
           if (bereit != id(ha_ready)) {
@@ -1267,6 +1739,16 @@ def panel_bauen():
           if (schluessel != stat_schluessel && (stat_schluessel < 0 || !t.is_valid() || t.minute >= 2)) {
             stat_schluessel = schluessel;
             id(ha_fetch_stats).execute();
+          }
+          // Tageswerte aus der Statistik und Stundenbalken der Seite
+          // Prognose: alle 5 min ab Minute 1 (Home Assistant schreibt die
+          // 5-min-Statistik kurz nach dem Takt)
+          constexpr bool S_ANY = """ + " || ".join(j_stat_an(z_, q) for z_, q, _ in TAGES_STAT) + " || "
+      + " || ".join(j_kurve_an(i) for i in range(1, 9)) + """;
+          const int k5 = t.is_valid() ? t.day_of_year * 288 + t.hour * 12 + t.minute / 5 : 0;
+          if (S_ANY && k5 != heute_schluessel && (heute_schluessel < 0 || !t.is_valid() || t.minute % 5 >= 1)) {
+            heute_schluessel = k5;
+            id(ha_fetch_today).execute();
           }""")
     return "\n".join(out) + "\n"
 
@@ -1304,6 +1786,8 @@ def dummy_bauen():
         if e["attr"]:
             continue
         ent = e["ent"]
+        if ent == "none":
+            continue  # Standard nicht belegt (ha_dev<N>_energy_total)
         dom, obj = ent.split(".", 1)
         uid = "pvd_" + e["name"]
         if dom in ("weather", "sun"):

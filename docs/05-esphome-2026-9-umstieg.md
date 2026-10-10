@@ -60,11 +60,16 @@ Optionen schließen sich aus.
 Bis Schritt 2 erledigt ist, warnt 9.0, dass das Passwort rund 3,5 KB Flash
 kostet. Das ist für Schritt 1 bewusst in Kauf genommen.
 
-## Audio: I2S-Halbduplex
+## Audio: I2S-Halbduplex (entfernt am 10.10.2026)
 
-Umgesetzt am 11.09.2026. Der Hardware-Test am Gerät **steht weiterhin aus**
-(Stand 20.09.2026) — zusammen mit Schritt 2 des OTA-Umstiegs der letzte offene
-Punkt des 9.0-Umstiegs.
+**Erledigt durch Entfernen.** Seit dem 10.10.2026 gibt es kein Audio mehr im
+Dashboard (Wunsch des Nutzers nach dem ersten Flashen; Log: `micro_wake_word`
+mehrmals je Sekunde „Not enough free bytes in ring buffer“).
+`.pv-dashboard_audio.yaml` ist gelöscht, der Testplan unten entfällt. Der
+Abschnitt bleibt als Nachweis stehen, falls Audio zurückkommt — das Paket
+liegt im Versionsverlauf des Repos.
+
+Umgesetzt war es am 11.09.2026; am Gerät getestet wurde es nie.
 
 Ausgangslage: Wiedergabe und Aufnahme hängen an denselben I2S-Leitungen (Chips
 und Pins in Dokument 02), und ESPHome vergibt den Bus exklusiv. Bis 09/2026
@@ -72,7 +77,7 @@ lief `micro_wake_word` ab dem API-Connect dauerhaft; der Lautsprecher bekam den
 Bus nie und meldete im Sekundentakt „Parent bus is busy“ (Log vom 31.07.2026).
 Die Lösung folgt dem ESPHome-Muster für die S3-Box-3 mit demselben Chip-Paar.
 
-Umgesetzt in `.pv-dashboard_audio.yaml`:
+Umgesetzt war es in `.pv-dashboard_audio.yaml` (gelöscht):
 
 - `on_wake_word_detected` startet den Voice Assistant; die
   micro_wake_word-ID heißt `mww`.
@@ -89,7 +94,7 @@ Bewusste Folge der Entscheidung vom 11.09.2026: Solange Musik läuft, ist das
 Wakeword aus. Beim Start einer Wiedergabe darf einmal „Parent bus is busy“
 erscheinen; der Lautsprecher versucht es nach 1 s erneut.
 
-### Testplan am Gerät (offen)
+### Testplan am Gerät (entfallen)
 
 1. Boot, bis Home Assistant abonniert und das Wakeword aktiv ist.
 2. „Okay Nabu“, Antwort abwarten; danach muss das Wakeword wieder aktiv sein.
@@ -147,8 +152,8 @@ is valid!" und gibt dabei **genau diese drei** aus (nachgemessen am 20.09.2026):
 - **Nicht empfohlene Framework-Version** — gesetzt ist ESP-IDF 6.0.2, während
   ESPHome weiterhin 5.5.5 empfiehlt. Bei Build-Problemen ist ein Gegentest mit
   der empfohlenen Version der schnellste Schritt. (Steht zweimal im Protokoll.)
-- **OTA-Passwort kostet rund 3,5 KB Flash** (plus 60 Byte) — Schritt 1 des
-  Noise-Umstiegs, siehe oben.
+- ~~**OTA-Passwort kostet rund 3,5 KB Flash**~~ — entfallen seit dem 10.10.2026:
+  OTA läuft nur noch verschlüsselt (`encryption: {}`), ohne Passwort.
 - **Geschwärzte Werte in der Config-Ausgabe** — eine Heuristik schwärzt jedes
   Feld mit „_key“ im Namen: hier `transparency_key`, im Simulator zusätzlich
   `snapshot_key: SDLK_F12`. Reine Kosmetik; laut Warnung fällt die Heuristik mit
@@ -196,8 +201,8 @@ Builder:
   Werten (Restprognose, Jetzt-Linie, Flusspunkte, Meldungszeiten) und den
   Commits nach dem 25.09. Die Wallbox-Seite ist bis auf die Uhr identisch —
   Schriften und Abstände haben sich mit der Beta nicht verschoben.
-- Die geräteeigenen Pakete (`_core`, `_display`, `_audio`, `_utility`, `_ha`,
-  `_ui` mit Seiten) bestehen `esphome config` mit 2026.10.0b2 — geprüft über
+- Die geräteeigenen Pakete (`_core`, `_display`, `_audio` — seit 10.10.2026
+  entfernt —, `_utility`, `_ha`, `_ui` mit Seiten) bestehen `esphome config` mit 2026.10.0b2 — geprüft über
   eine Hilfskonfiguration mit Platzhalterwerten statt `secrets.yaml` und der
   Vorlage `.pv-dashboard_anlage.yaml.example`. Es erscheinen dieselben drei
   Warnungen wie unter 2026.9.0 (siehe „Akzeptierte Warnungen“). Gebaut für den
@@ -217,8 +222,8 @@ das Dashboard berühren:
   `restore_mode: RESTORE_DEFAULT_ON`) bleibt deshalb unverändert.
 - **speaker** (#19074): `codec_support_enabled` entfernt — nicht benutzt.
 - **speaker / speaker_source** (#19307, #18412): Lautstärke und Stummschaltung
-  des Media Players sind jetzt unabhängig. Kein YAML betroffen, aber ein Punkt
-  für den Audio-Testplan am Gerät.
+  des Media Players sind jetzt unabhängig. Kein YAML betroffen; Audio ist seit
+  dem 10.10.2026 ohnehin entfernt.
 - **host** (#19214): baut mit ninja statt PlatformIO. Simulator, Screenshots und
   `tests/ha-test.yaml` bauen damit ohne Änderung.
 - Daneben ohne Handlungsbedarf: OTA komprimiert Uploads auf dem ESP32 (#19037),
@@ -234,7 +239,7 @@ stabile ein (`Version.parse("2026.10.0b2") <= Version.parse("2026.10.0")` ist
 
 ---
 
-Stand: 09.10.2026 (Beta 2026.10.0b2 geprüft, `transparency_key` geklärt); davor 25.09.2026 (Demo-Konfigurationen auf 2026.9.0, `transparency_key` als
+Stand: 10.10.2026 (Audio entfernt, Testplan entfallen); davor 09.10.2026 (Beta 2026.10.0b2 geprüft, `transparency_key` geklärt); davor 25.09.2026 (Demo-Konfigurationen auf 2026.9.0, `transparency_key` als
 offen markiert); davor 20.09.2026 (#19177 in 2026.9.0 enthalten, in der Bauumgebung
 `esphome-2026.9.0` nachgeprüft; `~/.venvs/esphome-beta` an dem Tag auf 2026.9.0
 gehoben). Geprüfter Stand: Commit `0e2bd3d` (25.09.2026).

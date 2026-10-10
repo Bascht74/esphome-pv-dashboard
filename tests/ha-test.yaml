@@ -16,7 +16,9 @@
 # auf stdout -- dev_present, ausgeblendete Kaesten, Texte einzelner Labels,
 # offene Systemmeldungen, Prognose- und Statistikreihen. Die Probe liest
 # nur diese Zeilen. probe_shot(name) legt auf Wunsch ein Bild ab.
-# probe_tap(wb, seg) tippt einen Teil des Modus-Schalters an: Es schickt
+# probe_page(page) zeigt eine Seite (overview, pv, house, grid, alerts,
+# forecast), probe_fc_mode(mode) tippt den Umschalter der Seite Prognose an,
+# damit probe_shot sie aufnimmt. probe_tap(wb, seg) tippt einen Teil des Modus-Schalters an: Es schickt
 # LV_EVENT_CLICKED an wb<N>_seg<S>, also denselben Weg wie ein Finger
 # (on_click -> wallbox_mode_set); einen Touchscreen hat der Test nicht.
 ##############################################################################
@@ -33,6 +35,33 @@ substitutions:
   ha_meter_house_power_faktor: "-1"
   ha_bat1_current_faktor: "-1"
   ha_wb1_power_faktor: "0.001"
+  # Tageswerte aus der Statistik (Fall O): Flaeche 1 aus dem Mittel ihrer
+  # Leistung, Waschmaschine aus einem Zaehlerstand, Einspeisung heute aus
+  # dem Zaehlerstand Hausanschluss Einspeisung
+  ha_pv1_energy: statistik
+  ha_dev2_energy: Statistik
+  ha_dev2_energy_total: sensor.waschmaschine_energie_gesamt
+  ha_meter1_today: statistik
+  # Summen ohne Entitaet (Fall P): Erzeugung = Summe der Wechselrichter,
+  # Eigenverbrauch = Hybrid-Erzeugung - Ueberschuss (docs/01)
+  ha_pv_energy_today: none
+  ha_selfuse_energy_today: none
+  # Stoerung aus dem Statustext (Fall Q), kurze Haltezeit fuer den Test
+  ha_inv3_fault: none
+  inv_fault_hold_s: "4"
+  # Prognose je Dach (Fall R): Flaeche 1 mit allen sieben Tagen, Flaeche 2
+  # nur heute und morgen, Flaeche 3 belegt, aber in HA unavailable (keine
+  # Kachel). IDs wie Solcast mit einem Eintrag je Dach.
+  ha_pv1_fc_d1: sensor.solcast_test_sued_prognose_heute
+  ha_pv1_fc_d2: sensor.solcast_test_sued_prognose_morgen
+  ha_pv1_fc_d3: sensor.solcast_test_sued_prognose_tag_3
+  ha_pv1_fc_d4: sensor.solcast_test_sued_prognose_tag_4
+  ha_pv1_fc_d5: sensor.solcast_test_sued_prognose_tag_5
+  ha_pv1_fc_d6: sensor.solcast_test_sued_prognose_tag_6
+  ha_pv1_fc_d7: sensor.solcast_test_sued_prognose_tag_7
+  ha_pv2_fc_d1: sensor.solcast_test_west_prognose_heute
+  ha_pv2_fc_d2: sensor.solcast_test_west_prognose_morgen
+  ha_pv3_fc_d1: sensor.solcast_test_weg_prognose_heute
 
 packages:
   sim: !include ../pv-dashboard-sim.yaml
@@ -52,6 +81,48 @@ api:
         - snapshot.take:
             id: main_display
             filename: !lambda 'return name;'
+    - action: probe_page
+      variables:
+        page: string
+      then:
+        - if:
+            condition:
+              lambda: 'return page == "overview";'
+            then:
+              - lvgl.page.show: page_overview
+        - if:
+            condition:
+              lambda: 'return page == "pv";'
+            then:
+              - lvgl.page.show: page_pv
+        - if:
+            condition:
+              lambda: 'return page == "house";'
+            then:
+              - lvgl.page.show: page_house
+        - if:
+            condition:
+              lambda: 'return page == "grid";'
+            then:
+              - lvgl.page.show: page_grid
+        - if:
+            condition:
+              lambda: 'return page == "alerts";'
+            then:
+              - lvgl.page.show: page_alerts
+        - if:
+            condition:
+              lambda: 'return page == "forecast";'
+            then:
+              - lvgl.page.show: page_forecast
+    - action: probe_fc_mode
+      variables:
+        mode: int
+      then:
+        # Tipp auf den Umschalter Heute / Vorschau (wie ein Finger)
+        - lambda: |-
+            if (mode >= 0 && mode <= 1)
+              lv_obj_send_event(mode == 0 ? id(fc_seg0) : id(fc_seg1), LV_EVENT_CLICKED, nullptr);
     - action: probe_tap
       variables:
         wb: int
@@ -97,18 +168,25 @@ interval:
           // ungekuerzt im Label (nur hier, nicht im Geraet)
           static bool clip = false;
           if (!clip) {
-            for (lv_obj_t *l : {id(hp_season), id(hp_bypass), id(hp_compressor), id(gr_rule_0)})
+            for (lv_obj_t *l : {id(hp_season), id(hp_bypass), id(hp_compressor), id(gr_rule_0), id(pv_str_sub_1),
+                                id(pv_inv_sub_3), id(ht_c3_d), id(gm_today_2), id(fc_total),
+                                lv_obj_get_child(id(fc_t0), 0), lv_obj_get_child(id(fc_t0), 1),
+                                lv_obj_get_child(id(fc_t1), 1)})
               lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_CLIP);
             clip = true;
           }
           // offene Systemmeldungen (USER_1 = freie Zeile, USER_4 = behoben)
           int sys_open = 0, link = 0;
+          std::string alerts;   // offene Meldungen: ["Quelle: Text", Anzahl]
           lv_obj_t *list = id(alert_list);
           for (uint32_t i = 0; i < lv_obj_get_child_count(list); i++) {
             lv_obj_t *e = lv_obj_get_child(list, i);
             if (lv_obj_has_flag(e, LV_OBJ_FLAG_USER_1) || lv_obj_has_flag(e, LV_OBJ_FLAG_USER_4))
               continue;
             const char *k = lv_label_get_text(lv_obj_get_child(e, 5));
+            unsigned cnt = 1;
+            sscanf(lv_label_get_text(lv_obj_get_child(e, 6)), "%u", &cnt);
+            alerts += std::string(alerts.empty() ? "" : ",") + "[\"" + esc(k) + "\"," + std::to_string(cnt) + "]";
             if (strncmp(k, "System: ", 8) != 0)
               continue;
             sys_open++;
@@ -124,7 +202,23 @@ interval:
           j += std::string(",\"bat1\":") + hid(box(id(v_bat1))) + ",\"bat2\":" + hid(box(id(v_bat2)));
           j += std::string(",\"bat3\":") + hid(box(id(v_bat3))) + ",\"wb1\":" + hid(box(id(v_wb1)));
           j += std::string(",\"wb2\":") + hid(box(id(v_wb2))) + ",\"heatpump\":" + hid(box(id(v_heatpump)));
-          j += std::string(",\"meter_house\":") + hid(box(id(v_meter_house))) + "}";
+          j += std::string(",\"meter_house\":") + hid(box(id(v_meter_house)));
+          j += std::string(",\"grid\":") + hid(box(id(v_grid))) + ",\"house\":" + hid(box(id(v_house))) + "}";
+          // Ruhiger Start (Fall S): sichtbare Kinder des Schemas (Kaesten,
+          // Leitungen, Kugeln, Rahmen) und davon die Leitungen lnNN
+          {
+            lv_obj_t *s = id(schema_area);
+            int vis = 0, lines = 0;
+            for (uint32_t i = 0; i < lv_obj_get_child_count(s); i++) {
+              lv_obj_t *c = lv_obj_get_child(s, i);
+              if (lv_obj_has_flag(c, LV_OBJ_FLAG_HIDDEN))
+                continue;
+              vis++;
+              if (lv_obj_check_type(c, &lv_line_class))
+                lines++;
+            }
+            j += ",\"schema_vis\":" + std::to_string(vis) + ",\"schema_lines\":" + std::to_string(lines);
+          }
           j += ",\"txt\":{";
           j += "\"v_bat1\":" + txt(id(v_bat1)) + ",\"d_bat1\":" + txt(id(d_bat1));
           j += ",\"v_bat2\":" + txt(id(v_bat2)) + ",\"v_bat3\":" + txt(id(v_bat3));
@@ -134,7 +228,11 @@ interval:
           j += ",\"hp_season\":" + txt(id(hp_season)) + ",\"hp_bypass\":" + txt(id(hp_bypass));
           j += ",\"hp_compressor\":" + txt(id(hp_compressor)) + ",\"gr_rule_0\":" + txt(id(gr_rule_0));
           j += ",\"v_house\":" + txt(id(v_house)) + ",\"v_misc\":" + txt(id(v_misc)) + ",\"v_heatpump\":" + txt(id(v_heatpump));
-          j += ",\"ht_c_total\":" + txt(id(ht_c_total)) + ",\"ht_out_total\":" + txt(id(ht_out_total)) + "}";
+          j += ",\"ht_c_total\":" + txt(id(ht_c_total)) + ",\"ht_out_total\":" + txt(id(ht_out_total));
+          j += ",\"pv_sub1\":" + txt(id(pv_str_sub_1)) + ",\"inv_sub3\":" + txt(id(pv_inv_sub_3));
+          j += ",\"dev2_d\":" + txt(id(ht_c3_d)) + ",\"meter1_today\":" + txt(id(gm_today_2));
+          j += ",\"val_gen\":" + txt(id(val_gen)) + ",\"money_split\":" + txt(id(money_split)) + "}";
+          j += ",\"alerts\":[" + alerts + "]";
           // Kein Label irgendwo darf "inf" oder "nan" zeigen: alle Seiten und
           // die oberste Ebene rekursiv, Wort mit Nicht-Buchstaben daneben
           // ("Infos", "Finanz" zaehlen nicht)
@@ -191,6 +289,24 @@ interval:
           };
           j += ",\"wb_seg\":[" + std::to_string(seg(id(wb1_seg0), id(wb1_seg1), id(wb1_seg2))) + "," +
                std::to_string(seg(id(wb2_seg0), id(wb2_seg1), id(wb2_seg2))) + "]";
+          // Seite Prognose: Umschalter, Daecher mit Prognose, Kacheln, Titel,
+          // Kopfzeile, Zahl der Stundenwerte (Ist) je Dach
+          {
+            int tiles = 0;
+            for (lv_obj_t *t : {id(fc_t0), id(fc_t1), id(fc_t2), id(fc_t3), id(fc_t4), id(fc_t5)})
+              tiles += lv_obj_has_flag(t, LV_OBJ_FLAG_HIDDEN) ? 0 : 1;
+            auto zahl = [](const std::array<float, 24> &a) {
+              int c = 0;
+              for (float v : a)
+                c += std::isfinite(v) ? 1 : 0;
+              return c;
+            };
+            j += ",\"fc\":{\"mode\":" + std::to_string(id(fc_mode)) + ",\"on\":" + std::to_string(id(fc_roof_on)) +
+                 ",\"tiles\":" + std::to_string(tiles) + ",\"t0\":" + txt(lv_obj_get_child(id(fc_t0), 1)) +
+                 ",\"t1\":" + txt(lv_obj_get_child(id(fc_t1), 1)) + ",\"t0n\":" + txt(lv_obj_get_child(id(fc_t0), 0)) +
+                 ",\"total\":" + txt(id(fc_total)) + ",\"act\":[" + std::to_string(zahl(id(fc_r_act)[0])) + "," +
+                 std::to_string(zahl(id(fc_r_act)[1])) + "]}";
+          }
           j += ",\"wx_stamp\":\"" + esc(id(ha_wx_stamp)) + "\"}";
           printf("PROBE %s\n", j.c_str());
           fflush(stdout);

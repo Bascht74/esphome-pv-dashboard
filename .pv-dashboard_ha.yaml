@@ -37,7 +37,8 @@
 #     verfuegbar oder 10 s nach dem Verbinden ohne Wert ist, zeigt ihren Wert
 #     leer statt mit Strichen (val_leer bzw. " "). Vor dem Verbinden: Striche.
 #   - Listen (Wetter stuendlich und taeglich, Solcast-Halbstunden,
-#     Statistik, Hausverbrauch 24 h) holt homeassistant.action mit
+#     Prognose je Dach, Statistik, Hausverbrauch 24 h) holt
+#     homeassistant.action mit
 #     capture_response; die Jinja-Vorlage rechnet sie in Home Assistant auf
 #     kurze Reihen zusammen. Abruf 20 s / 30 s nach dem Verbinden, dann
 #     Prognosen alle 30 min, Statistik stuendlich ab Minute 2.
@@ -76,40 +77,41 @@ substitutions:
   #   heatpump     ha_hp_dhw
   #   meter_pv     ha_meter_pv_power
   #   meter_house  ha_meter_house_power
+  #   grid         ha_grid_power
   ha_pv1_power: sensor.wr1_pv1_leistung  # W, Flaeche/Modul am Wechselrichter 1, MPPT 1 [A]
-  ha_pv1_energy: sensor.wr1_pv1_ertrag_heute  # kWh heute [A]
+  ha_pv1_energy: sensor.wr1_pv1_ertrag_heute  # kWh heute [A]; statistik: aus pv1_power
   ha_pv2_power: sensor.wr1_pv2_leistung  # W, Flaeche/Modul am Wechselrichter 1, MPPT 2 [A]
-  ha_pv2_energy: sensor.wr1_pv2_ertrag_heute  # kWh heute [A]
+  ha_pv2_energy: sensor.wr1_pv2_ertrag_heute  # kWh heute [A]; statistik: aus pv2_power
   ha_pv3_power: sensor.wr2_pv1_leistung  # W, Flaeche/Modul am Wechselrichter 2, MPPT 1 [A]
-  ha_pv3_energy: sensor.wr2_pv1_ertrag_heute  # kWh heute [A]
+  ha_pv3_energy: sensor.wr2_pv1_ertrag_heute  # kWh heute [A]; statistik: aus pv3_power
   ha_pv4_power: sensor.wr2_pv2_leistung  # W, Flaeche/Modul am Wechselrichter 2, MPPT 2 [A]
-  ha_pv4_energy: sensor.wr2_pv2_ertrag_heute  # kWh heute [A]
+  ha_pv4_energy: sensor.wr2_pv2_ertrag_heute  # kWh heute [A]; statistik: aus pv4_power
   ha_pv5_power: sensor.wr3_pv1_leistung  # W, Flaeche/Modul am Wechselrichter 3, MPPT 1 [A]
-  ha_pv5_energy: sensor.wr3_pv1_ertrag_heute  # kWh heute [A]
+  ha_pv5_energy: sensor.wr3_pv1_ertrag_heute  # kWh heute [A]; statistik: aus pv5_power
   ha_pv6_power: sensor.wr3_pv2_leistung  # W, Flaeche/Modul am Wechselrichter 3, MPPT 2 [A]
-  ha_pv6_energy: sensor.wr3_pv2_ertrag_heute  # kWh heute [A]
+  ha_pv6_energy: sensor.wr3_pv2_ertrag_heute  # kWh heute [A]; statistik: aus pv6_power
   ha_pv7_power: sensor.wr4_pv1_leistung  # W, Flaeche/Modul am Wechselrichter 4, MPPT 1 [A]
-  ha_pv7_energy: sensor.wr4_pv1_ertrag_heute  # kWh heute [A]
+  ha_pv7_energy: sensor.wr4_pv1_ertrag_heute  # kWh heute [A]; statistik: aus pv7_power
   ha_pv8_power: sensor.wr4_pv2_leistung  # W, Flaeche/Modul am Wechselrichter 4, MPPT 2 [A]
-  ha_pv8_energy: sensor.wr4_pv2_ertrag_heute  # kWh heute [A]
+  ha_pv8_energy: sensor.wr4_pv2_ertrag_heute  # kWh heute [A]; statistik: aus pv8_power
   ha_inv1_power: sensor.wr1_leistung  # W [A]
   ha_inv1_energy: sensor.wr1_ertrag_heute  # kWh heute [A]
-  ha_inv1_fault: binary_sensor.wr1_stoerung  # an = Stoerung [A]
+  ha_inv1_fault: binary_sensor.wr1_stoerung  # an = Stoerung [A]; nicht belegt: Statustext, inv_fault_texts
   ha_inv1_status: sensor.wr1_status  # Fehlertext [A]
   ha_inv1_temp: sensor.wr1_temperatur  # [A]
   ha_inv2_power: sensor.wr2_leistung  # W [A]
   ha_inv2_energy: sensor.wr2_ertrag_heute  # kWh heute [A]
-  ha_inv2_fault: binary_sensor.wr2_stoerung  # an = Stoerung [A]
+  ha_inv2_fault: binary_sensor.wr2_stoerung  # an = Stoerung [A]; nicht belegt: Statustext, inv_fault_texts
   ha_inv2_status: sensor.wr2_status  # Fehlertext [A]
   ha_inv2_temp: sensor.wr2_temperatur  # [A]
   ha_inv3_power: sensor.wr3_leistung  # W [A]
   ha_inv3_energy: sensor.wr3_ertrag_heute  # kWh heute [A]
-  ha_inv3_fault: binary_sensor.wr3_stoerung  # an = Stoerung [A]
+  ha_inv3_fault: binary_sensor.wr3_stoerung  # an = Stoerung [A]; nicht belegt: Statustext, inv_fault_texts
   ha_inv3_status: sensor.wr3_status  # Fehlertext [A]
   ha_inv3_temp: sensor.wr3_temperatur  # [A]
   ha_inv4_power: sensor.wr4_leistung  # W [A]
   ha_inv4_energy: sensor.wr4_ertrag_heute  # kWh heute [A]
-  ha_inv4_fault: binary_sensor.wr4_stoerung  # an = Stoerung [A]
+  ha_inv4_fault: binary_sensor.wr4_stoerung  # an = Stoerung [A]; nicht belegt: Statustext, inv_fault_texts
   ha_inv4_status: sensor.wr4_status  # Fehlertext [A]
   ha_inv4_temp: sensor.wr4_temperatur  # [A]
   ha_bat1_soc: sensor.speicher1_soc
@@ -200,15 +202,20 @@ substitutions:
   ha_hp_filter_days: sensor.nilan_filter_tage  # [A]
   ha_hp_defrost: binary_sensor.nilan_enteisung  # [A]
   ha_dev1_power: sensor.backofen_leistung  # [A]
-  ha_dev1_energy: sensor.backofen_energie_heute  # [A]
+  ha_dev1_energy: sensor.backofen_energie_heute  # [A]; statistik: aus dev1_energy_total
   ha_dev2_power: sensor.waschmaschine_leistung  # [A]
-  ha_dev2_energy: sensor.waschmaschine_energie_heute  # [A]
+  ha_dev2_energy: sensor.waschmaschine_energie_heute  # [A]; statistik: aus dev2_energy_total
   ha_dev3_power: sensor.spuelmaschine_leistung  # [A]
-  ha_dev3_energy: sensor.spuelmaschine_energie_heute  # [A]
+  ha_dev3_energy: sensor.spuelmaschine_energie_heute  # [A]; statistik: aus dev3_energy_total
   ha_dev4_power: sensor.trockner_leistung  # [A]
-  ha_dev4_energy: sensor.trockner_energie_heute  # [A]
+  ha_dev4_energy: sensor.trockner_energie_heute  # [A]; statistik: aus dev4_energy_total
   ha_dev5_power: sensor.grundlast_leistung  # [A]
-  ha_dev5_energy: sensor.grundlast_energie_heute  # [A]
+  ha_dev5_energy: sensor.grundlast_energie_heute  # [A]; statistik: aus dev5_energy_total
+  ha_dev1_energy_total: none  # kWh, Zaehler fuer ha_dev1_energy: statistik
+  ha_dev2_energy_total: none  # kWh, Zaehler fuer ha_dev2_energy: statistik
+  ha_dev3_energy_total: none  # kWh, Zaehler fuer ha_dev3_energy: statistik
+  ha_dev4_energy_total: none  # kWh, Zaehler fuer ha_dev4_energy: statistik
+  ha_dev5_energy_total: none  # kWh, Zaehler fuer ha_dev5_energy: statistik
   ha_grid_power: sensor.hausanschluss_leistung  # W, + = Bezug (total_act_power)
   ha_grid_freq: sensor.hausanschluss_phase_a_frequenz  # ab Werk aus
   ha_grid_n_current: sensor.hausanschluss_neutralleiterstrom  # ab Werk aus [A]
@@ -228,15 +235,15 @@ substitutions:
   ha_grid_l3_apparent: sensor.hausanschluss_phase_c_scheinleistung
   ha_grid_l3_pf: sensor.hausanschluss_phase_c_leistungsfaktor
   ha_meter0_total: sensor.hausanschluss_energie  # kWh, Hausanschluss Bezug [A]
-  ha_meter0_today: sensor.netz_bezug_heute  # utility_meter-Helfer [A]
+  ha_meter0_today: sensor.netz_bezug_heute  # utility_meter-Helfer [A]; statistik: aus meter0_total
   ha_meter1_total: sensor.hausanschluss_zurueckgelieferte_energie  # kWh, Hausanschluss Einspeisung [A]
-  ha_meter1_today: sensor.netz_einspeisung_heute  # utility_meter-Helfer [A]
+  ha_meter1_today: sensor.netz_einspeisung_heute  # utility_meter-Helfer [A]; statistik: aus meter1_total
   ha_meter2_total: sensor.pv_zaehler_einspeisung_gesamt  # kWh, PV-Zaehler Einspeisung [A]
-  ha_meter2_today: sensor.pv_zaehler_einspeisung_heute  # utility_meter-Helfer [A]
+  ha_meter2_today: sensor.pv_zaehler_einspeisung_heute  # utility_meter-Helfer [A]; statistik: aus meter2_total
   ha_meter3_total: sensor.hauszaehler_bezug_gesamt  # kWh, Hauszaehler Bezug [A]
-  ha_meter3_today: sensor.hauszaehler_bezug_heute  # utility_meter-Helfer [A]
+  ha_meter3_today: sensor.hauszaehler_bezug_heute  # utility_meter-Helfer [A]; statistik: aus meter3_total
   ha_meter4_total: sensor.hauszaehler_einspeisung_gesamt  # kWh, Hauszaehler Einspeisung [A]
-  ha_meter4_today: sensor.hauszaehler_einspeisung_heute  # utility_meter-Helfer [A]
+  ha_meter4_today: sensor.hauszaehler_einspeisung_heute  # utility_meter-Helfer [A]; statistik: aus meter4_total
   ha_meter_pv_power: sensor.pv_zaehler_leistung  # W, + = Einspeisung [A]
   ha_meter_house_power: sensor.hauszaehler_leistung  # W, + = Einspeisung [A]
   ha_rule_limit: input_boolean.einspeisegrenze_aktiv  # nicht belegt: aktiv, wenn feed_limit_pct < 100
@@ -246,21 +253,64 @@ substitutions:
   ha_selfuse_energy_today: sensor.eigenverbrauch_heute  # [A]
   ha_pv_energy_total: sensor.pv_erzeugung_gesamt  # nur Statistik [A]
   ha_home_energy_total: sensor.hausverbrauch_gesamt  # nur Statistik [A]
-  ha_solcast_today: sensor.solcast_pv_forecast_prognose_heute
+  ha_solcast_today: sensor.solcast_pv_forecast_prognose_heute  # nur Attribut detailedForecast (forecast_curve)
   ha_solcast_remaining: sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute
-  ha_solcast_power_now: sensor.solcast_pv_forecast_aktuelle_leistung
-  ha_solcast_next_hour: sensor.solcast_pv_forecast_prognose_nachste_stunde  # Wh -> kWh
-  ha_solcast_peak: sensor.solcast_pv_forecast_prognose_spitzenleistung_heute  # W -> kW
-  ha_solcast_peak_time: sensor.solcast_pv_forecast_zeitpunkt_spitzenleistung_heute
-  ha_solcast_last_poll: sensor.solcast_pv_forecast_zeitpunkt_letzter_api_abruf
-  ha_solcast_api_used: sensor.solcast_pv_forecast_verwendete_api_abrufe
-  ha_solcast_api_limit: sensor.solcast_pv_forecast_max_api_abrufe
-  ha_solcast_d2: sensor.solcast_pv_forecast_prognose_morgen
-  ha_solcast_d3: sensor.solcast_pv_forecast_prognose_tag_3  # ab Tag 3 ab Werk aus
-  ha_solcast_d4: sensor.solcast_pv_forecast_prognose_tag_4
-  ha_solcast_d5: sensor.solcast_pv_forecast_prognose_tag_5
-  ha_solcast_d6: sensor.solcast_pv_forecast_prognose_tag_6
-  ha_solcast_d7: sensor.solcast_pv_forecast_prognose_tag_7
+  ha_pv1_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
+  ha_pv1_fc_d2: none  # morgen
+  ha_pv1_fc_d3: none  # Tag 3
+  ha_pv1_fc_d4: none  # Tag 4
+  ha_pv1_fc_d5: none  # Tag 5
+  ha_pv1_fc_d6: none  # Tag 6
+  ha_pv1_fc_d7: none  # Tag 7
+  ha_pv2_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
+  ha_pv2_fc_d2: none
+  ha_pv2_fc_d3: none
+  ha_pv2_fc_d4: none
+  ha_pv2_fc_d5: none
+  ha_pv2_fc_d6: none
+  ha_pv2_fc_d7: none
+  ha_pv3_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
+  ha_pv3_fc_d2: none
+  ha_pv3_fc_d3: none
+  ha_pv3_fc_d4: none
+  ha_pv3_fc_d5: none
+  ha_pv3_fc_d6: none
+  ha_pv3_fc_d7: none
+  ha_pv4_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
+  ha_pv4_fc_d2: none
+  ha_pv4_fc_d3: none
+  ha_pv4_fc_d4: none
+  ha_pv4_fc_d5: none
+  ha_pv4_fc_d6: none
+  ha_pv4_fc_d7: none
+  ha_pv5_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
+  ha_pv5_fc_d2: none
+  ha_pv5_fc_d3: none
+  ha_pv5_fc_d4: none
+  ha_pv5_fc_d5: none
+  ha_pv5_fc_d6: none
+  ha_pv5_fc_d7: none
+  ha_pv6_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
+  ha_pv6_fc_d2: none
+  ha_pv6_fc_d3: none
+  ha_pv6_fc_d4: none
+  ha_pv6_fc_d5: none
+  ha_pv6_fc_d6: none
+  ha_pv6_fc_d7: none
+  ha_pv7_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
+  ha_pv7_fc_d2: none
+  ha_pv7_fc_d3: none
+  ha_pv7_fc_d4: none
+  ha_pv7_fc_d5: none
+  ha_pv7_fc_d6: none
+  ha_pv7_fc_d7: none
+  ha_pv8_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
+  ha_pv8_fc_d2: none
+  ha_pv8_fc_d3: none
+  ha_pv8_fc_d4: none
+  ha_pv8_fc_d5: none
+  ha_pv8_fc_d6: none
+  ha_pv8_fc_d7: none
   ha_weather: weather.dwd_station  # Zustand = Lage
   ha_wx_sun: sensor.dwd_station_sonnenscheindauer_heute  # s -> h, ab Werk aus
   ha_sun: sun.sun  # nur fuer die Attribute (Integration sun)
@@ -411,33 +461,7 @@ substitutions:
   ha_pv_energy_today_faktor: "1"
   ha_home_energy_today_faktor: "1"
   ha_selfuse_energy_today_faktor: "1"
-  ha_solcast_today_faktor: "1"
-  ha_solcast_today_p10_faktor: "1"
-  ha_solcast_today_p90_faktor: "1"
   ha_solcast_remaining_faktor: "1"
-  ha_solcast_power_now_faktor: "1"
-  ha_solcast_next_hour_faktor: "1"
-  ha_solcast_peak_faktor: "1"
-  ha_solcast_api_used_faktor: "1"
-  ha_solcast_api_limit_faktor: "1"
-  ha_solcast_d2_faktor: "1"
-  ha_solcast_d2_p10_faktor: "1"
-  ha_solcast_d2_p90_faktor: "1"
-  ha_solcast_d3_faktor: "1"
-  ha_solcast_d3_p10_faktor: "1"
-  ha_solcast_d3_p90_faktor: "1"
-  ha_solcast_d4_faktor: "1"
-  ha_solcast_d4_p10_faktor: "1"
-  ha_solcast_d4_p90_faktor: "1"
-  ha_solcast_d5_faktor: "1"
-  ha_solcast_d5_p10_faktor: "1"
-  ha_solcast_d5_p90_faktor: "1"
-  ha_solcast_d6_faktor: "1"
-  ha_solcast_d6_p10_faktor: "1"
-  ha_solcast_d6_p90_faktor: "1"
-  ha_solcast_d7_faktor: "1"
-  ha_solcast_d7_p10_faktor: "1"
-  ha_solcast_d7_p90_faktor: "1"
   ha_wx_temp_faktor: "1"
   ha_wx_humidity_faktor: "1"
   ha_wx_pressure_faktor: "1"
@@ -445,6 +469,21 @@ substitutions:
   ha_wx_bearing_faktor: "1"
   ha_wx_sun_faktor: "1"
   ha_warn_level_faktor: "1"
+  # Tageswert aus der Statistik: ha_<ziel>: statistik statt einer ID
+  # (Gross-/Kleinschreibung egal). Das Panel rechnet ihn dann aus
+  # recorder.get_statistics, ab 0 Uhr, alle 5 min (Stand: letzte volle
+  # 5 min); Faktor des Ziels gilt weiter. Ziel und Quelle:
+  #   ha_pv<N>_energy   Mittel von ha_pv<N>_power in W, Summe der
+  #                     Stundenmittel / 1000 = kWh
+  #   ha_dev<N>_energy  Zuwachs von ha_dev<N>_energy_total (Zaehlerstand)
+  #   ha_meter<N>_today Zuwachs von ha_meter<N>_total
+  # Stoerung aus dem Statustext: Ist ha_inv<N>_fault nicht belegt und
+  # ha_inv<N>_status belegt, gilt ein Text aus dieser Liste (kommagetrennt,
+  # ganzer Text, Gross-/Kleinschreibung egal) als Stoerung. Sie endet erst,
+  # wenn inv_fault_hold_s Sekunden lang keiner davon kam -- eine Schleife
+  # Normal <-> Fault bleibt so eine Meldung.
+  inv_fault_texts: "Fault,Alarm"
+  inv_fault_hold_s: "300"
 
 globals:
   # Gruppen mit neuen Werten, ein Bit je Gruppe (Liste in
@@ -460,8 +499,7 @@ globals:
     restore_value: false
     initial_value: 'false'
   # Aus den Vorhersagen (weather.get_forecasts): heute Hoechst, Tiefst,
-  # Regen; naechste Stunde Boeen, Bewoelkung; Lage je Tag fuer fc_day;
-  # Uhrzeit des Abrufs
+  # Regen; naechste Stunde Boeen, Bewoelkung; Uhrzeit des Abrufs
   - id: ha_wx_today
     type: std::array<float, 3>
     restore_value: false
@@ -470,11 +508,38 @@ globals:
     type: std::array<float, 2>
     restore_value: false
     initial_value: '{NAN, NAN}'
-  - id: ha_wx_cond
-    type: std::array<std::string, 7>
-    restore_value: false
   - id: ha_wx_stamp
     type: std::string
+    restore_value: false
+  # Tageswerte aus der Statistik (ha_<ziel>: statistik), Plaetze wie
+  # TAGES_STAT im Werkzeug: volle Stunden ab 0 Uhr, laufende Stunde aus
+  # 5-min-Werten, Ende der letzten vollen Stunde (Start des 5-min-Abrufs)
+  - id: ha_stat_h
+    type: std::array<float, 18>
+    restore_value: false
+  - id: ha_stat_m
+    type: std::array<float, 18>
+    restore_value: false
+  - id: ha_stat_end
+    type: std::string
+    restore_value: false
+  # Stundenmittel je Flaeche mit Prognose (Seite Prognose), wie sie der
+  # Tagesabruf liefert: volle Stunden ("kW,kW,...;..." je Flaeche) und das
+  # Mittel der laufenden Stunde
+  - id: ha_fc_h
+    type: std::string
+    restore_value: false
+  - id: ha_fc_m
+    type: std::string
+    restore_value: false
+  # Stoerung aus dem Statustext (ha_inv<N>_fault nicht belegt): Bit je
+  # Wechselrichter, gehalten fuer inv_fault_hold_s; letzter Stoerungstext
+  - id: ha_inv_fault_txt
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: ha_inv_fault_msg
+    type: std::array<std::string, 4>
     restore_value: false
   # "a,b,c" -> {"a", "b", "c"}
   - id: ha_split
@@ -488,6 +553,25 @@ globals:
         size_t a = 0;
         while (true) {
           const size_t b = s.find(',', a);
+          v.push_back(s.substr(a, b == std::string::npos ? std::string::npos : b - a));
+          if (b == std::string::npos)
+            break;
+          a = b + 1;
+        }
+        return v;
+      }
+  # wie ha_split, aber mit eigenem Trennzeichen
+  - id: ha_split_by
+    type: std::function<std::vector<std::string>(const std::string &, char)>
+    restore_value: false
+    initial_value: |-
+      [](const std::string &s, char sep) -> std::vector<std::string> {
+        std::vector<std::string> v;
+        if (s.empty())
+          return v;
+        size_t a = 0;
+        while (true) {
+          const size_t b = s.find(sep, a);
           v.push_back(s.substr(a, b == std::string::npos ? std::string::npos : b - a));
           if (b == std::string::npos)
             break;
@@ -564,7 +648,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00000001u;'
   - platform: homeassistant
     id: ha_pv1_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_pv1_energy | string | lower | trim) == 'statistik' else ha_pv1_energy }"
     internal: true
     filters:
       - multiply: ${ha_pv1_energy_faktor}
@@ -580,7 +664,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00000002u;'
   - platform: homeassistant
     id: ha_pv2_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_pv2_energy | string | lower | trim) == 'statistik' else ha_pv2_energy }"
     internal: true
     filters:
       - multiply: ${ha_pv2_energy_faktor}
@@ -596,7 +680,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00000004u;'
   - platform: homeassistant
     id: ha_pv3_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv3_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv3_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_pv3_energy | string | lower | trim) == 'statistik' else ha_pv3_energy }"
     internal: true
     filters:
       - multiply: ${ha_pv3_energy_faktor}
@@ -612,7 +696,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00000008u;'
   - platform: homeassistant
     id: ha_pv4_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv4_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv4_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_pv4_energy | string | lower | trim) == 'statistik' else ha_pv4_energy }"
     internal: true
     filters:
       - multiply: ${ha_pv4_energy_faktor}
@@ -628,7 +712,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00000010u;'
   - platform: homeassistant
     id: ha_pv5_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv5_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv5_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_pv5_energy | string | lower | trim) == 'statistik' else ha_pv5_energy }"
     internal: true
     filters:
       - multiply: ${ha_pv5_energy_faktor}
@@ -644,7 +728,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00000020u;'
   - platform: homeassistant
     id: ha_pv6_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv6_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv6_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_pv6_energy | string | lower | trim) == 'statistik' else ha_pv6_energy }"
     internal: true
     filters:
       - multiply: ${ha_pv6_energy_faktor}
@@ -660,7 +744,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00000040u;'
   - platform: homeassistant
     id: ha_pv7_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv7_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv7_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_pv7_energy | string | lower | trim) == 'statistik' else ha_pv7_energy }"
     internal: true
     filters:
       - multiply: ${ha_pv7_energy_faktor}
@@ -676,7 +760,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00000080u;'
   - platform: homeassistant
     id: ha_pv8_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv8_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_pv8_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_pv8_energy | string | lower | trim) == 'statistik' else ha_pv8_energy }"
     internal: true
     filters:
       - multiply: ${ha_pv8_energy_faktor}
@@ -697,7 +781,7 @@ sensor:
     filters:
       - multiply: ${ha_inv1_energy_faktor}
     on_value:
-      - lambda: 'id(ha_dirty) |= 0x00000100u;'
+      - lambda: 'id(ha_dirty) |= 0x02000100u;'
   - platform: homeassistant
     id: ha_inv1_temp
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv1_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv1_temp }"
@@ -721,7 +805,7 @@ sensor:
     filters:
       - multiply: ${ha_inv2_energy_faktor}
     on_value:
-      - lambda: 'id(ha_dirty) |= 0x00000200u;'
+      - lambda: 'id(ha_dirty) |= 0x02000200u;'
   - platform: homeassistant
     id: ha_inv2_temp
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv2_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv2_temp }"
@@ -745,7 +829,7 @@ sensor:
     filters:
       - multiply: ${ha_inv3_energy_faktor}
     on_value:
-      - lambda: 'id(ha_dirty) |= 0x00000400u;'
+      - lambda: 'id(ha_dirty) |= 0x02000400u;'
   - platform: homeassistant
     id: ha_inv3_temp
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv3_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv3_temp }"
@@ -769,7 +853,7 @@ sensor:
     filters:
       - multiply: ${ha_inv4_energy_faktor}
     on_value:
-      - lambda: 'id(ha_dirty) |= 0x00000800u;'
+      - lambda: 'id(ha_dirty) |= 0x02000800u;'
   - platform: homeassistant
     id: ha_inv4_temp
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_inv4_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_inv4_temp }"
@@ -1360,7 +1444,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev1_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev1_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_dev1_energy | string | lower | trim) == 'statistik' else ha_dev1_energy }"
     internal: true
     filters:
       - multiply: ${ha_dev1_energy_faktor}
@@ -1376,7 +1460,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev2_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev2_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_dev2_energy | string | lower | trim) == 'statistik' else ha_dev2_energy }"
     internal: true
     filters:
       - multiply: ${ha_dev2_energy_faktor}
@@ -1392,7 +1476,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev3_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev3_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev3_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev3_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_dev3_energy | string | lower | trim) == 'statistik' else ha_dev3_energy }"
     internal: true
     filters:
       - multiply: ${ha_dev3_energy_faktor}
@@ -1408,7 +1492,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00100000u;'
   - platform: homeassistant
     id: ha_dev4_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev4_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev4_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev4_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_dev4_energy | string | lower | trim) == 'statistik' else ha_dev4_energy }"
     internal: true
     filters:
       - multiply: ${ha_dev4_energy_faktor}
@@ -1424,7 +1508,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00300000u;'
   - platform: homeassistant
     id: ha_dev5_energy
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev5_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_dev5_energy }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_dev5_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_dev5_energy | string | lower | trim) == 'statistik' else ha_dev5_energy }"
     internal: true
     filters:
       - multiply: ${ha_dev5_energy_faktor}
@@ -1576,7 +1660,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x00400000u;'
   - platform: homeassistant
     id: ha_meter0_today
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter0_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter0_today }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter0_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_meter0_today | string | lower | trim) == 'statistik' else ha_meter0_today }"
     internal: true
     filters:
       - multiply: ${ha_meter0_today_faktor}
@@ -1584,7 +1668,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x02800000u;'
   - platform: homeassistant
     id: ha_meter1_today
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter1_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter1_today }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter1_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_meter1_today | string | lower | trim) == 'statistik' else ha_meter1_today }"
     internal: true
     filters:
       - multiply: ${ha_meter1_today_faktor}
@@ -1592,7 +1676,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x02800000u;'
   - platform: homeassistant
     id: ha_meter2_today
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter2_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter2_today }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter2_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_meter2_today | string | lower | trim) == 'statistik' else ha_meter2_today }"
     internal: true
     filters:
       - multiply: ${ha_meter2_today_faktor}
@@ -1600,7 +1684,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x02800000u;'
   - platform: homeassistant
     id: ha_meter3_today
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter3_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter3_today }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter3_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_meter3_today | string | lower | trim) == 'statistik' else ha_meter3_today }"
     internal: true
     filters:
       - multiply: ${ha_meter3_today_faktor}
@@ -1608,7 +1692,7 @@ sensor:
       - lambda: 'id(ha_dirty) |= 0x02800000u;'
   - platform: homeassistant
     id: ha_meter4_today
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter4_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_meter4_today }"
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_meter4_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] or (ha_meter4_today | string | lower | trim) == 'statistik' else ha_meter4_today }"
     internal: true
     filters:
       - multiply: ${ha_meter4_today_faktor}
@@ -1655,237 +1739,13 @@ sensor:
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02000000u;'
   - platform: homeassistant
-    id: ha_solcast_today
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_today }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_today_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_today_p10
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_today }"
-    attribute: estimate10
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_today_p10_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_today_p90
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_today }"
-    attribute: estimate90
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_today_p90_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
     id: ha_solcast_remaining
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_remaining | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_remaining }"
     internal: true
     filters:
       - multiply: ${ha_solcast_remaining_faktor}
     on_value:
-      - lambda: 'id(ha_dirty) |= 0x06200000u;'
-  - platform: homeassistant
-    id: ha_solcast_power_now
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_power_now | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_power_now }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_power_now_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_next_hour
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_next_hour | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_next_hour }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_next_hour_faktor}
-      - multiply: 0.001
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_peak
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_peak | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_peak }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_peak_faktor}
-      - multiply: 0.001
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_api_used
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_api_used | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_api_used }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_api_used_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_api_limit
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_api_limit | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_api_limit }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_api_limit_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d2
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d2 }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d2_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d2_p10
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d2 }"
-    attribute: estimate10
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d2_p10_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d2_p90
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d2 }"
-    attribute: estimate90
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d2_p90_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d3
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d3 }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d3_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d3_p10
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d3 }"
-    attribute: estimate10
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d3_p10_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d3_p90
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d3 }"
-    attribute: estimate90
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d3_p90_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d4
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d4 }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d4_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d4_p10
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d4 }"
-    attribute: estimate10
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d4_p10_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d4_p90
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d4 }"
-    attribute: estimate90
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d4_p90_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d5
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d5 }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d5_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d5_p10
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d5 }"
-    attribute: estimate10
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d5_p10_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d5_p90
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d5 }"
-    attribute: estimate90
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d5_p90_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d6
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d6 }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d6_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d6_p10
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d6 }"
-    attribute: estimate10
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d6_p10_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d6_p90
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d6 }"
-    attribute: estimate90
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d6_p90_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d7
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d7 }"
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d7_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d7_p10
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d7 }"
-    attribute: estimate10
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d7_p10_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_d7_p90
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_d7 }"
-    attribute: estimate90
-    internal: true
-    filters:
-      - multiply: ${ha_solcast_d7_p90_faktor}
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
+      - lambda: 'id(ha_dirty) |= 0x02200000u;'
   - platform: homeassistant
     id: ha_wx_temp
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_weather | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_weather }"
@@ -2089,18 +1949,6 @@ text_sensor:
     on_value:
       - lambda: 'id(ha_dirty) |= 0x00080000u;'
   - platform: homeassistant
-    id: ha_solcast_peak_time
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_peak_time | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_peak_time }"
-    internal: true
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
-    id: ha_solcast_last_poll
-    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_solcast_last_poll | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_solcast_last_poll }"
-    internal: true
-    on_value:
-      - lambda: 'id(ha_dirty) |= 0x04000000u;'
-  - platform: homeassistant
     id: ha_weather
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_weather | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_weather }"
     internal: true
@@ -2215,8 +2063,9 @@ binary_sensor:
       - lambda: 'id(ha_dirty) |= 0x01000000u;'
 
 script:
-  # Prognosen: Wetter stuendlich und taeglich, Solcast-Halbstunden. Die drei
-  # Aktionen laufen nebeneinander, jede Antwort kommt fuer sich.
+  # Prognosen: Wetter stuendlich und taeglich, Solcast-Halbstunden der Anlage,
+  # Solcast je Dach. Die vier Aktionen laufen nebeneinander, jede Antwort
+  # kommt fuer sich.
   - id: ha_fetch_fc
     then:
       - homeassistant.action:
@@ -2326,12 +2175,11 @@ script:
                   // sun_duration in Sekunden [A], nur mit der DWD-Option fuer Zusatzwerte
                   id(wx_day).execute(tag, id(ha_day_label)(tag, jetzt), lage, F(hi, k), F(lo, k), F(rr, k), F(p, k),
                                      F(s, k) / 3600.0f, F(w, k));
-                  id(ha_wx_cond)[tag] = lage;
                   if (tag == 0)
                     id(ha_wx_today) = {F(hi, k), F(lo, k), F(rr, k)};
                 }
                 id(ha_wx_stamp) = jetzt.is_valid() ? jetzt.strftime("%H:%M") : std::string();
-                id(ha_dirty) |= (1u << 26) | (1u << 27);
+                id(ha_dirty) |= 1u << 27;
           on_error:
             - lambda: 'ESP_LOGW("ha", "weather.get_forecasts daily: %s", error.c_str());'
       # Solcast: Aktion der Integration; scheitert sie (Integration fehlt,
@@ -2345,18 +2193,16 @@ script:
           response_template: |-
             {%- set src = response.get('data') or [] -%}
 
-            {%- set o = namespace(a=['nan'] * 48, b=['nan'] * 48, c=['nan'] * 48) -%}
+            {%- set o = namespace(a=['nan'] * 48) -%}
             {%- for x in src -%}
             {%- set ps = x.get('period_start') -%}
             {%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}
             {%- if t and t.date() == now().date() -%}
             {%- set i = t.hour * 2 + t.minute // 30 -%}
             {%- set o.a = o.a[:i] + [((x.get('pv_estimate')) | round(2)) if (x.get('pv_estimate')) is number else 'nan'] + o.a[i + 1:] -%}
-            {%- set o.b = o.b[:i] + [((x.get('pv_estimate10')) | round(2)) if (x.get('pv_estimate10')) is number else 'nan'] + o.b[i + 1:] -%}
-            {%- set o.c = o.c[:i] + [((x.get('pv_estimate90')) | round(2)) if (x.get('pv_estimate90')) is number else 'nan'] + o.c[i + 1:] -%}
             {%- endif -%}
             {%- endfor -%}
-            {{ {'a': o.a | join(','), 'b': o.b | join(','), 'c': o.c | join(',')} | tojson }}
+            {{ {'a': o.a | join(',')} | tojson }}
           on_success:
             - lambda: |-
                 const bool txt = response["response"].is<const char *>();
@@ -2374,21 +2220,126 @@ script:
                 auto F = [](const std::vector<std::string> &v, size_t i) -> float {
                   return (i < v.size() && !v[i].empty()) ? strtof(v[i].c_str(), nullptr) : NAN;
                 };
-                id(fc_slots).execute(S("a"), S("b"), S("c"));
-                // Tagesreihe Prognose (06..22 Uhr, kWh je Stunde) aus den Halbstunden
-                const auto &p = id(fc_p50);
-                char buf[128];
-                int n = 0;
-                for (int h = 6; h < 22 && n >= 0 && n < (int) sizeof(buf); h++) {
-                  float v = (p[2 * h] + p[2 * h + 1]) * 0.5f;
-                  v = std::isfinite(v) ? std::clamp(v, 0.0f, 999.0f) : 0.0f;
-                  n += snprintf(buf + n, sizeof(buf) - n, h > 6 ? ",%.2f" : "%.2f", v);
+                if (id(fc_roof_on) != 0)
+                  return;
+                const auto a = L(S("a"));
+                std::array<float, 48> P;
+                for (size_t i = 0; i < 48; i++)
+                  P[i] = F(a, i);
+                {
+                  char buf[128];
+                  int n = 0;
+                  for (int h = 6; h < 22 && n >= 0 && n < (int) sizeof(buf); h++) {
+                    float v = (P[2 * h] + P[2 * h + 1]) * 0.5f;
+                    v = std::isfinite(v) ? std::clamp(v, 0.0f, 999.0f) : 0.0f;
+                    n += snprintf(buf + n, sizeof(buf) - n, h > 6 ? ",%.2f" : "%.2f", v);
+                  }
+                  if (id(forecast_curve).state != buf)
+                    id(forecast_curve).make_call().set_value(buf).perform();
                 }
-                if (id(forecast_curve).state != buf)
-                  id(forecast_curve).make_call().set_value(buf).perform();
           on_error:
             - lambda: 'ESP_LOGD("ha", "solcast_solar.query_forecast_data: %s -- lese detailedForecast", error.c_str());'
             - script.execute: ha_fetch_solcast_attr
+      # Prognose je Dach (Seite Prognose): Zustand, estimate10 und
+      # detailedForecast von ha_pv<N>_fc_d1..7 -- die Vorlage liest sie selbst,
+      # weather.get_forecasts ist nur der Traeger einer Antwort
+      - homeassistant.action:
+          action: weather.get_forecasts
+          data:
+            entity_id: ${ha_weather}
+            type: daily
+          capture_response: true
+          response_template: |-
+            {%- set q = [
+            ['${ '' if (ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_fc_d1 }', '${ '' if (ha_pv1_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_fc_d2 }', '${ '' if (ha_pv1_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_fc_d3 }', '${ '' if (ha_pv1_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_fc_d4 }', '${ '' if (ha_pv1_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_fc_d5 }', '${ '' if (ha_pv1_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_fc_d6 }', '${ '' if (ha_pv1_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv1_fc_d7 }'],
+            ['${ '' if (ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_fc_d1 }', '${ '' if (ha_pv2_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_fc_d2 }', '${ '' if (ha_pv2_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_fc_d3 }', '${ '' if (ha_pv2_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_fc_d4 }', '${ '' if (ha_pv2_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_fc_d5 }', '${ '' if (ha_pv2_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_fc_d6 }', '${ '' if (ha_pv2_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv2_fc_d7 }'],
+            ['${ '' if (ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_fc_d1 }', '${ '' if (ha_pv3_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_fc_d2 }', '${ '' if (ha_pv3_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_fc_d3 }', '${ '' if (ha_pv3_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_fc_d4 }', '${ '' if (ha_pv3_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_fc_d5 }', '${ '' if (ha_pv3_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_fc_d6 }', '${ '' if (ha_pv3_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv3_fc_d7 }'],
+            ['${ '' if (ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_fc_d1 }', '${ '' if (ha_pv4_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_fc_d2 }', '${ '' if (ha_pv4_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_fc_d3 }', '${ '' if (ha_pv4_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_fc_d4 }', '${ '' if (ha_pv4_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_fc_d5 }', '${ '' if (ha_pv4_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_fc_d6 }', '${ '' if (ha_pv4_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv4_fc_d7 }'],
+            ['${ '' if (ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_fc_d1 }', '${ '' if (ha_pv5_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_fc_d2 }', '${ '' if (ha_pv5_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_fc_d3 }', '${ '' if (ha_pv5_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_fc_d4 }', '${ '' if (ha_pv5_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_fc_d5 }', '${ '' if (ha_pv5_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_fc_d6 }', '${ '' if (ha_pv5_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv5_fc_d7 }'],
+            ['${ '' if (ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_fc_d1 }', '${ '' if (ha_pv6_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_fc_d2 }', '${ '' if (ha_pv6_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_fc_d3 }', '${ '' if (ha_pv6_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_fc_d4 }', '${ '' if (ha_pv6_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_fc_d5 }', '${ '' if (ha_pv6_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_fc_d6 }', '${ '' if (ha_pv6_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv6_fc_d7 }'],
+            ['${ '' if (ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d1 }', '${ '' if (ha_pv7_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d2 }', '${ '' if (ha_pv7_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d3 }', '${ '' if (ha_pv7_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d4 }', '${ '' if (ha_pv7_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d5 }', '${ '' if (ha_pv7_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d6 }', '${ '' if (ha_pv7_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d7 }'],
+            ['${ '' if (ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d1 }', '${ '' if (ha_pv8_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d2 }', '${ '' if (ha_pv8_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d3 }', '${ '' if (ha_pv8_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d4 }', '${ '' if (ha_pv8_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d5 }', '${ '' if (ha_pv8_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d6 }', '${ '' if (ha_pv8_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d7 }']
+            ] -%}
+            {%- set o = namespace(l=[]) -%}
+            {%- for k in range(q | length) -%}
+            {%- set ids = q[k] -%}
+            {%- if ids[0] -%}
+            {%- set h = namespace(a=[''] * 48, b=[''] * 48) -%}
+            {%- for x in state_attr(ids[0], 'detailedForecast') or [] -%}
+            {%- set ps = x.get('period_start') -%}
+            {%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}
+            {%- if t and t.date() == now().date() -%}
+            {%- set i = t.hour * 2 + t.minute // 30 -%}
+            {%- set a = x.get('pv_estimate') -%}
+            {%- set b = x.get('pv_estimate10') -%}
+            {%- set h.a = h.a[:i] + [('%.3g' | format(a)) if a is number else ''] + h.a[i + 1:] -%}
+            {%- set h.b = h.b[:i] + [('%.3g' | format(b)) if b is number else ''] + h.b[i + 1:] -%}
+            {%- endif -%}
+            {%- endfor -%}
+            {%- set d = namespace(p=[], q=[]) -%}
+            {%- for e in ids -%}
+            {%- set v = (states(e) | float(none)) if e else none -%}
+            {%- set w = (state_attr(e, 'estimate10') | float(none)) if e else none -%}
+            {%- set d.p = d.p + [('%.4g' | format(v)) if v is number else ''] -%}
+            {%- set d.q = d.q + [('%.4g' | format(w)) if w is number else ''] -%}
+            {%- endfor -%}
+            {%- set n = (k + 1) | string -%}
+            {%- set o.l = o.l + [['a' ~ n, h.a | join(',')], ['b' ~ n, h.b | join(',')], ['d' ~ n, d.p | join(',')], ['e' ~ n, d.q | join(',')]] -%}
+            {%- endif -%}
+            {%- endfor -%}
+            {{ dict(o.l) | tojson }}
+          on_success:
+            - lambda: |-
+                const bool txt = response["response"].is<const char *>();
+                JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
+                JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
+                if (r.isNull()) {
+                  ESP_LOGW("ha", "Prognose je Dach: Antwort ohne Inhalt");
+                  return;
+                }
+                auto S = [&r](const char *k) -> std::string {
+                  const char *v = r[k].as<const char *>();
+                  return v ? std::string(v) : std::string();
+                };
+                auto &L = id(ha_split);
+                auto F = [](const std::vector<std::string> &v, size_t i) -> float {
+                  return (i < v.size() && !v[i].empty()) ? strtof(v[i].c_str(), nullptr) : NAN;
+                };
+                // Prognose je Dach -> Seite Prognose (fc_roof_fc speichert nur, fc_redraw
+                // zeichnet einmal am Ende); Flaechen ohne Schluessel in der Antwort: weg
+                for (int k = 0; k < 8; k++) {
+                  const std::string n = std::to_string(k + 1);
+                  id(fc_roof_fc).execute(k, S(("a" + n).c_str()), S(("b" + n).c_str()), S(("d" + n).c_str()),
+                                         S(("e" + n).c_str()));
+                }
+                id(fc_redraw).execute();
+                if (id(fc_roof_on) == 0)
+                  return;
+                // forecast_curve aus der Summe der Daecher (P50)
+                std::array<float, 48> P;
+                P.fill(NAN);
+                for (int k = 0; k < 8; k++) {
+                  if (!((id(fc_roof_on) >> k) & 1u))
+                    continue;
+                  for (int i = 0; i < 48; i++) {
+                    const float v = id(fc_r_p50)[k][i];
+                    if (std::isfinite(v))
+                      P[i] = std::isfinite(P[i]) ? P[i] + v : v;
+                  }
+                }
+                {
+                  char buf[128];
+                  int n = 0;
+                  for (int h = 6; h < 22 && n >= 0 && n < (int) sizeof(buf); h++) {
+                    float v = (P[2 * h] + P[2 * h + 1]) * 0.5f;
+                    v = std::isfinite(v) ? std::clamp(v, 0.0f, 999.0f) : 0.0f;
+                    n += snprintf(buf + n, sizeof(buf) - n, h > 6 ? ",%.2f" : "%.2f", v);
+                  }
+                  if (id(forecast_curve).state != buf)
+                    id(forecast_curve).make_call().set_value(buf).perform();
+                }
+          on_error:
+            - lambda: 'ESP_LOGW("ha", "Prognose je Dach: %s", error.c_str());'
 
   # Ersatzweg fuer die Solcast-Halbstunden: das Attribut detailedForecast der
   # Tagesprognose. Die Vorlage braucht irgendeine Aktion mit Antwort --
@@ -2404,18 +2355,16 @@ script:
           response_template: |-
             {%- set src = state_attr('${ha_solcast_today}', 'detailedForecast') or [] -%}
 
-            {%- set o = namespace(a=['nan'] * 48, b=['nan'] * 48, c=['nan'] * 48) -%}
+            {%- set o = namespace(a=['nan'] * 48) -%}
             {%- for x in src -%}
             {%- set ps = x.get('period_start') -%}
             {%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}
             {%- if t and t.date() == now().date() -%}
             {%- set i = t.hour * 2 + t.minute // 30 -%}
             {%- set o.a = o.a[:i] + [((x.get('pv_estimate')) | round(2)) if (x.get('pv_estimate')) is number else 'nan'] + o.a[i + 1:] -%}
-            {%- set o.b = o.b[:i] + [((x.get('pv_estimate10')) | round(2)) if (x.get('pv_estimate10')) is number else 'nan'] + o.b[i + 1:] -%}
-            {%- set o.c = o.c[:i] + [((x.get('pv_estimate90')) | round(2)) if (x.get('pv_estimate90')) is number else 'nan'] + o.c[i + 1:] -%}
             {%- endif -%}
             {%- endfor -%}
-            {{ {'a': o.a | join(','), 'b': o.b | join(','), 'c': o.c | join(',')} | tojson }}
+            {{ {'a': o.a | join(',')} | tojson }}
           on_success:
             - lambda: |-
                 const bool txt = response["response"].is<const char *>();
@@ -2433,18 +2382,23 @@ script:
                 auto F = [](const std::vector<std::string> &v, size_t i) -> float {
                   return (i < v.size() && !v[i].empty()) ? strtof(v[i].c_str(), nullptr) : NAN;
                 };
-                id(fc_slots).execute(S("a"), S("b"), S("c"));
-                // Tagesreihe Prognose (06..22 Uhr, kWh je Stunde) aus den Halbstunden
-                const auto &p = id(fc_p50);
-                char buf[128];
-                int n = 0;
-                for (int h = 6; h < 22 && n >= 0 && n < (int) sizeof(buf); h++) {
-                  float v = (p[2 * h] + p[2 * h + 1]) * 0.5f;
-                  v = std::isfinite(v) ? std::clamp(v, 0.0f, 999.0f) : 0.0f;
-                  n += snprintf(buf + n, sizeof(buf) - n, h > 6 ? ",%.2f" : "%.2f", v);
+                if (id(fc_roof_on) != 0)
+                  return;
+                const auto a = L(S("a"));
+                std::array<float, 48> P;
+                for (size_t i = 0; i < 48; i++)
+                  P[i] = F(a, i);
+                {
+                  char buf[128];
+                  int n = 0;
+                  for (int h = 6; h < 22 && n >= 0 && n < (int) sizeof(buf); h++) {
+                    float v = (P[2 * h] + P[2 * h + 1]) * 0.5f;
+                    v = std::isfinite(v) ? std::clamp(v, 0.0f, 999.0f) : 0.0f;
+                    n += snprintf(buf + n, sizeof(buf) - n, h > 6 ? ",%.2f" : "%.2f", v);
+                  }
+                  if (id(forecast_curve).state != buf)
+                    id(forecast_curve).make_call().set_value(buf).perform();
                 }
-                if (id(forecast_curve).state != buf)
-                  id(forecast_curve).make_call().set_value(buf).perform();
           on_error:
             - lambda: 'ESP_LOGW("ha", "Solcast detailedForecast: %s", error.c_str());'
 
@@ -2795,6 +2749,234 @@ script:
           on_error:
             - lambda: 'ESP_LOGW("ha", "Statistik 24 h: %s", error.c_str());'
 
+  # Tageswerte aus der Statistik (ha_<ziel>: statistik, Liste unter
+  # substitutions): erst die vollen Stunden ab 0 Uhr (Leistung: mean in W,
+  # Zaehler: change in kWh), dann ab dem Ende der letzten Stunde die
+  # 5-min-Werte der laufenden Stunde. Nur die Quellen der Ziele auf
+  # statistik werden abgefragt; die Antwort ist eine Zahl je Platz. Dazu
+  # die Leistung jeder Flaeche mit Prognose (ha_pv<N>_fc_d1 belegt): ihre
+  # Stundenmittel werden die Balken der Seite Prognose.
+  - id: ha_fetch_today
+    then:
+      - homeassistant.action:
+          action: recorder.get_statistics
+          data:
+            period: hour
+          data_template:
+            statistic_ids: "{{ ['${ ha_pv1_power if ((ha_pv1_energy | string | lower | trim) == 'statistik') and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv2_power if ((ha_pv2_energy | string | lower | trim) == 'statistik') and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv3_power if ((ha_pv3_energy | string | lower | trim) == 'statistik') and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv4_power if ((ha_pv4_energy | string | lower | trim) == 'statistik') and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv5_power if ((ha_pv5_energy | string | lower | trim) == 'statistik') and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv6_power if ((ha_pv6_energy | string | lower | trim) == 'statistik') and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv7_power if ((ha_pv7_energy | string | lower | trim) == 'statistik') and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv8_power if ((ha_pv8_energy | string | lower | trim) == 'statistik') and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev1_energy_total if ((ha_dev1_energy | string | lower | trim) == 'statistik') and not ((ha_dev1_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev2_energy_total if ((ha_dev2_energy | string | lower | trim) == 'statistik') and not ((ha_dev2_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev3_energy_total if ((ha_dev3_energy | string | lower | trim) == 'statistik') and not ((ha_dev3_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev4_energy_total if ((ha_dev4_energy | string | lower | trim) == 'statistik') and not ((ha_dev4_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev5_energy_total if ((ha_dev5_energy | string | lower | trim) == 'statistik') and not ((ha_dev5_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter0_total if ((ha_meter0_today | string | lower | trim) == 'statistik') and not ((ha_meter0_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter1_total if ((ha_meter1_today | string | lower | trim) == 'statistik') and not ((ha_meter1_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter2_total if ((ha_meter2_today | string | lower | trim) == 'statistik') and not ((ha_meter2_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter3_total if ((ha_meter3_today | string | lower | trim) == 'statistik') and not ((ha_meter3_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter4_total if ((ha_meter4_today | string | lower | trim) == 'statistik') and not ((ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv1_power if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv2_power if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv3_power if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv4_power if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv5_power if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv6_power if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv7_power if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv8_power if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }'] | select | unique | list }}"
+            start_time: "{{ today_at('00:00').isoformat() }}"
+            types: "{{ ['mean', 'change'] }}"
+            units: "{{ {'energy': 'kWh', 'power': 'W'} }}"
+          capture_response: true
+          response_template: |-
+            {%- set q = [
+            ['${ ha_pv1_power if ((ha_pv1_energy | string | lower | trim) == 'statistik') and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv2_power if ((ha_pv2_energy | string | lower | trim) == 'statistik') and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv3_power if ((ha_pv3_energy | string | lower | trim) == 'statistik') and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv4_power if ((ha_pv4_energy | string | lower | trim) == 'statistik') and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv5_power if ((ha_pv5_energy | string | lower | trim) == 'statistik') and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv6_power if ((ha_pv6_energy | string | lower | trim) == 'statistik') and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv7_power if ((ha_pv7_energy | string | lower | trim) == 'statistik') and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv8_power if ((ha_pv8_energy | string | lower | trim) == 'statistik') and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_dev1_energy_total if ((ha_dev1_energy | string | lower | trim) == 'statistik') and not ((ha_dev1_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_dev2_energy_total if ((ha_dev2_energy | string | lower | trim) == 'statistik') and not ((ha_dev2_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_dev3_energy_total if ((ha_dev3_energy | string | lower | trim) == 'statistik') and not ((ha_dev3_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_dev4_energy_total if ((ha_dev4_energy | string | lower | trim) == 'statistik') and not ((ha_dev4_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_dev5_energy_total if ((ha_dev5_energy | string | lower | trim) == 'statistik') and not ((ha_dev5_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter0_total if ((ha_meter0_today | string | lower | trim) == 'statistik') and not ((ha_meter0_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter1_total if ((ha_meter1_today | string | lower | trim) == 'statistik') and not ((ha_meter1_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter2_total if ((ha_meter2_today | string | lower | trim) == 'statistik') and not ((ha_meter2_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter3_total if ((ha_meter3_today | string | lower | trim) == 'statistik') and not ((ha_meter3_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter4_total if ((ha_meter4_today | string | lower | trim) == 'statistik') and not ((ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c']
+            ] -%}
+            {%- set o = namespace(v=[], end=today_at('00:00')) -%}
+            {%- for x in q -%}
+            {%- set ns = namespace(s=0, n=0) -%}
+            {%- for e in (response.statistics.get(x[0], []) if x[0] else []) -%}
+            {%- set w = e.get('mean') if x[1] == 'm' else e.get('change') -%}
+            {%- set ns.n = ns.n + 1 -%}
+            {%- if w is number -%}
+            {%- set ns.s = ns.s + w -%}
+            {%- endif -%}
+            {%- set t = e.get('end') -%}
+            {%- set t = as_datetime(t) if t is string else t -%}
+            {%- if t and t > o.end -%}
+            {%- set o.end = t -%}
+            {%- endif -%}
+            {%- endfor -%}
+            {%- set o.v = o.v + [(((ns.s / 1000) if x[1] == 'm' else ns.s) | round(3)) if ns.n else ''] -%}
+            {%- endfor -%}
+            {%- set k = ['${ ha_pv1_power if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv2_power if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv3_power if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv4_power if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv5_power if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv6_power if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv7_power if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv8_power if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }'] -%}
+            {%- set c = namespace(l=[]) -%}
+            {%- for x in k -%}
+            {%- set h = namespace(v=[''] * 24, s=0, n=0) -%}
+            {%- for e in (response.statistics.get(x, []) if x else []) -%}
+            {%- set w = e.get('mean') -%}
+            {%- if w is number -%}
+            {%- set s = as_local(as_datetime(e.start) if e.start is string else e.start) -%}
+            {%- set h.v = h.v[:s.hour] + ['%.3g' | format(w / 1000)] + h.v[s.hour + 1:] -%}
+            {%- endif -%}
+            {%- set t = e.get('end') -%}
+            {%- set t = as_datetime(t) if t is string else t -%}
+            {%- if t and t > o.end -%}
+            {%- set o.end = t -%}
+            {%- endif -%}
+            {%- endfor -%}
+            {%- set c.l = c.l + [(h.v | join(',')) if x else ''] -%}
+            {%- endfor -%}
+            {{ {'v': o.v | join(','), 'end': o.end.isoformat(), 'c': c.l | join(';')} | tojson }}
+          on_success:
+            - lambda: |-
+                const bool txt = response["response"].is<const char *>();
+                JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
+                JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
+                if (r.isNull()) {
+                  ESP_LOGW("ha", "Tageswerte Stunden: Antwort ohne Inhalt");
+                  return;
+                }
+                auto S = [&r](const char *k) -> std::string {
+                  const char *v = r[k].as<const char *>();
+                  return v ? std::string(v) : std::string();
+                };
+                auto &L = id(ha_split);
+                auto F = [](const std::vector<std::string> &v, size_t i) -> float {
+                  return (i < v.size() && !v[i].empty()) ? strtof(v[i].c_str(), nullptr) : NAN;
+                };
+                // Volle Stunden ab 0 Uhr; dann die 5-min-Werte ab dem Ende der letzten Stunde
+                const auto v = L(S("v"));
+                for (size_t k = 0; k < 18; k++)
+                  id(ha_stat_h)[k] = F(v, k);
+                id(ha_stat_end) = S("end");
+                id(ha_fc_h) = S("c");
+                id(ha_fetch_today_5min).execute();
+          on_error:
+            - lambda: 'ESP_LOGW("ha", "Tageswerte Stunden: %s", error.c_str());'
+
+  - id: ha_fetch_today_5min
+    then:
+      - homeassistant.action:
+          action: recorder.get_statistics
+          data:
+            period: 5minute
+            start_time: !lambda 'return id(ha_stat_end);'
+          data_template:
+            statistic_ids: "{{ ['${ ha_pv1_power if ((ha_pv1_energy | string | lower | trim) == 'statistik') and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv2_power if ((ha_pv2_energy | string | lower | trim) == 'statistik') and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv3_power if ((ha_pv3_energy | string | lower | trim) == 'statistik') and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv4_power if ((ha_pv4_energy | string | lower | trim) == 'statistik') and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv5_power if ((ha_pv5_energy | string | lower | trim) == 'statistik') and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv6_power if ((ha_pv6_energy | string | lower | trim) == 'statistik') and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv7_power if ((ha_pv7_energy | string | lower | trim) == 'statistik') and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv8_power if ((ha_pv8_energy | string | lower | trim) == 'statistik') and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev1_energy_total if ((ha_dev1_energy | string | lower | trim) == 'statistik') and not ((ha_dev1_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev2_energy_total if ((ha_dev2_energy | string | lower | trim) == 'statistik') and not ((ha_dev2_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev3_energy_total if ((ha_dev3_energy | string | lower | trim) == 'statistik') and not ((ha_dev3_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev4_energy_total if ((ha_dev4_energy | string | lower | trim) == 'statistik') and not ((ha_dev4_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_dev5_energy_total if ((ha_dev5_energy | string | lower | trim) == 'statistik') and not ((ha_dev5_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter0_total if ((ha_meter0_today | string | lower | trim) == 'statistik') and not ((ha_meter0_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter1_total if ((ha_meter1_today | string | lower | trim) == 'statistik') and not ((ha_meter1_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter2_total if ((ha_meter2_today | string | lower | trim) == 'statistik') and not ((ha_meter2_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter3_total if ((ha_meter3_today | string | lower | trim) == 'statistik') and not ((ha_meter3_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_meter4_total if ((ha_meter4_today | string | lower | trim) == 'statistik') and not ((ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv1_power if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv2_power if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv3_power if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv4_power if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv5_power if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv6_power if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv7_power if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv8_power if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }'] | select | unique | list }}"
+            types: "{{ ['mean', 'change'] }}"
+            units: "{{ {'energy': 'kWh', 'power': 'W'} }}"
+          capture_response: true
+          response_template: |-
+            {%- set q = [
+            ['${ ha_pv1_power if ((ha_pv1_energy | string | lower | trim) == 'statistik') and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv2_power if ((ha_pv2_energy | string | lower | trim) == 'statistik') and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv3_power if ((ha_pv3_energy | string | lower | trim) == 'statistik') and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv4_power if ((ha_pv4_energy | string | lower | trim) == 'statistik') and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv5_power if ((ha_pv5_energy | string | lower | trim) == 'statistik') and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv6_power if ((ha_pv6_energy | string | lower | trim) == 'statistik') and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv7_power if ((ha_pv7_energy | string | lower | trim) == 'statistik') and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_pv8_power if ((ha_pv8_energy | string | lower | trim) == 'statistik') and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'm'],
+            ['${ ha_dev1_energy_total if ((ha_dev1_energy | string | lower | trim) == 'statistik') and not ((ha_dev1_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_dev2_energy_total if ((ha_dev2_energy | string | lower | trim) == 'statistik') and not ((ha_dev2_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_dev3_energy_total if ((ha_dev3_energy | string | lower | trim) == 'statistik') and not ((ha_dev3_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_dev4_energy_total if ((ha_dev4_energy | string | lower | trim) == 'statistik') and not ((ha_dev4_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_dev5_energy_total if ((ha_dev5_energy | string | lower | trim) == 'statistik') and not ((ha_dev5_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter0_total if ((ha_meter0_today | string | lower | trim) == 'statistik') and not ((ha_meter0_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter1_total if ((ha_meter1_today | string | lower | trim) == 'statistik') and not ((ha_meter1_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter2_total if ((ha_meter2_today | string | lower | trim) == 'statistik') and not ((ha_meter2_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter3_total if ((ha_meter3_today | string | lower | trim) == 'statistik') and not ((ha_meter3_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c'],
+            ['${ ha_meter4_total if ((ha_meter4_today | string | lower | trim) == 'statistik') and not ((ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', 'c']
+            ] -%}
+            {%- set o = namespace(v=[], end=today_at('00:00')) -%}
+            {%- for x in q -%}
+            {%- set ns = namespace(s=0, n=0) -%}
+            {%- for e in (response.statistics.get(x[0], []) if x[0] else []) -%}
+            {%- set w = e.get('mean') if x[1] == 'm' else e.get('change') -%}
+            {%- set ns.n = ns.n + 1 -%}
+            {%- if w is number -%}
+            {%- set ns.s = ns.s + w -%}
+            {%- endif -%}
+            {%- set t = e.get('end') -%}
+            {%- set t = as_datetime(t) if t is string else t -%}
+            {%- if t and t > o.end -%}
+            {%- set o.end = t -%}
+            {%- endif -%}
+            {%- endfor -%}
+            {%- set o.v = o.v + [(((ns.s / 12000) if x[1] == 'm' else ns.s) | round(3)) if ns.n else ''] -%}
+            {%- endfor -%}
+            {%- set k = ['${ ha_pv1_power if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv2_power if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv3_power if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv4_power if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv5_power if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv6_power if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv7_power if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv8_power if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }'] -%}
+            {%- set c = namespace(l=[]) -%}
+            {%- for x in k -%}
+            {%- set h = namespace(v=[''] * 24, s=0, n=0) -%}
+            {%- for e in (response.statistics.get(x, []) if x else []) -%}
+            {%- set w = e.get('mean') -%}
+            {%- if w is number -%}
+            {%- set h.s = h.s + w -%}
+            {%- set h.n = h.n + 1 -%}
+            {%- endif -%}
+            {%- set t = e.get('end') -%}
+            {%- set t = as_datetime(t) if t is string else t -%}
+            {%- if t and t > o.end -%}
+            {%- set o.end = t -%}
+            {%- endif -%}
+            {%- endfor -%}
+            {%- set c.l = c.l + [('%.3g' | format(h.s / h.n / 1000)) if h.n else ''] -%}
+            {%- endfor -%}
+            {{ {'v': o.v | join(','), 'end': o.end.isoformat(), 'c': c.l | join(';')} | tojson }}
+          on_success:
+            - lambda: |-
+                const bool txt = response["response"].is<const char *>();
+                JsonDocument doc = txt ? json::parse_json(std::string(response["response"].as<const char *>())) : JsonDocument();
+                JsonObjectConst r = txt ? doc.as<JsonObjectConst>() : response["response"].as<JsonObjectConst>();
+                if (r.isNull()) {
+                  ESP_LOGW("ha", "Tageswerte 5 min: Antwort ohne Inhalt");
+                  return;
+                }
+                auto S = [&r](const char *k) -> std::string {
+                  const char *v = r[k].as<const char *>();
+                  return v ? std::string(v) : std::string();
+                };
+                auto &L = id(ha_split);
+                auto F = [](const std::vector<std::string> &v, size_t i) -> float {
+                  return (i < v.size() && !v[i].empty()) ? strtof(v[i].c_str(), nullptr) : NAN;
+                };
+                const auto v = L(S("v"));
+                for (size_t k = 0; k < 18; k++)
+                  id(ha_stat_m)[k] = F(v, k);
+                id(ha_fc_m) = S("c");
+                id(ha_stat_today_set).execute();
+          on_error:
+            - lambda: |-
+                ESP_LOGW("ha", "Tageswerte 5 min: %s", error.c_str());
+                id(ha_stat_m).fill(NAN);
+                id(ha_fc_m).clear();
+            - script.execute: ha_stat_today_set
+
+  # Tageswerte aus der Statistik in die Sensoren der Ziele (ha_<ziel>:
+  # statistik): volle Stunden + laufende Stunde; beide ohne Zeile -> NAN
+  # (leer). publish_state laeuft durch den Faktor des Ziels und setzt sein
+  # Gruppenbit wie ein Wert aus Home Assistant. Danach die Stundenbalken je
+  # Flaeche mit Prognose an die Seite Prognose (fc_roof_hours).
+  - id: ha_stat_today_set
+    then:
+      - lambda: |-
+          constexpr bool AN[18] = {${ 'true' if ((ha_pv1_energy | string | lower | trim) == 'statistik') and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_pv2_energy | string | lower | trim) == 'statistik') and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_pv3_energy | string | lower | trim) == 'statistik') and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_pv4_energy | string | lower | trim) == 'statistik') and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_pv5_energy | string | lower | trim) == 'statistik') and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_pv6_energy | string | lower | trim) == 'statistik') and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_pv7_energy | string | lower | trim) == 'statistik') and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_pv8_energy | string | lower | trim) == 'statistik') and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_dev1_energy | string | lower | trim) == 'statistik') and not ((ha_dev1_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_dev2_energy | string | lower | trim) == 'statistik') and not ((ha_dev2_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_dev3_energy | string | lower | trim) == 'statistik') and not ((ha_dev3_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_dev4_energy | string | lower | trim) == 'statistik') and not ((ha_dev4_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_dev5_energy | string | lower | trim) == 'statistik') and not ((ha_dev5_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_meter0_today | string | lower | trim) == 'statistik') and not ((ha_meter0_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_meter1_today | string | lower | trim) == 'statistik') and not ((ha_meter1_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_meter2_today | string | lower | trim) == 'statistik') and not ((ha_meter2_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_meter3_today | string | lower | trim) == 'statistik') and not ((ha_meter3_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if ((ha_meter4_today | string | lower | trim) == 'statistik') and not ((ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }};
+          sensor::Sensor *const ZIEL[18] = {id(ha_pv1_energy), id(ha_pv2_energy), id(ha_pv3_energy), id(ha_pv4_energy), id(ha_pv5_energy), id(ha_pv6_energy), id(ha_pv7_energy), id(ha_pv8_energy), id(ha_dev1_energy), id(ha_dev2_energy), id(ha_dev3_energy), id(ha_dev4_energy), id(ha_dev5_energy), id(ha_meter0_today), id(ha_meter1_today), id(ha_meter2_today), id(ha_meter3_today), id(ha_meter4_today)};
+          for (size_t k = 0; k < 18; k++) {
+            if (!AN[k])
+              continue;
+            const float h = id(ha_stat_h)[k], m = id(ha_stat_m)[k];
+            ZIEL[k]->publish_state(std::isnan(h) ? m : (std::isnan(m) ? h : h + m));
+          }
+          // Stundenbalken der Seite Prognose: je Flaeche 24 Stundenmittel und
+          // das Mittel der laufenden Stunde in kW (';' trennt die Flaechen)
+          constexpr bool KURVE[8] = {${ 'true' if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }};
+          const auto h = id(ha_split_by)(id(ha_fc_h), ';'), m = id(ha_split_by)(id(ha_fc_m), ';');
+          for (size_t k = 0; k < 8; k++) {
+            if (KURVE[k])
+              id(fc_roof_hours).execute(k, k < h.size() ? h[k] : std::string(),
+                                        k < m.size() && !m[k].empty() ? strtof(m[k].c_str(), nullptr) : NAN);
+          }
+          id(fc_redraw).execute();
+
   # Modus-Schalter der Seite Wallboxen: wallbox_mode_set
   # (.pv-dashboard_page_wallbox.yaml) laesst den getippten Teil leuchten;
   # hier kommt der Befehl an evcc dazu (!extend: die Schritte laufen nach
@@ -2925,18 +3107,22 @@ interval:
           constexpr bool B_hp_supply = ${ 'false' if (ha_hp_supply | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_hp_vent_mode = ${ 'false' if (ha_hp_vent_mode | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv1_energy = ${ 'false' if (ha_inv1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
+          constexpr bool B_inv1_fault = ${ 'false' if (ha_inv1_fault | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv1_power = ${ 'false' if (ha_inv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv1_status = ${ 'false' if (ha_inv1_status | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv1_temp = ${ 'false' if (ha_inv1_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv2_energy = ${ 'false' if (ha_inv2_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
+          constexpr bool B_inv2_fault = ${ 'false' if (ha_inv2_fault | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv2_power = ${ 'false' if (ha_inv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv2_status = ${ 'false' if (ha_inv2_status | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv2_temp = ${ 'false' if (ha_inv2_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv3_energy = ${ 'false' if (ha_inv3_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
+          constexpr bool B_inv3_fault = ${ 'false' if (ha_inv3_fault | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv3_power = ${ 'false' if (ha_inv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv3_status = ${ 'false' if (ha_inv3_status | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv3_temp = ${ 'false' if (ha_inv3_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv4_energy = ${ 'false' if (ha_inv4_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
+          constexpr bool B_inv4_fault = ${ 'false' if (ha_inv4_fault | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv4_power = ${ 'false' if (ha_inv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv4_status = ${ 'false' if (ha_inv4_status | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_inv4_temp = ${ 'false' if (ha_inv4_temp | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
@@ -2975,21 +3161,7 @@ interval:
           constexpr bool B_site_battery_soc = ${ 'false' if (ha_site_battery_soc | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_site_grid_power = ${ 'false' if (ha_site_grid_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_site_pv_power = ${ 'false' if (ha_site_pv_power | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_api_limit = ${ 'false' if (ha_solcast_api_limit | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_api_used = ${ 'false' if (ha_solcast_api_used | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_d2 = ${ 'false' if (ha_solcast_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_d3 = ${ 'false' if (ha_solcast_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_d4 = ${ 'false' if (ha_solcast_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_d5 = ${ 'false' if (ha_solcast_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_d6 = ${ 'false' if (ha_solcast_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_d7 = ${ 'false' if (ha_solcast_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_last_poll = ${ 'false' if (ha_solcast_last_poll | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_next_hour = ${ 'false' if (ha_solcast_next_hour | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_peak = ${ 'false' if (ha_solcast_peak | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_peak_time = ${ 'false' if (ha_solcast_peak_time | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_power_now = ${ 'false' if (ha_solcast_power_now | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_solcast_remaining = ${ 'false' if (ha_solcast_remaining | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
-          constexpr bool B_solcast_today = ${ 'false' if (ha_solcast_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_sun = ${ 'false' if (ha_sun | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_tariff_feedin = ${ 'false' if (ha_tariff_feedin | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_tariff_grid = ${ 'false' if (ha_tariff_grid | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
@@ -3083,10 +3255,53 @@ interval:
             neu |= 1u << 18;   // meter_pv
           if (B_meter_house_power && id(ha_meter_house_power).has_state() && !std::isnan(id(ha_meter_house_power).state))
             neu |= 1u << 19;   // meter_house
+          if (B_grid_power && id(ha_grid_power).has_state() && !std::isnan(id(ha_grid_power).state))
+            neu |= 1u << 20;   // grid
           if (neu != id(dev_present)) {
             id(dev_present) = neu;
             id(dev_apply).execute();
             id(ha_dirty) = 0xFFFFFFFFu;
+          }
+          // Stoerung aus dem Statustext: ha_inv<N>_fault nicht belegt, ha_inv<N>_status
+          // belegt. Ein Text aus inv_fault_texts (ganzer Text, ohne Gross-/Klein-
+          // schreibung) setzt das Bit sofort; es faellt erst, wenn inv_fault_hold_s
+          // lang keiner kam. Aenderung -> Gruppe des Wechselrichters neu.
+          {
+            constexpr bool AUS_TEXT[4] = {!B_inv1_fault && B_inv1_status, !B_inv2_fault && B_inv2_status, !B_inv3_fault && B_inv3_status, !B_inv4_fault && B_inv4_status};
+            static std::vector<std::string> liste;
+            static uint32_t zuletzt[4] = {0, 0, 0, 0};
+            auto klein = [](const std::string &s) -> std::string {
+              const size_t a = s.find_first_not_of(" \t"), b = s.find_last_not_of(" \t");
+              std::string t = a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
+              for (auto &c : t)
+                c = tolower((unsigned char) c);
+              return t;
+            };
+            if (liste.empty()) {
+              for (const auto &x : id(ha_split)("${inv_fault_texts}"))
+                if (!klein(x).empty())
+                  liste.push_back(klein(x));
+              if (liste.empty())
+                liste.push_back(std::string("\x01"));  // leere Liste: nie ein Treffer
+            }
+            text_sensor::TextSensor *const st[4] = {id(ha_inv1_status), id(ha_inv2_status), id(ha_inv3_status), id(ha_inv4_status)};
+            const uint32_t ms = millis();
+            for (int k = 0; k < 4; k++) {
+              if (!AUS_TEXT[k])
+                continue;
+              const bool hit = T_ok(st[k]) && std::find(liste.begin(), liste.end(), klein(st[k]->state)) != liste.end();
+              if (hit) {
+                zuletzt[k] = ms | 1u;
+                id(ha_inv_fault_msg)[k] = st[k]->state;
+              }
+              const bool f = zuletzt[k] != 0 && (hit || ms - zuletzt[k] < (uint32_t) (${inv_fault_hold_s}) * 1000u);
+              if (!f)
+                zuletzt[k] = 0;
+              if (f != (bool) ((id(ha_inv_fault_txt) >> k) & 1u)) {
+                id(ha_inv_fault_txt) ^= 1u << k;
+                id(ha_dirty) |= 1u << (8 + k);
+              }
+            }
           }
           const uint32_t d = id(ha_dirty);
           if (d == 0)
@@ -3120,48 +3335,56 @@ interval:
               (ready || id(ha_pv1_power).has_state() || id(ha_pv1_energy).has_state())) {
             id(pv_update).execute(-1, 0, V(id(ha_pv1_power), B_pv1_power), V(id(ha_pv1_energy), B_pv1_energy));
             id(ov_roof).execute(0, V(id(ha_pv1_power), B_pv1_power), V(id(ha_pv1_energy), B_pv1_energy));
+            id(fc_roof_live).execute(0, V(id(ha_pv1_power), B_pv1_power), V(id(ha_pv1_energy), B_pv1_energy));
           }
           // 1 Flaeche 2
           if ((d & (1u << 1)) && (dev & 0x00000002u) &&
               (ready || id(ha_pv2_power).has_state() || id(ha_pv2_energy).has_state())) {
             id(pv_update).execute(-1, 1, V(id(ha_pv2_power), B_pv2_power), V(id(ha_pv2_energy), B_pv2_energy));
             id(ov_roof).execute(1, V(id(ha_pv2_power), B_pv2_power), V(id(ha_pv2_energy), B_pv2_energy));
+            id(fc_roof_live).execute(1, V(id(ha_pv2_power), B_pv2_power), V(id(ha_pv2_energy), B_pv2_energy));
           }
           // 2 Flaeche 3
           if ((d & (1u << 2)) && (dev & 0x00000004u) &&
               (ready || id(ha_pv3_power).has_state() || id(ha_pv3_energy).has_state())) {
             id(pv_update).execute(-1, 2, V(id(ha_pv3_power), B_pv3_power), V(id(ha_pv3_energy), B_pv3_energy));
             id(ov_roof).execute(2, V(id(ha_pv3_power), B_pv3_power), V(id(ha_pv3_energy), B_pv3_energy));
+            id(fc_roof_live).execute(2, V(id(ha_pv3_power), B_pv3_power), V(id(ha_pv3_energy), B_pv3_energy));
           }
           // 3 Flaeche 4
           if ((d & (1u << 3)) && (dev & 0x00000008u) &&
               (ready || id(ha_pv4_power).has_state() || id(ha_pv4_energy).has_state())) {
             id(pv_update).execute(-1, 3, V(id(ha_pv4_power), B_pv4_power), V(id(ha_pv4_energy), B_pv4_energy));
             id(ov_roof).execute(3, V(id(ha_pv4_power), B_pv4_power), V(id(ha_pv4_energy), B_pv4_energy));
+            id(fc_roof_live).execute(3, V(id(ha_pv4_power), B_pv4_power), V(id(ha_pv4_energy), B_pv4_energy));
           }
           // 4 Flaeche 5
           if ((d & (1u << 4)) && (dev & 0x00000010u) &&
               (ready || id(ha_pv5_power).has_state() || id(ha_pv5_energy).has_state())) {
             id(pv_update).execute(-1, 4, V(id(ha_pv5_power), B_pv5_power), V(id(ha_pv5_energy), B_pv5_energy));
             id(ov_roof).execute(4, V(id(ha_pv5_power), B_pv5_power), V(id(ha_pv5_energy), B_pv5_energy));
+            id(fc_roof_live).execute(4, V(id(ha_pv5_power), B_pv5_power), V(id(ha_pv5_energy), B_pv5_energy));
           }
           // 5 Flaeche 6
           if ((d & (1u << 5)) && (dev & 0x00000020u) &&
               (ready || id(ha_pv6_power).has_state() || id(ha_pv6_energy).has_state())) {
             id(pv_update).execute(-1, 5, V(id(ha_pv6_power), B_pv6_power), V(id(ha_pv6_energy), B_pv6_energy));
             id(ov_roof).execute(5, V(id(ha_pv6_power), B_pv6_power), V(id(ha_pv6_energy), B_pv6_energy));
+            id(fc_roof_live).execute(5, V(id(ha_pv6_power), B_pv6_power), V(id(ha_pv6_energy), B_pv6_energy));
           }
           // 6 Flaeche 7
           if ((d & (1u << 6)) && (dev & 0x00000040u) &&
               (ready || id(ha_pv7_power).has_state() || id(ha_pv7_energy).has_state())) {
             id(pv_update).execute(-1, 6, V(id(ha_pv7_power), B_pv7_power), V(id(ha_pv7_energy), B_pv7_energy));
             id(ov_roof).execute(6, V(id(ha_pv7_power), B_pv7_power), V(id(ha_pv7_energy), B_pv7_energy));
+            id(fc_roof_live).execute(6, V(id(ha_pv7_power), B_pv7_power), V(id(ha_pv7_energy), B_pv7_energy));
           }
           // 7 Flaeche 8
           if ((d & (1u << 7)) && (dev & 0x00000080u) &&
               (ready || id(ha_pv8_power).has_state() || id(ha_pv8_energy).has_state())) {
             id(pv_update).execute(-1, 7, V(id(ha_pv8_power), B_pv8_power), V(id(ha_pv8_energy), B_pv8_energy));
             id(ov_roof).execute(7, V(id(ha_pv8_power), B_pv8_power), V(id(ha_pv8_energy), B_pv8_energy));
+            id(fc_roof_live).execute(7, V(id(ha_pv8_power), B_pv8_power), V(id(ha_pv8_energy), B_pv8_energy));
           }
           // 8 Wechselrichter 1
           if ((d & (1u << 8)) && (dev & 0x00000100u) &&
@@ -3169,7 +3392,11 @@ interval:
                id(ha_inv1_status).has_state() || id(ha_inv1_temp).has_state())) {
             id(pv_update).execute(0, -1, V(id(ha_inv1_power), B_inv1_power), V(id(ha_inv1_energy), B_inv1_energy));
             id(ov_inverter).execute(0, V(id(ha_inv1_power), B_inv1_power), V(id(ha_inv1_energy), B_inv1_energy));
-            id(pv_status).execute(0, !id(ha_inv1_fault).state, T(id(ha_inv1_status), B_inv1_status), V(id(ha_inv1_temp), B_inv1_temp));
+            {
+              // Stoerung: an/aus-Entitaet, sonst der Statustext (ha_inv_fault_txt, Punkt 8)
+              const bool f = B_inv1_fault ? id(ha_inv1_fault).state : ((id(ha_inv_fault_txt) >> 0) & 1u);
+              id(pv_status).execute(0, !f, (f && !B_inv1_fault) ? id(ha_inv_fault_msg)[0] : T(id(ha_inv1_status), B_inv1_status), V(id(ha_inv1_temp), B_inv1_temp));
+            }
           }
           // 9 Wechselrichter 2
           if ((d & (1u << 9)) && (dev & 0x00000200u) &&
@@ -3177,7 +3404,11 @@ interval:
                id(ha_inv2_status).has_state() || id(ha_inv2_temp).has_state())) {
             id(pv_update).execute(1, -1, V(id(ha_inv2_power), B_inv2_power), V(id(ha_inv2_energy), B_inv2_energy));
             id(ov_inverter).execute(1, V(id(ha_inv2_power), B_inv2_power), V(id(ha_inv2_energy), B_inv2_energy));
-            id(pv_status).execute(1, !id(ha_inv2_fault).state, T(id(ha_inv2_status), B_inv2_status), V(id(ha_inv2_temp), B_inv2_temp));
+            {
+              // Stoerung: an/aus-Entitaet, sonst der Statustext (ha_inv_fault_txt, Punkt 8)
+              const bool f = B_inv2_fault ? id(ha_inv2_fault).state : ((id(ha_inv_fault_txt) >> 1) & 1u);
+              id(pv_status).execute(1, !f, (f && !B_inv2_fault) ? id(ha_inv_fault_msg)[1] : T(id(ha_inv2_status), B_inv2_status), V(id(ha_inv2_temp), B_inv2_temp));
+            }
           }
           // 10 Wechselrichter 3
           if ((d & (1u << 10)) && (dev & 0x00000400u) &&
@@ -3185,7 +3416,11 @@ interval:
                id(ha_inv3_status).has_state() || id(ha_inv3_temp).has_state())) {
             id(pv_update).execute(2, -1, V(id(ha_inv3_power), B_inv3_power), V(id(ha_inv3_energy), B_inv3_energy));
             id(ov_inverter).execute(2, V(id(ha_inv3_power), B_inv3_power), V(id(ha_inv3_energy), B_inv3_energy));
-            id(pv_status).execute(2, !id(ha_inv3_fault).state, T(id(ha_inv3_status), B_inv3_status), V(id(ha_inv3_temp), B_inv3_temp));
+            {
+              // Stoerung: an/aus-Entitaet, sonst der Statustext (ha_inv_fault_txt, Punkt 8)
+              const bool f = B_inv3_fault ? id(ha_inv3_fault).state : ((id(ha_inv_fault_txt) >> 2) & 1u);
+              id(pv_status).execute(2, !f, (f && !B_inv3_fault) ? id(ha_inv_fault_msg)[2] : T(id(ha_inv3_status), B_inv3_status), V(id(ha_inv3_temp), B_inv3_temp));
+            }
           }
           // 11 Wechselrichter 4
           if ((d & (1u << 11)) && (dev & 0x00000800u) &&
@@ -3193,7 +3428,11 @@ interval:
                id(ha_inv4_status).has_state() || id(ha_inv4_temp).has_state())) {
             id(pv_update).execute(3, -1, V(id(ha_inv4_power), B_inv4_power), V(id(ha_inv4_energy), B_inv4_energy));
             id(ov_inverter).execute(3, V(id(ha_inv4_power), B_inv4_power), V(id(ha_inv4_energy), B_inv4_energy));
-            id(pv_status).execute(3, !id(ha_inv4_fault).state, T(id(ha_inv4_status), B_inv4_status), V(id(ha_inv4_temp), B_inv4_temp));
+            {
+              // Stoerung: an/aus-Entitaet, sonst der Statustext (ha_inv_fault_txt, Punkt 8)
+              const bool f = B_inv4_fault ? id(ha_inv4_fault).state : ((id(ha_inv_fault_txt) >> 3) & 1u);
+              id(pv_status).execute(3, !f, (f && !B_inv4_fault) ? id(ha_inv_fault_msg)[3] : T(id(ha_inv4_status), B_inv4_status), V(id(ha_inv4_temp), B_inv4_temp));
+            }
           }
           // 12 Speicher 1
           if ((d & (1u << 12)) && (dev & 0x00001000u) &&
@@ -3365,40 +3604,56 @@ interval:
           }
           // 25 Tageswerte
           if ((d & (1u << 25)) &&
-              (ready || id(ha_meter0_today).has_state() || id(ha_meter1_today).has_state() || id(ha_meter2_today).has_state() ||
-               id(ha_meter3_today).has_state() || id(ha_meter4_today).has_state() || id(ha_pv_energy_today).has_state() ||
-               id(ha_home_energy_today).has_state() || id(ha_selfuse_energy_today).has_state() || id(ha_solcast_remaining).has_state())) {
+              (ready || id(ha_inv1_energy).has_state() || id(ha_inv2_energy).has_state() || id(ha_inv3_energy).has_state() ||
+               id(ha_inv4_energy).has_state() || id(ha_meter0_today).has_state() || id(ha_meter1_today).has_state() ||
+               id(ha_meter2_today).has_state() || id(ha_meter3_today).has_state() || id(ha_meter4_today).has_state() ||
+               id(ha_pv_energy_today).has_state() || id(ha_home_energy_today).has_state() || id(ha_selfuse_energy_today).has_state() ||
+               id(ha_solcast_remaining).has_state())) {
             {
               // Volleinspeisung nur mit PV-Zaehler; ohne Hauszaehler ist der
               // Ueberschuss die Einspeisung am Hausanschluss ohne die Volleinspeisung [A]
               const float full = da(18) ? V(id(ha_meter2_today), B_meter2_today) : 0.0f;
               const float feed = V(id(ha_meter1_today), B_meter1_today);
               const float surplus = da(19) ? V(id(ha_meter4_today), B_meter4_today) : sub(feed, full);
-              id(ov_totals).execute(V(id(ha_pv_energy_today), B_pv_energy_today), V(id(ha_home_energy_today), B_home_energy_today), feed, V(id(ha_meter0_today), B_meter0_today), full, surplus, V(id(ha_solcast_remaining), B_solcast_remaining));
-              id(money_update).execute(full, surplus, V(id(ha_selfuse_energy_today), B_selfuse_energy_today), V(id(ha_meter0_today), B_meter0_today));
-            }
-          }
-          // 26 Prognose
-          if ((d & (1u << 26)) &&
-              (ready || id(ha_solcast_today).has_state() || id(ha_solcast_today_p10).has_state() || id(ha_solcast_today_p90).has_state() ||
-               id(ha_solcast_remaining).has_state() || id(ha_solcast_power_now).has_state() || id(ha_solcast_next_hour).has_state() ||
-               id(ha_solcast_peak).has_state() || id(ha_solcast_peak_time).has_state() || id(ha_solcast_last_poll).has_state() ||
-               id(ha_solcast_api_used).has_state() || id(ha_solcast_api_limit).has_state() || id(ha_solcast_d2).has_state() ||
-               id(ha_solcast_d2_p10).has_state() || id(ha_solcast_d2_p90).has_state() || id(ha_solcast_d3).has_state() ||
-               id(ha_solcast_d3_p10).has_state() || id(ha_solcast_d3_p90).has_state() || id(ha_solcast_d4).has_state() ||
-               id(ha_solcast_d4_p10).has_state() || id(ha_solcast_d4_p90).has_state() || id(ha_solcast_d5).has_state() ||
-               id(ha_solcast_d5_p10).has_state() || id(ha_solcast_d5_p90).has_state() || id(ha_solcast_d6).has_state() ||
-               id(ha_solcast_d6_p10).has_state() || id(ha_solcast_d6_p90).has_state() || id(ha_solcast_d7).has_state() ||
-               id(ha_solcast_d7_p10).has_state() || id(ha_solcast_d7_p90).has_state())) {
-            {
-              id(fc_today).execute(V(id(ha_solcast_today), B_solcast_today), V(id(ha_solcast_today_p10), B_solcast_today), V(id(ha_solcast_today_p90), B_solcast_today), V(id(ha_solcast_remaining), B_solcast_remaining),
-                                   V(id(ha_solcast_power_now), B_solcast_power_now), V(id(ha_solcast_next_hour), B_solcast_next_hour), V(id(ha_solcast_peak), B_solcast_peak), when(T(id(ha_solcast_peak_time), B_solcast_peak_time), false),
-                                   when(T(id(ha_solcast_last_poll), B_solcast_last_poll), false), I(V(id(ha_solcast_api_used), B_solcast_api_used), -1), I(V(id(ha_solcast_api_limit), B_solcast_api_limit), -1));
-              const float p50[7] = {V(id(ha_solcast_today), B_solcast_today), V(id(ha_solcast_d2), B_solcast_d2), V(id(ha_solcast_d3), B_solcast_d3), V(id(ha_solcast_d4), B_solcast_d4), V(id(ha_solcast_d5), B_solcast_d5), V(id(ha_solcast_d6), B_solcast_d6), V(id(ha_solcast_d7), B_solcast_d7)};
-              const float p10[7] = {V(id(ha_solcast_today_p10), B_solcast_today), V(id(ha_solcast_d2_p10), B_solcast_d2), V(id(ha_solcast_d3_p10), B_solcast_d3), V(id(ha_solcast_d4_p10), B_solcast_d4), V(id(ha_solcast_d5_p10), B_solcast_d5), V(id(ha_solcast_d6_p10), B_solcast_d6), V(id(ha_solcast_d7_p10), B_solcast_d7)};
-              const float p90[7] = {V(id(ha_solcast_today_p90), B_solcast_today), V(id(ha_solcast_d2_p90), B_solcast_d2), V(id(ha_solcast_d3_p90), B_solcast_d3), V(id(ha_solcast_d4_p90), B_solcast_d4), V(id(ha_solcast_d5_p90), B_solcast_d5), V(id(ha_solcast_d6_p90), B_solcast_d6), V(id(ha_solcast_d7_p90), B_solcast_d7)};
-              for (int d = 0; d < 7; d++)
-                id(fc_day).execute(d, id(ha_day_label)(d, jetzt), id(ha_wx_cond)[d], p50[d], p10[d], p90[d]);
+              // Ohne eigene Entitaet (nicht belegt, Punkt 7): Erzeugung = Summe der
+              // belegten Wechselrichter, deren Geraet da ist (keiner -> leer);
+              // Eigenverbrauch nach docs/01 = Hybrid-Erzeugung - Ueberschuss; die
+              // Hybrid-Erzeugung ist die Summe der WR 2..4 (alles ausser der
+              // Volleinspeisung), ohne sie Erzeugung - Volleinspeisung
+              float gen = V(id(ha_pv_energy_today), B_pv_energy_today), hyb = NAN;
+              {
+                float s = NAN;
+                bool alle = false, haus = false;
+                if (B_inv1_energy && da(8)) {
+                  s = add(s, V(id(ha_inv1_energy), B_inv1_energy));
+                  alle = true;
+                }
+                if (B_inv2_energy && da(9)) {
+                  const float e = V(id(ha_inv2_energy), B_inv2_energy);
+                  s = add(s, e);
+                  hyb = add(hyb, e);
+                  alle = haus = true;
+                }
+                if (B_inv3_energy && da(10)) {
+                  const float e = V(id(ha_inv3_energy), B_inv3_energy);
+                  s = add(s, e);
+                  hyb = add(hyb, e);
+                  alle = haus = true;
+                }
+                if (B_inv4_energy && da(11)) {
+                  const float e = V(id(ha_inv4_energy), B_inv4_energy);
+                  s = add(s, e);
+                  hyb = add(hyb, e);
+                  alle = haus = true;
+                }
+                if (!B_pv_energy_today)
+                  gen = alle ? s : LEER;
+                if (!haus)
+                  hyb = sub(gen, full);
+              }
+              const float own = B_selfuse_energy_today ? V(id(ha_selfuse_energy_today), B_selfuse_energy_today) : pos(sub(hyb, surplus));
+              id(ov_totals).execute(gen, V(id(ha_home_energy_today), B_home_energy_today), feed, V(id(ha_meter0_today), B_meter0_today), full, surplus, V(id(ha_solcast_remaining), B_solcast_remaining));
+              id(money_update).execute(full, surplus, own, V(id(ha_meter0_today), B_meter0_today));
             }
           }
           // 27 Wetter jetzt
@@ -3421,19 +3676,21 @@ interval:
   # Abrufe: 20 s nach dem Verbinden die Prognosen, 30 s danach die
   # Statistik; dann Prognosen alle 30 min, Statistik zu jeder neuen Stunde
   # ab Minute 2 (Home Assistant schreibt die Stundenstatistik kurz nach der
-  # vollen Stunde). Beim Trennen beginnt alles von vorn.
+  # vollen Stunde), Tageswerte aus der Statistik alle 5 min ab Minute 1.
+  # Beim Trennen beginnt alles von vorn.
   - interval: 10s
     then:
       - lambda: |-
           static bool war = false;
           static uint32_t seit = 0, fc_zuletzt = 0;
-          static int stat_schluessel = -1;
+          static int stat_schluessel = -1, heute_schluessel = -1;
           const bool ist = api::global_api_server != nullptr && api::global_api_server->is_connected_with_state_subscription();
           if (ist != war) {
             war = ist;
             seit = millis();
             fc_zuletzt = 0;
             stat_schluessel = -1;
+            heute_schluessel = -1;
           }
           const bool bereit = ist && millis() - seit >= 10000;
           if (bereit != id(ha_ready)) {
@@ -3453,4 +3710,13 @@ interval:
           if (schluessel != stat_schluessel && (stat_schluessel < 0 || !t.is_valid() || t.minute >= 2)) {
             stat_schluessel = schluessel;
             id(ha_fetch_stats).execute();
+          }
+          // Tageswerte aus der Statistik und Stundenbalken der Seite
+          // Prognose: alle 5 min ab Minute 1 (Home Assistant schreibt die
+          // 5-min-Statistik kurz nach dem Takt)
+          constexpr bool S_ANY = ${ 'true' if ((ha_pv1_energy | string | lower | trim) == 'statistik') and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv2_energy | string | lower | trim) == 'statistik') and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv3_energy | string | lower | trim) == 'statistik') and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv4_energy | string | lower | trim) == 'statistik') and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv5_energy | string | lower | trim) == 'statistik') and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv6_energy | string | lower | trim) == 'statistik') and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv7_energy | string | lower | trim) == 'statistik') and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv8_energy | string | lower | trim) == 'statistik') and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev1_energy | string | lower | trim) == 'statistik') and not ((ha_dev1_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev2_energy | string | lower | trim) == 'statistik') and not ((ha_dev2_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev3_energy | string | lower | trim) == 'statistik') and not ((ha_dev3_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev4_energy | string | lower | trim) == 'statistik') and not ((ha_dev4_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev5_energy | string | lower | trim) == 'statistik') and not ((ha_dev5_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter0_today | string | lower | trim) == 'statistik') and not ((ha_meter0_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter1_today | string | lower | trim) == 'statistik') and not ((ha_meter1_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter2_today | string | lower | trim) == 'statistik') and not ((ha_meter2_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter3_today | string | lower | trim) == 'statistik') and not ((ha_meter3_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter4_today | string | lower | trim) == 'statistik') and not ((ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' };
+          const int k5 = t.is_valid() ? t.day_of_year * 288 + t.hour * 12 + t.minute / 5 : 0;
+          if (S_ANY && k5 != heute_schluessel && (heute_schluessel < 0 || !t.is_valid() || t.minute % 5 >= 1)) {
+            heute_schluessel = k5;
+            id(ha_fetch_today).execute();
           }
