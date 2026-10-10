@@ -49,6 +49,13 @@ esp32:
       # experimental features in ESP-IDF ..." bei der Code-Erzeugung ist
       # damit gewollt, wie die zur nicht empfohlenen Framework-Version.
       enable_idf_experimental_features: true
+      # Stapel des Hauptablaufs (loopTask). Standard 8 KB reicht nicht mehr:
+      # setup() legt alle Komponenten in einer einzigen Funktion an und ist
+      # mit dem Datenweg (.pv-dashboard_ha.yaml) so gross geworden, dass das
+      # Panel am 10.10.2026 sofort nach dem Start mit "Stack protection fault"
+      # in loopTask abstuerzte und per OTA-Rollback zurueckfiel. 32 KB ist das
+      # Hoechstmass von ESPHome und liegt im internen RAM (reichlich frei).
+      loop_task_stack_size: 32768
 
 # 32 MB PSRAM im Package - ohne PSRAM kein MIPI-DSI-Framebuffer.
 psram:
