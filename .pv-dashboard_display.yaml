@@ -77,6 +77,12 @@ display:
     reset_pin: GPIO27
     # ACHTUNG: Hier KEIN "rotation" setzen -- zusammen mit LVGL lehnt ESPHome
     # das ab. Die Drehung steht im lvgl-Block (.pv-dashboard_ui.yaml).
+    # Pixeltakt: das Preset nimmt 80 MHz (rund 69 Bilder/s). Am Geraet
+    # meldete der Treiber dabei "lcd.dsi: can't fetch data from external
+    # memory fast enough, underrun happens", sichtbar als blaues Flackern
+    # (10.10.2026): Bildausgabe, LVGL und PPA-Drehung teilen sich das PSRAM.
+    # 60 MHz ergeben rund 51 Bilder/s und ein Viertel weniger Lesestrom.
+    pclk_frequency: 60MHz
     update_interval: never
     auto_clear_enabled: false
 
