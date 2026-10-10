@@ -216,10 +216,10 @@ script:
           id(money_import) = ha(cost);
           id(money_total) = ha(total);
           auto &num = id(fmt_num);
-          lv_label_set_text(id(val_money), num(total, "%.2f", "--,--").c_str());
+          id(lbl_set)(id(val_money), num(total, "%.2f", "--,--").c_str());
           const std::string split = num(sub, "+%.2f", "+--,--") + " €\n" + num(saved, "+%.2f", "+--,--") + " €\n" +
                                     num(std::isinf(cost) ? cost : -cost, "%.2f", "---,--") + " €";
-          lv_label_set_text(id(money_split), split.c_str());
+          id(lbl_set)(id(money_split), split.c_str());
           id(sensor_money_total).publish_state(ha(total));
           id(sensor_money_subsidy).publish_state(ha(sub));
           id(sensor_money_saved).publish_state(ha(saved));
@@ -263,8 +263,8 @@ script:
             return;
           lv_obj_t *const val[8] = {id(v_roof_1), id(v_roof_2), id(v_roof_3), id(v_roof_4), id(v_roof_5), id(v_roof_6), id(v_roof_7), id(v_roof_8)};
           lv_obj_t *const sub[8] = {id(e_roof_1), id(e_roof_2), id(e_roof_3), id(e_roof_4), id(e_roof_5), id(e_roof_6), id(e_roof_7), id(e_roof_8)};
-          lv_label_set_text(val[n], id(fmt_watt)(power, "-.---").c_str());
-          lv_label_set_text(sub[n], ("W · " + id(fmt_num)(energy, "%.1f", "--,-") + " kWh").c_str());
+          id(lbl_set)(val[n], id(fmt_watt)(power, "-.---").c_str());
+          id(lbl_set)(sub[n], ("W · " + id(fmt_num)(energy, "%.1f", "--,-") + " kWh").c_str());
           const bool da = id(dev_present) & (1u << n);
           id(flow_ch)[n] = (da && std::isfinite(power)) ? power : 0.0f;
           id(data_seen)[0] = millis();
@@ -280,8 +280,8 @@ script:
             return;
           lv_obj_t *const val[4] = {id(v_wr_full), id(v_wr_mini), id(v_wr_hybrid1), id(v_wr_hybrid2)};
           lv_obj_t *const sub[4] = {id(e_wr_full), id(e_wr_mini), id(e_wr_hybrid1), id(e_wr_hybrid2)};
-          lv_label_set_text(val[n], id(fmt_watt)(power, "--.---").c_str());
-          lv_label_set_text(sub[n], ("W · " + id(fmt_num)(energy, "%.1f", "--,-") + " kWh").c_str());
+          id(lbl_set)(val[n], id(fmt_watt)(power, "--.---").c_str());
+          id(lbl_set)(sub[n], ("W · " + id(fmt_num)(energy, "%.1f", "--,-") + " kWh").c_str());
           const bool da = id(dev_present) & (1u << (8 + n));
           id(flow_ch)[8 + n] = (da && std::isfinite(power)) ? power : 0.0f;
           id(data_seen)[0] = millis();
@@ -301,9 +301,9 @@ script:
           auto &num = id(fmt_num);
           lv_obj_t *const val[3] = {id(v_bat1), id(v_bat2), id(v_bat3)};
           lv_obj_t *const sub[3] = {id(d_bat1), id(d_bat2), id(d_bat3)};
-          lv_label_set_text(val[n], num(soc, "%.0f", "--").c_str());
+          id(lbl_set)(val[n], num(soc, "%.0f", "--").c_str());
           const std::string a = (std::isfinite(current) && fabsf(current) < 0.5f) ? std::string("0") : num(current, "%+.0f", "---");
-          lv_label_set_text(sub[n], ("% · " + a + " A · " + num(voltage, "%.1f", "--,-") + " V").c_str());
+          id(lbl_set)(sub[n], ("% · " + a + " A · " + num(voltage, "%.1f", "--,-") + " V").c_str());
           const bool da = id(dev_present) & (1u << (12 + n));
           const float w = current * voltage;
           id(flow_ch)[13 + n] = (da && std::isfinite(w)) ? w : 0.0f;
@@ -317,11 +317,11 @@ script:
     then:
       - lambda: |-
           auto &num = id(fmt_num);
-          lv_label_set_text(id(e_batt), id(fmt_watt)(power, "---.---").c_str());
+          id(lbl_set)(id(e_batt), id(fmt_watt)(power, "---.---").c_str());
           // Pfeile wie in .pv-dashboard_utility.yaml: runter = Laden, hoch = Entladen
           const std::string s = "W · \U000F0045" + num(charged, "%.1f", "--,-") + " kWh · \U000F005D" +
                                 num(discharged, "%.1f", "--,-") + " kWh";
-          lv_label_set_text(id(sub_battery_total), s.c_str());
+          id(lbl_set)(id(sub_battery_total), s.c_str());
           const bool da = id(dev_present) & (7u << 12);
           id(flow_ch)[12] = (da && std::isfinite(power)) ? power : 0.0f;
           id(data_seen)[1] = millis();
@@ -339,9 +339,9 @@ script:
           auto kw = [](float w) -> float { return !std::isfinite(w) ? w : w / 1000.0f; };
           lv_obj_t *const val[4] = {id(v_heatpump), id(v_misc), id(v_wb1), id(v_wb2)};
           lv_obj_t *const det[4] = {id(d_heatpump), id(d_misc), id(d_wb1), id(d_wb2)};
-          lv_label_set_text(val[n], id(fmt_num)(kw(power), "%.1f", "--,-").c_str());
+          id(lbl_set)(val[n], id(fmt_num)(kw(power), "%.1f", "--,-").c_str());
           if (!sub.empty())
-            lv_label_set_text(det[n], ("kW · " + sub).c_str());
+            id(lbl_set)(det[n], ("kW · " + sub).c_str());
           // Bits in dev_present: Waermepumpe 17, Wallboxen 15 und 16;
           // "Sonstige" gibt es immer
           const uint32_t bit[4] = {1u << 17, 0, 1u << 15, 1u << 16};
@@ -362,8 +362,8 @@ script:
           auto kw = [](float w) -> float { return !std::isfinite(w) ? w : w / 1000.0f; };
           lv_obj_t *const val[2] = {id(v_meter_pv), id(v_meter_house)};
           lv_obj_t *const sub[2] = {id(e_meter_pv), id(e_meter_house)};
-          lv_label_set_text(val[n], id(fmt_num)(kw(power), "%.1f", "--,-").c_str());
-          lv_label_set_text(sub[n], ("kW · " + id(fmt_num)(energy, "%.1f", "--,-") + " kWh").c_str());
+          id(lbl_set)(val[n], id(fmt_num)(kw(power), "%.1f", "--,-").c_str());
+          id(lbl_set)(sub[n], ("kW · " + id(fmt_num)(energy, "%.1f", "--,-") + " kWh").c_str());
           const bool da = id(dev_present) & (1u << (18 + n));
           id(flow_ch)[21 + n] = (da && std::isfinite(power)) ? power : 0.0f;
           id(data_seen)[5] = millis();
@@ -375,10 +375,10 @@ script:
       power: float
     then:
       - lambda: |-
-          lv_label_set_text(id(v_grid), id(fmt_num)(!std::isfinite(power) ? power : fabsf(power) / 1000.0f, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(v_grid), id(fmt_num)(!std::isfinite(power) ? power : fabsf(power) / 1000.0f, "%.1f", "--,-").c_str());
           const bool bezug = std::isfinite(power) && power > 10.0f;
           const bool ein = std::isfinite(power) && power < -10.0f;
-          lv_label_set_text(id(dir_grid), bezug ? "kW · Bezug" : (ein ? "kW · Einspeisung" : "kW"));
+          id(lbl_set)(id(dir_grid), bezug ? "kW · Bezug" : (ein ? "kW · Einspeisung" : "kW"));
           lv_obj_set_style_text_color(id(v_grid), lv_color_hex(bezug ? $col_draw : $col_feed), 0);
           id(flow_ch)[23] = !std::isfinite(power) ? 0.0f : -power;   // Kanal: + = zum Netz
           id(ov_now)[1] = power;
@@ -392,8 +392,8 @@ script:
     then:
       - lambda: |-
           auto &num = id(fmt_num);
-          lv_label_set_text(id(v_house), num(!std::isfinite(power) ? power : power / 1000.0f, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(e_house), ("kW · " + num(energy, "%.1f", "--,-") + " kWh heute").c_str());
+          id(lbl_set)(id(v_house), num(!std::isfinite(power) ? power : power / 1000.0f, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(e_house), ("kW · " + num(energy, "%.1f", "--,-") + " kWh heute").c_str());
           id(flow_ch)[16] = !std::isfinite(power) ? 0.0f : power;
           id(ov_now)[0] = power;
           id(data_seen)[4] = millis();
@@ -416,10 +416,10 @@ script:
     then:
       - lambda: |-
           auto &num = id(fmt_num);
-          lv_label_set_text(id(val_gen), num(gen, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(val_use), num(use, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(val_feed), num(feed, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(val_draw), num(draw, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(val_gen), num(gen, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(val_use), num(use, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(val_feed), num(feed, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(val_draw), num(draw, "%.1f", "--,-").c_str());
           // Leerer Wert (val_leer, -inf) -> Quote leer; nie inf - inf
           const float LEER = id(val_leer);
           auto dif = [LEER](float a, float b) -> float { return (std::isinf(a) || std::isinf(b)) ? LEER : a - b; };
@@ -435,9 +435,9 @@ script:
           const float own = quote(dif(hyb, surplus), hyb);
           lv_arc_set_value(id(ring_cover_autarky), !std::isfinite(aut) ? 100 : (int32_t) lroundf(100.0f - aut));
           lv_arc_set_value(id(ring_cover_selfuse), !std::isfinite(own) ? 100 : (int32_t) lroundf(100.0f - own));
-          lv_label_set_text(id(val_autarky), num(aut, "%.0f", "--").c_str());
-          lv_label_set_text(id(val_selfuse), num(own, "%.0f", "--").c_str());
-          lv_label_set_text(id(sub_autarky), ("Heute " + num(aut, "%.0f", "--") + " %").c_str());
+          id(lbl_set)(id(val_autarky), num(aut, "%.0f", "--").c_str());
+          id(lbl_set)(id(val_selfuse), num(own, "%.0f", "--").c_str());
+          id(lbl_set)(id(sub_autarky), ("Heute " + num(aut, "%.0f", "--") + " %").c_str());
           id(ov_now)[2] = remaining;
           id(data_seen)[4] = millis();
       - script.execute: ov_status
@@ -454,7 +454,7 @@ script:
           auto &num = id(fmt_num);
           const std::string s = "Autarkie " + num(aut, "%.0f", "--") + " % · Restprognose " +
                                 num(id(ov_now)[2], "%.1f", "--,-") + " kWh";
-          lv_label_set_text(id(lbl_status_left), s.c_str());
+          id(lbl_set)(id(lbl_status_left), s.c_str());
 
   # Zeichnet Balken (Ist) und Linie (Prognose) aus beiden Reihen. Sie liegen
   # uebereinander in derselben Kachel: Die Linie steht im YAML nach den Balken

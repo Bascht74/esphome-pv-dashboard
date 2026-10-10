@@ -156,19 +156,19 @@ script:
             lv_obj_clear_flag(c.bolt, LV_OBJ_FLAG_HIDDEN);
           else
             lv_obj_add_flag(c.bolt, LV_OBJ_FLAG_HIDDEN);
-          lv_label_set_text(c.power, fmt(power, "%.1f", "--,-").c_str());
+          id(lbl_set)(c.power, fmt(power, "%.1f", "--,-").c_str());
           for (int i = 0; i < 3; i++)
             lv_obj_set_style_bg_color(c.ph[i], charging && i < phases ? green : lv_color_hex($col_line), 0);
-          lv_label_set_text(c.energy, fmt(energy, "%.1f", "--,-").c_str());
-          lv_label_set_text(c.solar, fmt(solar, "%.0f", "--").c_str());
+          id(lbl_set)(c.energy, fmt(energy, "%.1f", "--,-").c_str());
+          id(lbl_set)(c.solar, fmt(solar, "%.0f", "--").c_str());
           if (minutes < 0)
-            lv_label_set_text(c.dur, "-:--");
+            id(lbl_set)(c.dur, "-:--");
           else
             lv_label_set_text_fmt(c.dur, "%d:%02d", minutes / 60, minutes % 60);
 
           // Fahrzeug
-          lv_label_set_text(c.vehicle, vehicle.empty() ? "Kein Fahrzeug" : vehicle.c_str());
-          lv_label_set_text(c.status, status.empty() ? "--" : status.c_str());
+          id(lbl_set)(c.vehicle, vehicle.empty() ? "Kein Fahrzeug" : vehicle.c_str());
+          id(lbl_set)(c.status, status.empty() ? "--" : status.c_str());
           const float s = !std::isfinite(soc) ? 0.0f : std::clamp(soc, 0.0f, 100.0f);
           const float l = !std::isfinite(limit) ? 0.0f : std::clamp(limit, 0.0f, 100.0f);
           lv_bar_set_value(c.bar_soc, (int32_t) lroundf(s), LV_ANIM_OFF);
@@ -181,11 +181,11 @@ script:
             // Marke 4 breit, mittig auf dem Limit; Balken 610 breit
             lv_obj_set_x(c.marker, (int32_t) lroundf(l / 100.0f * 606.0f));
           }
-          lv_label_set_text(c.soc, fmt(soc, "%.0f", "--").c_str());
-          lv_label_set_text(c.soc_sub, ("% · " + fmt(range, "%.0f", "---") + " km").c_str());
-          lv_label_set_text(c.plan, plan.empty() ? "--" : plan.c_str());
-          lv_label_set_text(c.plan_sub, plan.empty() ? "kein Plan" : "Abfahrt");
-          lv_label_set_text(c.limit, fmt(limit, "%.0f", "--").c_str());
+          id(lbl_set)(c.soc, fmt(soc, "%.0f", "--").c_str());
+          id(lbl_set)(c.soc_sub, ("% · " + fmt(range, "%.0f", "---") + " km").c_str());
+          id(lbl_set)(c.plan, plan.empty() ? "--" : plan.c_str());
+          id(lbl_set)(c.plan_sub, plan.empty() ? "kein Plan" : "Abfahrt");
+          id(lbl_set)(c.limit, fmt(limit, "%.0f", "--").c_str());
 
   # ---------------------------------------------------------------------
   # Tipp auf den Modus-Schalter einer Karte (on_click der Teile unten).
@@ -235,10 +235,10 @@ script:
     then:
       - lambda: |-
           auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
-          lv_label_set_text(id(wbm_energy), fmt(energy, "%.1f", "---,-").c_str());
-          lv_label_set_text(id(wbm_solar), fmt(solar, "%.0f", "--").c_str());
-          lv_label_set_text(id(wbm_cost), fmt(cost, "%.2f", "--,--").c_str());
-          lv_label_set_text(id(wbm_price), fmt(price, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(wbm_energy), fmt(energy, "%.1f", "---,-").c_str());
+          id(lbl_set)(id(wbm_solar), fmt(solar, "%.0f", "--").c_str());
+          id(lbl_set)(id(wbm_cost), fmt(cost, "%.2f", "--,--").c_str());
+          id(lbl_set)(id(wbm_price), fmt(price, "%.1f", "--,-").c_str());
 
 lvgl:
   pages:

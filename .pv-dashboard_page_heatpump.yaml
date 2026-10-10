@@ -113,23 +113,23 @@ script:
               lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
           };
           auto txt = [](const std::string &s) -> const char * { return s.empty() ? "--" : s.c_str(); };
-          lv_label_set_text(id(hp_outdoor), fmt(outdoor, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(hp_room), fmt(room, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(hp_humidity), fmt(humidity, "%.0f", "--").c_str());
+          id(lbl_set)(id(hp_outdoor), fmt(outdoor, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(hp_room), fmt(room, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(hp_humidity), fmt(humidity, "%.0f", "--").c_str());
           show(id(hp_co2_group), std::isfinite(co2));
-          lv_label_set_text(id(hp_co2), fmt(co2, "%.0f", "---").c_str());
-          lv_label_set_text(id(hp_dhw), fmt(dhw, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(hp_co2), fmt(co2, "%.0f", "---").c_str());
+          id(lbl_set)(id(hp_dhw), fmt(dhw, "%.1f", "--,-").c_str());
           // Zweitzeile im Schema der Uebersicht: die Compact P hat keinen
           // COP, dort steht die Warmwassertemperatur (86 von 94 px)
-          lv_label_set_text(id(d_heatpump), ("kW · WW " + fmt(dhw, "%.0f", "--") + "°C").c_str());
+          id(lbl_set)(id(d_heatpump), ("kW · WW " + fmt(dhw, "%.0f", "--") + "°C").c_str());
           show(id(hp_dhw_dot), eheat);
           if (fan < 0)
-            lv_label_set_text(id(hp_fan), "Stufe -");
+            id(lbl_set)(id(hp_fan), "Stufe -");
           else if (fan == 0)
-            lv_label_set_text(id(hp_fan), "Aus");
+            id(lbl_set)(id(hp_fan), "Aus");
           else
             lv_label_set_text_fmt(id(hp_fan), "Stufe %d", fan);
-          lv_label_set_text(id(hp_vent_mode), txt(vent_mode));
+          id(lbl_set)(id(hp_vent_mode), txt(vent_mode));
           // Rohtext aus HA -> Deutsch: Vergleich ohne Gross-/Kleinschreibung
           // und Rand-Leerzeichen, sonst unveraendert (auch " " = leer)
           using Paar = std::pair<const char *, const char *>;
@@ -150,13 +150,13 @@ script:
                                                   {"heating + hot water", "Heizen + Warmwasser"}, {"bereit", "Bereit"},
                                                   {"heizen", "Heizen"}, {"warmwasser", "Warmwasser"},
                                                   {"heizen + warmwasser", "Heizen + Warmwasser"}});
-          lv_label_set_text(id(hp_season), txt(sea));
-          lv_label_set_text(id(hp_bypass), txt(byp));
-          lv_label_set_text(id(hp_compressor), txt(cmp));
-          lv_label_set_text(id(hp_supply), fmt(supply, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(hp_exhaust), fmt(exhaust, "%.1f", "--,-").c_str());
-          lv_label_set_text(id(hp_power), fmt(power, "%.2f", "-,--").c_str());
-          lv_label_set_text(id(hp_energy), fmt(energy, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(hp_season), txt(sea));
+          id(lbl_set)(id(hp_bypass), txt(byp));
+          id(lbl_set)(id(hp_compressor), txt(cmp));
+          id(lbl_set)(id(hp_supply), fmt(supply, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(hp_exhaust), fmt(exhaust, "%.1f", "--,-").c_str());
+          id(lbl_set)(id(hp_power), fmt(power, "%.2f", "-,--").c_str());
+          id(lbl_set)(id(hp_energy), fmt(energy, "%.1f", "--,-").c_str());
           // Warnsymbol wie im Bedienteil: gelb = Hinweis, rot = Alarm
           show(id(hp_alarm), alarm > 0);
           lv_obj_set_style_text_color(id(hp_alarm), alarm > 1 ? lv_color_hex($col_crit) : lv_color_hex($col_warn), 0);
@@ -186,13 +186,13 @@ script:
     then:
       - lambda: |-
           auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
-          lv_label_set_text(id(hp_room_unit), ("°C Raum · Soll " + fmt(room_set, "%.1f", "--")).c_str());
-          lv_label_set_text(id(hp_dhw_label), ("Warmwasser · Soll " + fmt(dhw_set, "%.0f", "--")).c_str());
-          lv_label_set_text(id(hp_fan_in), ("Zuluft " + fmt(fan_supply, "%.0f", "--") + " %").c_str());
-          lv_label_set_text(id(hp_fan_out), ("Abluft " + fmt(fan_extract, "%.0f", "--") + " %").c_str());
-          lv_label_set_text(id(hp_fans), (fmt(fan_supply, "%.0f", "--") + " / " + fmt(fan_extract, "%.0f", "--")).c_str());
+          id(lbl_set)(id(hp_room_unit), ("°C Raum · Soll " + fmt(room_set, "%.1f", "--")).c_str());
+          id(lbl_set)(id(hp_dhw_label), ("Warmwasser · Soll " + fmt(dhw_set, "%.0f", "--")).c_str());
+          id(lbl_set)(id(hp_fan_in), ("Zuluft " + fmt(fan_supply, "%.0f", "--") + " %").c_str());
+          id(lbl_set)(id(hp_fan_out), ("Abluft " + fmt(fan_extract, "%.0f", "--") + " %").c_str());
+          id(lbl_set)(id(hp_fans), (fmt(fan_supply, "%.0f", "--") + " / " + fmt(fan_extract, "%.0f", "--")).c_str());
           if (filter_days < 0)
-            lv_label_set_text(id(hp_filter), "--");
+            id(lbl_set)(id(hp_filter), "--");
           else
             lv_label_set_text_fmt(id(hp_filter), "%d", filter_days);
           lv_obj_set_style_text_color(id(hp_filter), filter_days >= 0 && filter_days <= 7 ? lv_color_hex($col_warn) : lv_color_hex($col_ink), 0);

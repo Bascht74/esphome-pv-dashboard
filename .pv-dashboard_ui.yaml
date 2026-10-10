@@ -186,6 +186,23 @@ globals:
   # (-inf + x, -inf * k > 0, -inf / k > 0 bleiben -inf); erkannt wird es mit
   # std::isinf (beide Vorzeichen). Wo Werte Geometrie, Kugeln oder Farben
   # steuern, gilt nur std::isfinite als "Wert da".
+  # Text eines Labels nur setzen, wenn er sich aendert (10.10.2026, Ruckeln
+  # der Kugeln). lv_label_set_text macht das Label auch bei gleichem Text
+  # ungueltig (lv_label.c, lv_label_mark_need_refr_text), LVGL zeichnet es
+  # dann samt Kasten dahinter neu. Die Seitenskripte setzen bei jedem neuen
+  # Wert alle Labels ihrer Gruppe, die meisten unveraendert. Mit long_mode
+  # DOT steht im Label der gekuerzte Text; der Vergleich schlaegt dann fehl
+  # und es wird wie bisher gesetzt. Aufruf: id(lbl_set)(obj, text).
+  - id: lbl_set
+    type: std::function<void(lv_obj_t *, const char *)>
+    restore_value: false
+    initial_value: |-
+      [](lv_obj_t *obj, const char *txt) {
+        const char *alt = lv_label_get_text(obj);
+        if (alt != nullptr && txt != nullptr && strcmp(alt, txt) == 0)
+          return;
+        lv_label_set_text(obj, txt);
+      }
   - id: val_leer
     type: float
     restore_value: false
@@ -364,7 +381,7 @@ script:
           for (int k = 0; k < 8; k++) {
             const uint32_t t = id(data_seen)[k];
             if (NEED[k] && !(id(dev_present) & NEED[k])) {
-              lv_label_set_text(age[k], "kein Gerät");
+              id(lbl_set)(age[k], "kein Gerät");
               lv_obj_set_style_text_color(age[k], lv_color_hex($col_ink3), 0);
               if (id(data_stale_reported) & (1 << k)) {
                 id(data_stale_reported) &= ~(1 << k);
@@ -373,7 +390,7 @@ script:
               continue;
             }
             if (t == 0) {
-              lv_label_set_text(age[k], "noch keine Werte");
+              id(lbl_set)(age[k], "noch keine Werte");
               lv_obj_set_style_text_color(age[k], lv_color_hex($col_ink3), 0);
               continue;
             }
@@ -409,20 +426,20 @@ script:
           }
           // Symbol Datenalter: grau = noch nichts, weiss = alles frisch,
           // gelb = mindestens eine Quelle ueberfaellig
-          lv_label_set_text(id(lbl_sys_data), stale > 0 ? "\U000F05CE" : "\U000F05E1");
+          id(lbl_set)(id(lbl_sys_data), stale > 0 ? "\U000F05CE" : "\U000F05E1");
           lv_obj_set_style_text_color(id(lbl_sys_data), seen == 0 ? lv_color_hex($col_ink3) : (stale > 0 ? lv_color_hex($col_warn) : lv_color_hex($col_ink)), 0);
 
           // WLAN und Home Assistant (Zustand oben ermittelt)
-          lv_label_set_text(id(sys_wifi), wifi_txt.c_str());
-          lv_label_set_text(id(sys_api), api_txt.c_str());
+          id(lbl_set)(id(sys_wifi), wifi_txt.c_str());
+          id(lbl_set)(id(sys_api), api_txt.c_str());
           lv_obj_set_style_text_color(id(sys_wifi), wifi_ok ? lv_color_hex($col_ink) : lv_color_hex($col_crit), 0);
           lv_obj_set_style_text_color(id(sys_api), api_ok ? lv_color_hex($col_ink) : lv_color_hex($col_crit), 0);
-          lv_label_set_text(id(lbl_sys_wifi), wifi_ok ? "\U000F05A9" : "\U000F05AA");
+          id(lbl_set)(id(lbl_sys_wifi), wifi_ok ? "\U000F05A9" : "\U000F05AA");
           lv_obj_set_style_text_color(id(lbl_sys_wifi), wifi_ok ? lv_color_hex($col_ink) : lv_color_hex($col_crit), 0);
           lv_obj_set_style_text_color(id(lbl_sys_api), api_ok ? lv_color_hex($col_ink) : lv_color_hex($col_crit), 0);
           const uint32_t up = now / 1000u;
           lv_label_set_text_fmt(id(sys_uptime), "%u d %02u:%02u", (unsigned) (up / 86400), (unsigned) (up / 3600 % 24), (unsigned) (up / 60 % 60));
-          lv_label_set_text(id(sys_version), ESPHOME_VERSION);
+          id(lbl_set)(id(sys_version), ESPHOME_VERSION);
 
   # Zur vollen Stunde um HH:00:05 aufgerufen (on_time in
   # .pv-dashboard_core.yaml bzw. pv-dashboard-sim.yaml): schreibt die

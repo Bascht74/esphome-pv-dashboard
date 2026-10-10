@@ -472,9 +472,9 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   Speicher und Wallbox eine, dazu Speicher gesamt, Wallbox-Monat,
   Wärmepumpe, Verbraucher, Hausnetz, Netz, Zähler, Netzvorgaben,
   Tageswerte, Wetter, Warnung; Bit 26, früher Prognose, ist seit dem
-  10.10.2026 frei). Ein Intervall von 1 s ruft je
-  gesetztem Bit die Skripte der Gruppe einmal auf, mit allen Werten der
-  Gruppe — jede Gruppe zeichnet also höchstens einmal je Sekunde neu, auch
+  10.10.2026 frei). Ein Intervall von 100 ms ruft je
+  gesetztem Bit die Skripte der Gruppe auf, mit allen Werten der Gruppe,
+  höchstens drei Gruppen je Takt — jede Gruppe zeichnet also höchstens einmal je Sekunde neu, auch
   wenn der Shelly jede Sekunde sendet oder nach dem Verbinden alle Werte auf
   einmal kommen. Übersprungen wird eine Gruppe, deren Gerät laut
   `dev_present` fehlt, und – bis `ha_ready` – eine, von der noch kein Wert
@@ -491,7 +491,7 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   | `bat_1` … `bat_3` | `ha_bat<N>_soc` | `meter_pv`, `meter_house` | `ha_meter_pv_power`, `ha_meter_house_power` |
   | `grid` (seit 10.10.2026) | `ha_grid_power` (Hausanschluss; mit ihm Hausnetz und Sonstige) | | |
 
-  Das Intervall (1 s) rechnet daraus `dev_present`: Bit an, solange die
+  Das Intervall (100 ms) rechnet daraus `dev_present`: Bit an, solange die
   Referenz einen gültigen Wert hat (Zahl nicht `NAN`, Text nicht leer,
   `unavailable` oder `unknown`). Ändert sich etwas, ruft es `dev_apply` und
   markiert alle Gruppen neu – in beide Richtungen, auch zur Laufzeit.
@@ -590,8 +590,21 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   Hybrid-Erzeugung − Überschuss, nie unter 0: Hybrid-Erzeugung ist die Summe
   der Wechselrichter 2 bis 4 (alles außer der Volleinspeisung), ohne sie
   Erzeugung − Volleinspeisung; Überschuss wie bisher `ha_meter4_today` bzw.
-  ohne Hauszähler Einspeisung − Volleinspeisung. `ha_pv_energy_total` bleibt
-  eine einzelne Statistik-ID.
+  ohne Hauszähler Einspeisung − Volleinspeisung.
+- **Summe mehrerer Statistik-IDs** (seit 11.10.2026). `ha_pv_energy_total` und
+  `ha_home_energy_total` dürfen eine kommagetrennte Liste sein, etwa die
+  Gesamtzähler aller Wechselrichter. Statistik (Woche, Monat, Jahr), 24 h und
+  Tagesreihe Erzeugung addieren je Platz die Zuwächse aller IDs.
+- **Verlorene Abfragen** (seit 11.10.2026). Verwirft das Panel eine Anfrage
+  wegen vollen Sendepuffers („Action request dropped, TCP buffer full“), kommt
+  keine Antwort, auch kein Fehler. `ha_offen` zählt je Abruf (Prognosen,
+  Statistik) die ausstehenden Antworten; fehlt 30 s nach dem Abruf noch eine,
+  fragt das Panel den ganzen Abruf neu ab, höchstens zweimal.
+- **Drosselung in Takten** (seit 11.10.2026). Das Intervall läuft alle 100 ms
+  und ruft je Takt höchstens drei Gruppen auf, jede höchstens einmal je
+  Sekunde. Labels setzt `lbl_set` nur bei geändertem Text. Vorher zeichnete das
+  Panel jede Sekunde alle geänderten Kästen in einem Bild bis 190.000 px neu
+  (60 bis 140 ms), die Kugeln der Übersicht standen so lange.
 - **Störung aus dem Statustext** (seit 10.10.2026). Ist `ha_inv<N>_fault`
   nicht belegt und `ha_inv<N>_status` belegt, gilt ein Statustext aus
   `inv_fault_texts` (Standard `"Fault,Alarm"`, kommagetrennt, ganzer Text,
