@@ -35,9 +35,7 @@ substitutions:
   # mit --show-secrets aufrufen.
   wifi_ssid:     !secret wifi_ssid
   wifi_password: !secret wifi_password
-  ap_password:   !secret ap_password
   api_key:       !secret encryption_key
-  ota_password:  !secret ota_password
 
   ############################################################################
   # HIER BESCHREIBEN SIE IHRE ANLAGE -- in einer eigenen Datei
