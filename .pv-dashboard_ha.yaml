@@ -2497,6 +2497,7 @@ script:
                 id(stats_update).execute(0, S("per"), S("lab"), P, C, I, E, money);
           on_error:
             - lambda: 'ESP_LOGW("ha", "Statistik Woche: %s", error.c_str());'
+      - delay: 2s
       # Monat
       - homeassistant.action:
           action: recorder.get_statistics
@@ -2586,6 +2587,7 @@ script:
                 id(stats_update).execute(1, S("per"), S("lab"), P, C, I, E, money);
           on_error:
             - lambda: 'ESP_LOGW("ha", "Statistik Monat: %s", error.c_str());'
+      - delay: 2s
       # Jahr
       - homeassistant.action:
           action: recorder.get_statistics
@@ -2675,6 +2677,7 @@ script:
                 id(stats_update).execute(2, S("per"), S("lab"), P, C, I, E, money);
           on_error:
             - lambda: 'ESP_LOGW("ha", "Statistik Jahr: %s", error.c_str());'
+      - delay: 2s
       # 24 Stunden: Hausverbrauch, Netzbezug (solar = Verbrauch - Bezug [A]),
       # Erzeugung heute 06..22 Uhr fuer day_curve
       - homeassistant.action:
@@ -3713,7 +3716,11 @@ interval:
           }
           // Tageswerte aus der Statistik und Stundenbalken der Seite
           // Prognose: alle 5 min ab Minute 1 (Home Assistant schreibt die
-          // 5-min-Statistik kurz nach dem Takt)
+          // 5-min-Statistik kurz nach dem Takt). Erst 45 s nach dem
+          // Verbinden, damit ha_fetch_stats (vier Abfragen mit je 2 s
+          // Abstand) vorher durch ist.
+          if (millis() - seit < 45000)
+            return;
           constexpr bool S_ANY = ${ 'true' if ((ha_pv1_energy | string | lower | trim) == 'statistik') and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv2_energy | string | lower | trim) == 'statistik') and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv3_energy | string | lower | trim) == 'statistik') and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv4_energy | string | lower | trim) == 'statistik') and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv5_energy | string | lower | trim) == 'statistik') and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv6_energy | string | lower | trim) == 'statistik') and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv7_energy | string | lower | trim) == 'statistik') and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_pv8_energy | string | lower | trim) == 'statistik') and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev1_energy | string | lower | trim) == 'statistik') and not ((ha_dev1_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev2_energy | string | lower | trim) == 'statistik') and not ((ha_dev2_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev3_energy | string | lower | trim) == 'statistik') and not ((ha_dev3_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev4_energy | string | lower | trim) == 'statistik') and not ((ha_dev4_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_dev5_energy | string | lower | trim) == 'statistik') and not ((ha_dev5_energy_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter0_today | string | lower | trim) == 'statistik') and not ((ha_meter0_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter1_today | string | lower | trim) == 'statistik') and not ((ha_meter1_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter2_today | string | lower | trim) == 'statistik') and not ((ha_meter2_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter3_today | string | lower | trim) == 'statistik') and not ((ha_meter3_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if ((ha_meter4_today | string | lower | trim) == 'statistik') and not ((ha_meter4_total | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' } || ${ 'true' if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' };
           const int k5 = t.is_valid() ? t.day_of_year * 288 + t.hour * 12 + t.minute / 5 : 0;
           if (S_ANY && k5 != heute_schluessel && (heute_schluessel < 0 || !t.is_valid() || t.minute % 5 >= 1)) {
