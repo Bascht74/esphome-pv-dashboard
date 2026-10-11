@@ -221,6 +221,10 @@ api:
   reboot_timeout: 9999 min
   encryption:
     key: ${api_key}
+  # Das Panel waehlt sich selbst bei Home Assistant ein, wie die anderen
+  # Geraete (11.10.2026). Ohne host nimmt es den zuletzt gemerkten Client;
+  # braucht ESPHome 2026.10.
+  outgoing_connection:
 
 # Zuletzt gezeichnete Zehnerstufe des OTA-Fortschritts (on_progress). on_begin
 # setzt sie zurueck: Sonst fehlte bei einem zweiten Upload in derselben
