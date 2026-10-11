@@ -484,19 +484,65 @@ class PrognoseJeDach(unittest.TestCase):
         self.assertEqual(c[2].split(",")[10], "0.02")
         self.assertEqual(r["end"], "2026-10-10T09:00:00+00:00")
         self.assertEqual(float(r["v"].split(",")[0]), 2.312)   # Tageswert pv1 unveraendert
-        r = ha_jinja(x["m"], response={"statistics": {p1: [zeile(10, mean=1200.0), zeile(10, mean=600.0)]}})
-        self.assertEqual(r["c"].split(";")[0], "0.9")    # Mittel der 5-min-Mittel in kW
+        # 5 min: "jetzt" 13:20 Ortszeit = 11:20Z, volle Stunde 11:00Z. Die
+        # Zeile der Vorstunde (Stundenwert noch nicht geschrieben) zaehlt fuer
+        # den Tageswert, nicht fuer die laufende Stunde
+        fuenf = lambda a, b, **w: dict(start=f"2026-10-10T{a}:00+00:00",  # noqa: E731
+                                       end=f"2026-10-10T{b}:00+00:00", **w)
+        resp = {"statistics": {p1: [fuenf("10:55", "11:00", mean=5000.0), fuenf("11:00", "11:05", mean=1200.0),
+                                    fuenf("11:05", "11:10", mean=600.0)]}}
+        r = ha_jinja(x["m"], response=resp)
+        self.assertEqual(r["c"].split(";")[0], "0.9")    # Mittel der 5-min-Mittel ab 13:00 in kW
         self.assertEqual(r["c"].split(";")[2], "")
+        self.assertEqual(r["cn"], "2,2" + ",0" * 14)     # Flaeche 1: 2 Zeilen bis Fach 2, Rest 0,0
+        self.assertEqual(r["hh"], "13")                   # Stunde laut HA, Ortszeit
+        self.assertEqual(float(r["v"].split(",")[0]), round(6800 / 12000, 3))   # Tageswert mit allen Zeilen
+        # Luecke: nur die Zeile 11:10Z..11:15Z -> 1 Zeile, Ende Fach 3
+        r = ha_jinja(x["m"], response={"statistics": {p1: [fuenf("11:10", "11:15", mean=300.0)]}})
+        self.assertEqual((r["c"].split(";")[0], r["cn"][:4]), ("0.3", "1,3,"))
+        # ohne Zeile: kein Mittel, alles 0 -- nie das Ende Mitternacht als Anker
+        r = ha_jinja(x["m"], response={"statistics": {}})
+        self.assertEqual(r["c"], ";" * 7)
+        self.assertEqual(r["cn"], ",".join(["0"] * 16))
+        self.assertEqual(r["hh"], "13")
+        # Stunden-Abruf: keine Felder fuer die Live-Fuellung
+        self.assertNotIn("cn", ha_jinja(x["h"], response={"statistics": {}}))
 
     def test_abruf_und_antwort(self):
         self.assertIn("action: weather.get_forecasts", self.text)
         self.assertIn("id(fc_roof_fc).execute(k, ", self.text)
         self.assertIn("id(fc_roof_hours).execute(k, ", self.text)
+        # Live-Fuellung (11.10.2026): 5-min-Zeilen an die Seite, vor dem Zeichnen
+        self.assertIn("id(fc_roof_rows).execute(id(ha_fc_n), id(ha_fc_hh));\n          id(fc_redraw).execute();",
+                      self.text)
+        self.assertIn('id(ha_fc_n) = S("cn");', self.text)
+        self.assertIn("id(fc_live_on) = bereit;", self.text)
+        # Reihenfolge der Abrufe bleibt (Entscheidung des Nutzers): Tageswerte
+        # erst 45 s nach dem Verbinden
+        self.assertIn("if (millis() - seit < 45000)", self.text)
         # Tagesreihe aus der Anlage nur ohne Prognose je Dach
         self.assertIn("if (id(fc_roof_on) != 0)\n", self.text)
         self.assertEqual(self.text.count("id(forecast_curve).make_call()"), 3)
         m = re.search(r"constexpr bool S_ANY = ([^;]*);", self.text)
         self.assertIn("ha_pv8_fc_d1", m.group(1))
+
+    def test_hinweise(self):
+        """Ladehinweise der Seite Prognose (11.10.2026): nur mit dem Datenweg
+        (fc_ha), Stand setzen nur die Antworten bzw. das Verbinden."""
+        self.assertEqual(self.subs.get("fc_ha"), '"true"')
+        seite = (ROOT / ".pv-dashboard_page_forecast.yaml").read_text(encoding="utf-8")
+        self.assertRegex(seite, r'\nsubstitutions:\n  fc_ha: "false"\n')
+        # gute Antwort 5 min: Zeit (nie in der Zukunft, kein "| 1u"), kein
+        # Fehler, schon einmal; Fehler beider Stufen
+        self.assertRegex(self.text, r"const uint32_t j = millis\(\);\n *id\(fc_ist_ms\) = j != 0 \? j : 0xFFFFFFFFu;\n"
+                                    r" *\}\n *id\(fc_ist_fehler\) = false;\n"
+                                    r" *id\(fc_ist_je\) = true;\n *id\(ha_stat_today_set\).execute\(\);")
+        self.assertNotIn("id(fc_ist_ms) = millis()", self.text)
+        self.assertEqual(self.text.count("id(fc_ist_fehler) = true;"), 2)
+        # Verbinden/Trennen: Ist neu laden, Daecher mit Stundenbalken
+        self.assertRegex(self.text, r"id\(fc_ist_soll\) \|= KURVE\[k\] \? 1u << k : 0u;\n *id\(fc_ist_ms\) = 0;\n *\}")
+        # Prognose je Dach: Antwort oder Fehler beendet "wird geladen"
+        self.assertEqual(self.text.count("id(fc_fc_da) = true;"), 2)
 
 
 class StoerungAusText(unittest.TestCase):

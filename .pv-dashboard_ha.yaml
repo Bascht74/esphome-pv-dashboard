@@ -55,6 +55,9 @@ substitutions:
   # dev_present startet leer; die Referenzen (s. u.) melden die Geraete.
   # Sticht den Wert aus .pv-dashboard_ui.yaml (Simulator: alles da).
   dev_present_start: "0u"
+  # Seite Prognose mit Ladehinweisen (Werte kommen aus Home Assistant).
+  # Sticht "false" aus .pv-dashboard_page_forecast.yaml.
+  fc_ha: "true"
   # Jede ID darf none, false, off, null oder "" sein = nicht belegt.
   # Referenz je Geraet (nicht verfuegbar oder nicht belegt = Geraet weg):
   #   pv_1         ha_pv1_power
@@ -552,6 +555,15 @@ globals:
   - id: ha_fc_m
     type: std::string
     restore_value: false
+  # Dazu aus dem 5-min-Abruf je Flaeche Zahl und Ende der Zeilen der
+  # laufenden Stunde ("n,j,...") und deren Stunde laut HA (-1 = keine)
+  - id: ha_fc_n
+    type: std::string
+    restore_value: false
+  - id: ha_fc_hh
+    type: int
+    restore_value: false
+    initial_value: '-1'
   # Stoerung aus dem Statustext (ha_inv<N>_fault nicht belegt): Bit je
   # Wechselrichter, gehalten fuer inv_fault_hold_s; letzter Stoerungstext
   - id: ha_inv_fault_txt
@@ -2356,6 +2368,7 @@ script:
                                          S(("e" + n).c_str()));
                 }
                 id(fc_roof_day) = atoi(S("t").c_str());
+                id(fc_fc_da) = true;  // erste Antwort: Seite Prognose laedt nicht mehr
                 id(fc_redraw).execute();
                 if (id(fc_roof_on) == 0)
                   return;
@@ -2384,7 +2397,9 @@ script:
                 }
           on_error:
             - lambda: 'if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;'
-            - lambda: 'ESP_LOGW("ha", "Prognose je Dach: %s", error.c_str());'
+            - lambda: |-
+                ESP_LOGW("ha", "Prognose je Dach: %s", error.c_str());
+                id(fc_fc_da) = true;
 
   # Ersatzweg fuer die Solcast-Halbstunden: das Attribut detailedForecast der
   # Tagesprognose. Die Vorlage braucht irgendeine Aktion mit Antwort --
@@ -2908,7 +2923,7 @@ script:
             {%- set k = ['${ ha_pv1_power if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv2_power if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv3_power if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv4_power if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv5_power if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv6_power if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv7_power if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv8_power if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }'] -%}
             {%- set c = namespace(l=[]) -%}
             {%- for x in k -%}
-            {%- set h = namespace(v=[''] * 24, s=0, n=0) -%}
+            {%- set h = namespace(v=[''] * 24, s=0, n=0, j=0) -%}
             {%- for e in (response.statistics.get(x, []) if x else []) -%}
             {%- set w = e.get('mean') -%}
             {%- if w is number -%}
@@ -2949,7 +2964,9 @@ script:
                 id(ha_fc_h) = S("c");
                 id(ha_fetch_today_5min).execute();
           on_error:
-            - lambda: 'ESP_LOGW("ha", "Tageswerte Stunden: %s", error.c_str());'
+            - lambda: |-
+                ESP_LOGW("ha", "Tageswerte Stunden: %s", error.c_str());
+                id(fc_ist_fehler) = true;
 
   - id: ha_fetch_today_5min
     then:
@@ -3003,13 +3020,21 @@ script:
             {%- endfor -%}
             {%- set k = ['${ ha_pv1_power if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv2_power if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv3_power if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv4_power if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv5_power if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv6_power if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv7_power if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }', '${ ha_pv8_power if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else '' }'] -%}
             {%- set c = namespace(l=[]) -%}
+            {%- set hs = now().replace(minute=0, second=0, microsecond=0) -%}
+            {%- set cn = namespace(l=[]) -%}
             {%- for x in k -%}
-            {%- set h = namespace(v=[''] * 24, s=0, n=0) -%}
+            {%- set h = namespace(v=[''] * 24, s=0, n=0, j=0) -%}
             {%- for e in (response.statistics.get(x, []) if x else []) -%}
             {%- set w = e.get('mean') -%}
             {%- if w is number -%}
+            {%- set st = as_datetime(e.start) if e.start is string else e.start -%}
+            {%- set en = e.get('end') -%}
+            {%- set en = as_datetime(en) if en is string else en -%}
+            {%- if st and en and st >= hs -%}
             {%- set h.s = h.s + w -%}
             {%- set h.n = h.n + 1 -%}
+            {%- set h.j = [h.j, ((en - hs).total_seconds() / 300) | int] | max -%}
+            {%- endif -%}
             {%- endif -%}
             {%- set t = e.get('end') -%}
             {%- set t = as_datetime(t) if t is string else t -%}
@@ -3018,8 +3043,9 @@ script:
             {%- endif -%}
             {%- endfor -%}
             {%- set c.l = c.l + [('%.3g' | format(h.s / h.n / 1000)) if h.n else ''] -%}
+            {%- set cn.l = cn.l + [h.n, h.j] -%}
             {%- endfor -%}
-            {{ {'v': o.v | join(','), 'end': o.end.isoformat(), 'c': c.l | join(';')} | tojson }}
+            {{ {'v': o.v | join(','), 'end': o.end.isoformat(), 'c': c.l | join(';'), 'cn': cn.l | join(','), 'hh': hs.hour | string} | tojson }}
           on_success:
             - lambda: |-
                 const bool txt = response["response"].is<const char *>();
@@ -3041,19 +3067,39 @@ script:
                 for (size_t k = 0; k < 18; k++)
                   id(ha_stat_m)[k] = F(v, k);
                 id(ha_fc_m) = S("c");
+                // 5-min-Zeilen der laufenden Stunde je Flaeche und Stunde laut HA
+                // (Live-Fuellung der Seite Prognose, fc_roof_rows)
+                id(ha_fc_n) = S("cn");
+                {
+                  const std::string hh = S("hh");
+                  id(ha_fc_hh) = hh.empty() ? -1 : atoi(hh.c_str());
+                }
+                // Stand fuer den Hinweis Ist-Werte der Seite Prognose. 0 heisst "keine
+                // Antwort", millis() == 0 zaehlt als die Millisekunde davor: Der Stempel
+                // liegt nie in der Zukunft (fc_ist_text rechnet das Alter unsigned).
+                {
+                  const uint32_t j = millis();
+                  id(fc_ist_ms) = j != 0 ? j : 0xFFFFFFFFu;
+                }
+                id(fc_ist_fehler) = false;
+                id(fc_ist_je) = true;
                 id(ha_stat_today_set).execute();
           on_error:
             - lambda: |-
                 ESP_LOGW("ha", "Tageswerte 5 min: %s", error.c_str());
                 id(ha_stat_m).fill(NAN);
                 id(ha_fc_m).clear();
+                id(ha_fc_n).clear();
+                id(ha_fc_hh) = -1;
+                id(fc_ist_fehler) = true;
             - script.execute: ha_stat_today_set
 
   # Tageswerte aus der Statistik in die Sensoren der Ziele (ha_<ziel>:
   # statistik): volle Stunden + laufende Stunde; beide ohne Zeile -> NAN
   # (leer). publish_state laeuft durch den Faktor des Ziels und setzt sein
   # Gruppenbit wie ein Wert aus Home Assistant. Danach die Stundenbalken je
-  # Flaeche mit Prognose an die Seite Prognose (fc_roof_hours).
+  # Flaeche mit Prognose an die Seite Prognose (fc_roof_hours, dazu die
+  # 5-min-Zeilen der laufenden Stunde fuer die Live-Fuellung, fc_roof_rows).
   - id: ha_stat_today_set
     then:
       - lambda: |-
@@ -3074,6 +3120,7 @@ script:
               id(fc_roof_hours).execute(k, k < h.size() ? h[k] : std::string(),
                                         k < m.size() && !m[k].empty() ? strtof(m[k].c_str(), nullptr) : NAN);
           }
+          id(fc_roof_rows).execute(id(ha_fc_n), id(ha_fc_hh));
           id(fc_redraw).execute();
 
   # Modus-Schalter der Seite Wallboxen: wallbox_mode_set
@@ -3813,10 +3860,18 @@ interval:
             stat_schluessel = -1;
             heute_schluessel = -1;
             id(ha_offen) = {0, 0};
+            // Seite Prognose: Daecher mit Ist aus der Statistik; Ist-Werte
+            // gelten bis zum ersten Tagesabruf als unvollstaendig (Hinweis)
+            constexpr bool KURVE[8] = {${ 'true' if not ((ha_pv1_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv1_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv2_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv2_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv3_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv3_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv4_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv4_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv5_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv5_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv6_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv6_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv7_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }, ${ 'true' if not ((ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', '']) and not ((ha_pv8_power | string | lower | trim) in ['none', 'false', 'off', 'null', '']) else 'false' }};
+            id(fc_ist_soll) = 0;
+            for (int k = 0; k < 8; k++)
+              id(fc_ist_soll) |= KURVE[k] ? 1u << k : 0u;
+            id(fc_ist_ms) = 0;
           }
           const bool bereit = ist && millis() - seit >= 10000;
           if (bereit != id(ha_ready)) {
             id(ha_ready) = bereit;
+            id(fc_live_on) = bereit;  // getrennt: alte Leistung zaehlt nicht
             id(ha_dirty) = 0xFFFFFFFFu;
           }
           if (!ist || millis() - seit < 20000)

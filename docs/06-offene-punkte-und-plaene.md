@@ -360,6 +360,16 @@ Offen bzw. bewusst so:
   Nutzer sind das die vier Hausdächer, Süd und West speisen voll ein.
   Halbstunden von gestern zählen nach 0 Uhr nicht, der Abruf holt ab 00:01
   die neuen. Dokument 03, „Rest heute“.
+- Erledigt (11.10.2026, Entscheidung des Nutzers): Der Balken der laufenden
+  Stunde füllt sich live. Die Seite summiert die Leistung je Dach selbst,
+  bis zur letzten fertigen 5-min-Zeile von Home Assistant zählen deren
+  Werte; zur vollen Stunde steht die Vorstunde sofort da, der Stundenwert
+  von Home Assistant ersetzt sie ab Minute 1. Gezeichnet wird einmal pro
+  Minute. Die Reihenfolge der Abrufe bleibt (Ist-Balken nach einem
+  Neustart etwa 30 s nach den Linien); fehlen Ist-Werte, sagt das ein
+  Hinweis in der Legende, vor der ersten Prognose „Prognose wird
+  geladen …“. Dokument 03, „Laufende Stunde live“ und „Hinweise der Seite
+  Prognose“.
 - Erledigt (11.10.2026): Datenalter „Prognose“ nachts. Mit verbundenem
   Home Assistant gilt keine Quelle mehr als veraltet (Abschnitt
   „Systemstatus“); eine Nacht ohne neue Leistung meldet nichts mehr.
@@ -394,7 +404,8 @@ sind für die Anzeige dazugekommen.
 
 Seit dem 25.09.2026. Oben rechts in der Statusleiste drei Symbole: WLAN,
 Verbindung zu Home Assistant (API), Daten aktuell. Ein Tipp öffnet das
-Systemfenster (`sys_panel`): WLAN, Home Assistant, Laufzeit, ESPHome-Version,
+Systemfenster (`sys_panel`): in der Titelzeile Version (`pv_version`) und
+Bauzeit der Firmware, darunter WLAN, Home Assistant, Laufzeit, ESPHome-Version,
 Grenze für veraltete Werte und das Alter der letzten Werte je Seite (PV,
 Speicher, Wallboxen, Wärmepumpe, Haus, Netz, Prognose, Wetter). Jedes Update-Skript stempelt
 `data_seen[n]`; `sys_refresh` läuft alle 10 s. Älter als `data_stale_s`

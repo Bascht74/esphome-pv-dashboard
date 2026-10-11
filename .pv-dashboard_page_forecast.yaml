@@ -31,6 +31,7 @@
 # Seite leer mit Hinweis):
 #   fc_roof_fc     Prognose eines Daches (Halbstunden heute, Tage 1..7)
 #   fc_roof_hours  Stundenmittel heute und laufende Stunde eines Daches
+#   fc_roof_rows   5-min-Zeilen der laufenden Stunde je Dach (Live-Fuellung)
 #   fc_roof_live   Leistung jetzt und Ertrag heute eines Daches
 #   fc_mode_set    Heute (0) / Vorschau (1)
 #   fc_redraw      Kacheln anordnen und zeichnen (ruft fc_text)
@@ -45,11 +46,29 @@
 # nicht von heute sind, zaehlen nicht (fc_sys_day, fc_roof_day); der Abruf
 # holt ab 00:01 die neuen.
 #
+# Laufende Stunde live (Entscheidung des Nutzers, 11.10.2026): Die Seite
+# summiert die Leistung je Dach selbst (fc_live_tick im 1-s-Takt unten).
+# Bis zum Ende der letzten fertigen 5-min-Zeile von Home Assistant zaehlen
+# deren Werte, danach die eigene Summe (fc_cur_kw). Zur vollen Stunde ist
+# die Vorstunde sofort fertig (fc_lv_prev); der Stundenwert von Home
+# Assistant ersetzt sie mit dem naechsten Tagesabruf (ab Minute 1).
+# Neu gezeichnet wird weiter nur einmal pro Minute, beim Minutenwechsel.
+#
+# Hinweise (11.10.2026), nur mit dem Datenweg (fc_ha): "Prognose wird
+# geladen ..." statt des Hinweises fc_empty bis zur ersten Antwort des
+# Abrufs je Dach; in der Legende "Ist wird geladen ..." bis zur ersten
+# Antwort des Tagesabrufs, danach "Ist unvollstaendig", solange Ist-Werte
+# fehlen (fc_redraw, Bedingungen dort).
+#
 # Flaeche x 4..1276, y 84..736:
 #   Kopfzeile y 84..128: Umschalter x 4, 220 x 44 (Pille wie Seite
 #             Wallboxen, Rahmen 1, zwei Teile je 108 x 38 bei x 2 / 110,
 #             y 2); Summen x 240, y 95, f_text 22 -> 95..117; Legende
-#             x 850..1276, y 97, f_unit 17 -> 97..114.
+#             x 850..1276, y 97, f_unit 17 -> 97..114. In der Legende
+#             Heute zwischen "jetzt" (176..216) und der Skala (rechts-
+#             buendig, "Skala 500 kW" 82 breit -> ab 344) der Hinweis
+#             fc_ist_hint, x 224..336 (112): "Ist wird geladen ..." 108,
+#             "Ist unvollstaendig" 97.
 #   Kacheln   y 136..736 (600), Abstand 8. Spalten je nach Zahl der Daecher
 #             n: 1 -> 1, 2 -> 2, 3 -> 3, 4 -> 2, 5/6 -> 3; eine Reihe 600
 #             hoch, zwei je 296 (136 / 440). Breite: Spalte c von
@@ -69,6 +88,12 @@
 #   Geometrie in der Kachel rechnet fc_redraw zur Laufzeit; die Werte im
 #   YAML sind nur der Ausgangszustand fuer sechs Kacheln.
 ##############################################################################
+
+# Daten aus Home Assistant? Der Datenweg (.pv-dashboard_ha.yaml) setzt
+# "true" -- er steht in der Paketliste spaeter und sticht diesen Wert.
+# Ohne ihn (Simulator, Screenshots) zeigt die Seite keine Ladehinweise.
+substitutions:
+  fc_ha: "false"
 
 globals:
   # 0 = Heute, 1 = Vorschau
@@ -229,6 +254,181 @@ globals:
           a = b + 1;
         }
       }
+  # --- Laufende Stunde live (Kopf der Datei) ---------------------------
+  # Stundenschluessel immer Tag im Jahr * 24 + Stunde (dash_time).
+  # Eigene Summe je Dach und 5-min-Fach der laufenden Stunde: Leistung mal
+  # Zeit in W*s (fc_lv_e) und abgedeckte Sekunden (fc_lv_t)
+  - id: fc_lv_e
+    type: std::array<std::array<float, 12>, 8>
+    restore_value: false
+  - id: fc_lv_t
+    type: std::array<std::array<float, 12>, 8>
+    restore_value: false
+  # Home Assistant je Dach: Zahl der 5-min-Zeilen der laufenden Stunde
+  # (Mittel fc_r_cur) und ihr Ende als Fach 0..12 (fc_roof_rows)
+  - id: fc_lv_n
+    type: std::array<uint8_t, 8>
+    restore_value: false
+  - id: fc_lv_j
+    type: std::array<uint8_t, 8>
+    restore_value: false
+  # Fertig gerechnete Vorstunde je Dach in kW (fc_live_tick), NAN = keine
+  - id: fc_lv_prev
+    type: std::array<float, 8>
+    restore_value: false
+    initial_value: '[] { std::array<float, 8> a; a.fill(NAN); return a; }()'
+  # Schluessel {eigene Summe, 5-min-Zeilen von HA, fc_lv_prev}; -1 = keiner
+  - id: fc_lv_i
+    type: std::array<int, 3>
+    restore_value: false
+    initial_value: '{-1, -1, -1}'
+  # Aufsummieren an/aus: der Datenweg schaltet es mit ha_ready (getrennt =
+  # alte Werte, die nicht zaehlen duerfen)
+  - id: fc_live_on
+    type: bool
+    restore_value: false
+    initial_value: 'true'
+  # Mittel der Stunde H eines Daches in kW: die 5-min-Zeilen von Home
+  # Assistant bis zu ihrem Ende (Fach j), danach die eigene Summe. Unter
+  # 30 s Abdeckung NAN (kein Balken) -- beim Neuzeichnen um :01 sind erst
+  # knapp 60 s gesammelt.
+  - id: fc_cur_kw
+    type: std::function<float(int, int)>
+    restore_value: false
+    initial_value: |-
+      [](int k, int H) -> float {
+        const auto &I = id(fc_lv_i);
+        float e = 0.0f, s = 0.0f;
+        int j0 = 0;
+        if (I[1] == H) {
+          const int n = id(fc_lv_n)[k];
+          const float c = id(fc_r_cur)[k];
+          if (n > 0 && std::isfinite(c)) {
+            e = c * 1000.0f * n * 300.0f;
+            s = n * 300.0f;
+          }
+          j0 = id(fc_lv_j)[k];
+        }
+        if (I[0] == H) {
+          for (int j = j0; j < 12; j++) {
+            e += id(fc_lv_e)[k][j];
+            s += id(fc_lv_t)[k][j];
+          }
+        }
+        return s >= 30.0f ? e / s / 1000.0f : NAN;
+      }
+  # Jede Sekunde (interval unten): neue Stunde -> Vorstunde fertig rechnen
+  # (nur, wenn sie direkt davor lag), Faecher leeren; dann mit an die
+  # Leistung jedes Daches (fc_r_now, leer/NAN zaehlt nicht) dt Sekunden in
+  # Fach slot (Minute / 5).
+  - id: fc_live_tick
+    type: std::function<void(int, int, float, bool)>
+    restore_value: false
+    initial_value: |-
+      [](int H, int slot, float dt, bool an) {
+        auto &I = id(fc_lv_i);
+        if (I[0] != H) {
+          const bool vor = I[0] >= 0 && I[0] == H - 1;
+          for (int k = 0; k < 8; k++)
+            id(fc_lv_prev)[k] = vor ? id(fc_cur_kw)(k, I[0]) : NAN;
+          I[2] = vor ? I[0] : -1;
+          for (auto &r : id(fc_lv_e))
+            r.fill(0.0f);
+          for (auto &r : id(fc_lv_t))
+            r.fill(0.0f);
+          I[0] = H;
+        }
+        if (!an || !(dt > 0.0f) || slot < 0 || slot > 11)
+          return;
+        for (int k = 0; k < 8; k++) {
+          const float p = id(fc_r_now)[k];
+          if (std::isfinite(p)) {
+            id(fc_lv_e)[k][slot] += p * dt;
+            id(fc_lv_t)[k][slot] += dt;
+          }
+        }
+      }
+  # Wert des Stundenbalkens h eines Daches in kW (hnow laufende Stunde, -1
+  # ohne Uhr; H ihr Schluessel, -1 = ohne Live-Fuellung wie im
+  # Screenshot-Lauf mit fc_clock): kuenftige Stunden NAN, die laufende live
+  # (ohne H das Mittel fc_r_cur), die Vorstunde ohne Stundenwert von Home
+  # Assistant aus der eigenen Rechnung, sonst der Stundenwert.
+  - id: fc_val
+    type: std::function<float(int, int, int, int)>
+    restore_value: false
+    initial_value: |-
+      [](int k, int h, int hnow, int H) -> float {
+        if (h < 0 || h > 23 || (hnow >= 0 && h > hnow))
+          return NAN;
+        if (h == hnow)
+          return H < 0 ? id(fc_r_cur)[k] : id(fc_cur_kw)(k, H);
+        const float a = id(fc_r_act)[k][h];
+        if (H >= 0 && h == hnow - 1 && !std::isfinite(a) && id(fc_lv_i)[2] == H - 1)
+          return id(fc_lv_prev)[k];
+        return a;
+      }
+  # --- Stand der Daten fuer die Hinweise (fc_redraw), gesetzt vom
+  # Datenweg; ohne ihn bleiben sie hier stehen und es gibt keinen Hinweis.
+  # Daecher, deren Ist aus der Statistik kommt (Bit k = Flaeche k + 1)
+  - id: fc_ist_soll
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  # millis() der letzten guten Antwort des Tagesabrufs seit dem Verbinden,
+  # 0 = noch keine
+  - id: fc_ist_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  # Letzte Antwort des Tagesabrufs war ein Fehler
+  - id: fc_ist_fehler
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  # Seit dem Start schon eine gute Antwort ("unvollstaendig" statt "wird
+  # geladen")
+  - id: fc_ist_je
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  # Abruf je Dach hat geantwortet (Erfolg oder Fehler)
+  - id: fc_fc_da
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  # Text des Hinweises Ist-Werte, "" = alles da. soll: Daecher mit Kachel,
+  # deren Ist aus der Statistik kommt (0 ohne Datenweg -> nie ein
+  # Hinweis); hnow, H wie fc_val; jetzt_ms = millis(). Es fehlt etwas,
+  # wenn seit dem Verbinden keine gute Antwort des Tagesabrufs kam, die
+  # letzte ein Fehler war oder aelter als 11 min ist (zwei Abrufe
+  # verpasst), oder wenn ab 1 Uhr ein Dach fuer keine fertige Stunde einen
+  # Wert hat. Vor der ersten guten Antwort seit dem Start "wird geladen".
+  - id: fc_ist_text
+    type: std::function<const char *(uint32_t, int, int, uint32_t)>
+    restore_value: false
+    initial_value: |-
+      [](uint32_t soll, int hnow, int H, uint32_t jetzt_ms) -> const char * {
+        if (soll == 0)
+          return "";
+        const uint32_t ms = id(fc_ist_ms);
+        bool fehlt = ms == 0 || id(fc_ist_fehler) || jetzt_ms - ms > 11u * 60u * 1000u;
+        for (int k = 0; k < 8 && !fehlt && H >= 0 && hnow >= 1; k++) {
+          if (!((soll >> k) & 1u))
+            continue;
+          // Nur Stunden mit erwartetem Ertrag zaehlen: nachts melden
+          // Wechselrichter oft gar keinen Wert
+          bool hat = false, erwartet = false;
+          for (int h = 0; h < hnow && !hat; h++) {
+            const float a = id(fc_r_p50)[k][2 * h], b = id(fc_r_p50)[k][2 * h + 1];
+            erwartet = erwartet || (std::isfinite(a) && a > 0.0f) || (std::isfinite(b) && b > 0.0f);
+            hat = std::isfinite(id(fc_val)(k, h, hnow, H));
+          }
+          fehlt = erwartet && !hat;
+        }
+        if (!fehlt)
+          return "";
+        return id(fc_ist_je) ? "Ist unvollständig" : "Ist wird geladen …";
+      }
 
 script:
   # ---------------------------------------------------------------------
@@ -285,6 +485,33 @@ script:
           id(fc_r_cur)[roof] = cur;
 
   # ---------------------------------------------------------------------
+  # 5-min-Zeilen von Home Assistant in der laufenden Stunde (Live-Fuellung,
+  # fc_cur_kw), aus derselben Antwort wie cur von fc_roof_hours:
+  #   rows   je Flaeche 1..8 zwei Zahlen "n,j": Zahl der Zeilen und Ende
+  #          der letzten als Fach 0..12; fehlt etwas, gilt 0
+  #   hour   Stunde laut Home Assistant, -1 = keine. Nur wenn sie die
+  #          laufende Stunde des Panels ist, gelten die Zeilen.
+  # Zeichnet nicht selbst (fc_redraw).
+  # ---------------------------------------------------------------------
+  - id: fc_roof_rows
+    parameters:
+      rows: string
+      hour: int
+    then:
+      - lambda: |-
+          float a[16];
+          id(fc_parse)(rows, a, 16);
+          auto fach = [](float v) -> uint8_t {
+            return std::isfinite(v) ? (uint8_t) std::min(std::max(v, 0.0f), 12.0f) : 0;
+          };
+          for (int k = 0; k < 8; k++) {
+            id(fc_lv_n)[k] = fach(a[2 * k]);
+            id(fc_lv_j)[k] = fach(a[2 * k + 1]);
+          }
+          const ESPTime t = id(dash_time).now();
+          id(fc_lv_i)[1] = (hour >= 0 && t.is_valid() && hour == t.hour) ? t.day_of_year * 24 + t.hour : -1;
+
+  # ---------------------------------------------------------------------
   # Live-Werte eines Daches (Gruppe der Flaeche, jede Sekunde moeglich):
   #   power   Leistung jetzt in W
   #   energy  Ertrag heute in kWh ("bisher"); kein Wert -> Summe der
@@ -326,10 +553,10 @@ script:
       - script.execute: fc_redraw
 
   # ---------------------------------------------------------------------
-  # Kacheln anordnen und zeichnen. Ruft das interval unten jede Minute
-  # (Marke jetzt, Rest), sonst nach neuen Daten bzw. dem Umschalter.
-  # Danach den Rest der anderen Stellen (fc_rest): Seite PV, Statusleiste,
-  # Haus.
+  # Kacheln anordnen und zeichnen. Ruft der 1-s-Takt unten bei jedem
+  # Minutenwechsel (Marke jetzt, laufende Stunde, Rest), sonst neue Daten
+  # bzw. der Umschalter. Setzt auch die Hinweise (Kopf der Datei). Danach
+  # den Rest der anderen Stellen (fc_rest): Seite PV, Statusleiste, Haus.
   # ---------------------------------------------------------------------
   - id: fc_redraw
     then:
@@ -340,7 +567,7 @@ script:
           const auto &D50 = id(fc_r_d50);
           const auto &D10 = id(fc_r_d10);
           const auto &ACT = id(fc_r_act);
-          const auto &CUR = id(fc_r_cur);
+          auto &wert = id(fc_val);
           auto &num = id(fmt_num);
           lv_obj_t *const T[6] = {id(fc_t0), id(fc_t1), id(fc_t2), id(fc_t3), id(fc_t4), id(fc_t5)};
           static const char *const NAME[8] = {"${name_pv_1}", "${name_pv_2}", "${name_pv_3}", "${name_pv_4}",
@@ -351,7 +578,12 @@ script:
           if (m < 0 && jetzt.is_valid())
             m = jetzt.hour * 60 + jetzt.minute;
           const int hnow = m >= 0 ? m / 60 : -1;
+          // Schluessel der laufenden Stunde fuer die Live-Fuellung (fc_val); -1
+          // im Screenshot-Lauf (fc_clock) und ohne Uhr: dann gilt fc_r_cur.
+          // Nicht H nennen: H ist unten die Innenhoehe der Kachel.
+          const int HS = (id(fc_clock) < 0 && jetzt.is_valid()) ? jetzt.day_of_year * 24 + jetzt.hour : -1;
           const bool vor = id(fc_mode) == 1;
+          constexpr bool HA = ${fc_ha};
 
           // Welche Daecher: Flaechen 1..8 mit Prognose, hoechstens sechs
           int roof[6], n = 0;
@@ -362,10 +594,35 @@ script:
             id(fc_tile_roof)[t] = t < n ? roof[t] : -1;
           static const int COLS[7] = {1, 1, 2, 3, 2, 3, 3};
           const int cols = COLS[n], rows = n > 3 ? 2 : 1;
-          if (n == 0)
+          static int n_alt = -1;
+          if (n != n_alt) {
+            ESP_LOGI("fc", "Prognose je Dach: %d Kacheln", n);
+            n_alt = n;
+          }
+          if (n == 0) {
+            // Bis zur ersten Antwort des Abrufs je Dach laedt sie noch
+            id(lbl_set)(id(fc_empty), HA && !id(fc_fc_da) ? "Prognose wird geladen …"
+                                                          : "Keine Prognose je Dach.\nIn der Anlage ha_pv<N>_fc_d1 mit "
+                                                            "dem Solcast-Sensor \"heute\" der Fläche belegen.");
             lv_obj_clear_flag(id(fc_empty), LV_OBJ_FLAG_HIDDEN);
-          else
+          } else {
             lv_obj_add_flag(id(fc_empty), LV_OBJ_FLAG_HIDDEN);
+          }
+
+          // Hinweis Ist-Werte in der Legende Heute (fc_ist_text), nur fuer
+          // Daecher mit Kachel; LVGL zeichnet nur bei neuem Text (lbl_set)
+          {
+            uint32_t soll = 0;
+            for (int t = 0; t < n; t++)
+              soll |= id(fc_ist_soll) & (1u << roof[t]);
+            const char *hinweis = id(fc_ist_text)(soll, hnow, HS, millis());
+            static std::string hinweis_alt;
+            if (hinweis_alt != hinweis) {
+              ESP_LOGI("fc", "Ist-Werte: %s", *hinweis ? hinweis : "vollständig");
+              hinweis_alt = hinweis;
+            }
+            id(lbl_set)(id(fc_ist_hint), hinweis);
+          }
 
           // Zeitachse Heute: volle Stunden um alles ueber 0
           int first = 48, last = -1;
@@ -405,7 +662,7 @@ script:
                 if (std::isfinite(v))
                   top = std::max(top, v);
             for (int h = h0; h < h1; h++) {
-              const float v = h == hnow ? CUR[k] : (hnow >= 0 && h > hnow ? NAN : ACT[k][h]);
+              const float v = wert(k, h, hnow, HS);
               if (std::isfinite(v))
                 top = std::max(top, v);
             }
@@ -490,7 +747,7 @@ script:
               lv_obj_t *bar = lv_obj_get_child(ch, 1 + j);
               const int h = h0 + j;
               const bool lauf = h == hnow;
-              const float v = j >= L ? NAN : (lauf ? CUR[k] : (hnow >= 0 && h > hnow ? NAN : ACT[k][h]));
+              const float v = j >= L ? NAN : wert(k, h, hnow, HS);
               if (!std::isfinite(v) || v <= 0.0f) {
                 show(bar, false);
                 continue;
@@ -598,13 +855,14 @@ script:
           const auto &P50 = id(fc_r_p50);
           const auto &D50 = id(fc_r_d50);
           const auto &D10 = id(fc_r_d10);
-          const auto &ACT = id(fc_r_act);
+          auto &wert = id(fc_val);
           lv_obj_t *const T[6] = {id(fc_t0), id(fc_t1), id(fc_t2), id(fc_t3), id(fc_t4), id(fc_t5)};
           const ESPTime jetzt = id(dash_time).now();
           int m = id(fc_clock);
           if (m < 0 && jetzt.is_valid())
             m = jetzt.hour * 60 + jetzt.minute;
           const int hnow = m >= 0 ? m / 60 : -1;
+          const int HS = (id(fc_clock) < 0 && jetzt.is_valid()) ? jetzt.day_of_year * 24 + jetzt.hour : -1;
           const bool vor = id(fc_mode) == 1;
           auto add = [](float &a, float v) {
             if (std::isfinite(v))
@@ -620,9 +878,9 @@ script:
             if (!std::isfinite(done)) {
               done = NAN;
               for (int h = 0; h < 24 && h < hnow; h++)
-                add(done, ACT[k][h]);
+                add(done, wert(k, h, hnow, HS));
               if (hnow >= 0)
-                add(done, id(fc_r_cur)[k] * (m % 60) / 60.0f);
+                add(done, wert(k, hnow, hnow, HS) * (m % 60) / 60.0f);
             }
             float prog = D50[k][0];
             if (!std::isfinite(prog)) {
@@ -661,31 +919,35 @@ script:
           id(lbl_set)(id(fc_total), s.c_str());
 
 interval:
-  - interval: 60s
-    then:
-      - script.execute: fc_redraw
-  # Rest heute rechnet minutengenau (fc_rest). Beim Minutenwechsel alle
-  # Stellen zugleich neu -- Kopfzeile, Seite PV, Statusleiste, Haus --,
-  # sonst stuende eine davon bis zum naechsten fc_redraw auf der Minute
-  # davor. Waehrend eines Updates nicht (ota_running, wie die Uhr).
+  # Jede Sekunde: Leistung je Dach in die laufende Stunde summieren
+  # (fc_live_tick, ohne LVGL). Neu gezeichnet wird nur beim
+  # Minutenwechsel, einmal: fc_redraw -- Kacheln samt laufender Stunde und
+  # Marke jetzt, danach Kopfzeile, Seite PV, Statusleiste und Haus (Rest
+  # heute rechnet minutengenau, fc_rest). Um :00 rechnet der Takt zuerst
+  # die Vorstunde fertig und zeichnet sie dann. Waehrend eines Updates
+  # nicht (ota_running, wie die Uhr); dt hoechstens 2 s, damit eine
+  # Pause (Update, haengende Schleife) nicht als Leistung zaehlt.
   - interval: 1s
     then:
       - lambda: |-
           static int alt = -1;
+          static uint32_t vorher = 0;
+          const uint32_t ms = millis();
+          const float dt = vorher != 0 ? std::min((ms - vorher) / 1000.0f, 2.0f) : 0.0f;
+          vorher = ms | 1u;
           if (id(ota_running))
             return;
           int m = id(fc_clock);
           if (m < 0) {
             const ESPTime t = id(dash_time).now();
             m = t.is_valid() ? t.hour * 60 + t.minute : -1;
+            if (t.is_valid())
+              id(fc_live_tick)(t.day_of_year * 24 + t.hour, t.minute / 5, dt, id(fc_live_on));
           }
           if (m == alt)
             return;
           alt = m;
-          id(fc_text).execute();
-          id(pv_rest).execute();
-          id(ov_status).execute();
-          id(house_rest).execute();
+          id(fc_redraw).execute();
 
 lvgl:
   pages:
@@ -770,6 +1032,9 @@ lvgl:
               - obj: { x: 168, y: 1, width: 2, height: 16, radius: 0, bg_color: $col_batt, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
               - label: { x: 176, y: 0, width: 40, height: 17, long_mode: CLIP, text: "jetzt", styles: st_unit }
               - label: { id: fc_scale_h, x: 226, y: 0, width: 200, height: 17, long_mode: DOT, text_align: RIGHT, text: "", styles: st_unit }
+              # Hinweis Ist-Werte (fc_redraw), leer = alles da; liegt vor der
+              # Skala, deren Text rechtsbuendig erst ab 344 beginnt
+              - label: { id: fc_ist_hint, x: 224, y: 0, width: 112, height: 17, long_mode: CLIP, text: "", text_font: f_unit, text_color: $col_warn }
         # Legende Vorschau: P50, P10, Skala
         - obj:
             id: fc_leg_v
@@ -791,7 +1056,9 @@ lvgl:
               - obj: { x: 56, y: 3, width: 12, height: 12, radius: 2, bg_color: $col_solar_deep, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
               - label: { x: 74, y: 0, width: 30, height: 17, long_mode: CLIP, text: "P10", styles: st_unit }
               - label: { id: fc_scale_v, x: 226, y: 0, width: 200, height: 17, long_mode: DOT, text_align: RIGHT, text: "", styles: st_unit }
-        # Ohne eine einzige Prognose je Dach
+        # Ohne eine einzige Prognose je Dach. Text setzt fc_redraw: mit dem
+        # Datenweg bis zur ersten Antwort "Prognose wird geladen ...", sonst
+        # "Keine Prognose je Dach. In der Anlage ... belegen."
         - label:
             id: fc_empty
             x: 4
@@ -800,7 +1067,7 @@ lvgl:
             height: 44
             long_mode: WRAP
             text_align: CENTER
-            text: "Keine Prognose je Dach.\nIn der Anlage ha_pv<N>_fc_d1 mit dem Solcast-Sensor \"heute\" der Fläche belegen."
+            text: "Prognose wird geladen …"
             text_font: f_text_s
             text_color: $col_ink3
         # ---------------- sechs Kacheln (fc_redraw ordnet sie an) ------------
