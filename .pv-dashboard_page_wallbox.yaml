@@ -89,6 +89,11 @@ script:
   #   limit     Ladelimit in %
   #   plan      naechster Ladeplan als Text, z. B. "Mo 07:00"; "" = keiner
   #   NAN = kein Wert (Striche)
+  # Ohne Fahrzeug (11.10.2026): Name "Kein Fahrzeug", Statuszeile leer,
+  # Ladestand, Reichweite, Limit und Plan auf Strichen, Balken leer -- evcc
+  # meldet die Werte des zuletzt verbundenen Fahrzeugs weiter. evcc nennt
+  # in seiner Oberflaeche angelegte Fahrzeuge intern "db:<Nummer>"; ein
+  # solcher Name oder ein leerer (" ") wird zu "Fahrzeug".
   # ---------------------------------------------------------------------
   - id: wallbox_update
     parameters:
@@ -166,26 +171,35 @@ script:
           else
             lv_label_set_text_fmt(c.dur, "%d:%02d", minutes / 60, minutes % 60);
 
-          // Fahrzeug
-          id(lbl_set)(c.vehicle, vehicle.empty() ? "Kein Fahrzeug" : vehicle.c_str());
-          id(lbl_set)(c.status, status.empty() ? "--" : status.c_str());
-          const float s = !std::isfinite(soc) ? 0.0f : std::clamp(soc, 0.0f, 100.0f);
-          const float l = !std::isfinite(limit) ? 0.0f : std::clamp(limit, 0.0f, 100.0f);
+          // Fahrzeug; ohne Fahrzeug keine Fahrzeugwerte (siehe oben)
+          const bool fz = !vehicle.empty();
+          const float v_soc = fz ? soc : NAN, v_range = fz ? range : NAN, v_limit = fz ? limit : NAN;
+          // Plan: leer (" ", Zeitpunkt unknown oder nicht belegt) wie "" -- kein Plan
+          const std::string v_plan = fz && plan.find_first_not_of(' ') != std::string::npos ? plan : std::string();
+          std::string name = fz ? vehicle : std::string("Kein Fahrzeug");
+          const bool db = name.size() > 3 && name.compare(0, 3, "db:") == 0 &&
+                          name.find_first_not_of("0123456789", 3) == std::string::npos;
+          if (fz && (db || name.find_first_not_of(' ') == std::string::npos))
+            name = "Fahrzeug";
+          id(lbl_set)(c.vehicle, name.c_str());
+          id(lbl_set)(c.status, !fz ? "" : (status.empty() ? "--" : status.c_str()));
+          const float s = !std::isfinite(v_soc) ? 0.0f : std::clamp(v_soc, 0.0f, 100.0f);
+          const float l = !std::isfinite(v_limit) ? 0.0f : std::clamp(v_limit, 0.0f, 100.0f);
           lv_bar_set_value(c.bar_soc, (int32_t) lroundf(s), LV_ANIM_OFF);
           // Hinter dem Ladestand der Rest bis zum Limit, gedaempft wie in evcc
           lv_bar_set_value(c.bar_limit, (int32_t) lroundf(std::max(s, l)), LV_ANIM_OFF);
-          if (!std::isfinite(limit)) {
+          if (!std::isfinite(v_limit)) {
             lv_obj_add_flag(c.marker, LV_OBJ_FLAG_HIDDEN);
           } else {
             lv_obj_clear_flag(c.marker, LV_OBJ_FLAG_HIDDEN);
             // Marke 4 breit, mittig auf dem Limit; Balken 610 breit
             lv_obj_set_x(c.marker, (int32_t) lroundf(l / 100.0f * 606.0f));
           }
-          id(lbl_set)(c.soc, fmt(soc, "%.0f", "--").c_str());
-          id(lbl_set)(c.soc_sub, ("% · " + fmt(range, "%.0f", "---") + " km").c_str());
-          id(lbl_set)(c.plan, plan.empty() ? "--" : plan.c_str());
-          id(lbl_set)(c.plan_sub, plan.empty() ? "kein Plan" : "Abfahrt");
-          id(lbl_set)(c.limit, fmt(limit, "%.0f", "--").c_str());
+          id(lbl_set)(c.soc, fmt(v_soc, "%.0f", "--").c_str());
+          id(lbl_set)(c.soc_sub, ("% · " + fmt(v_range, "%.0f", "---") + " km").c_str());
+          id(lbl_set)(c.plan, v_plan.empty() ? "--" : v_plan.c_str());
+          id(lbl_set)(c.plan_sub, v_plan.empty() ? "kein Plan" : "Abfahrt");
+          id(lbl_set)(c.limit, fmt(v_limit, "%.0f", "--").c_str());
 
   # ---------------------------------------------------------------------
   # Tipp auf den Modus-Schalter einer Karte (on_click der Teile unten).

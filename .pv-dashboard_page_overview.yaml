@@ -136,7 +136,8 @@ globals:
     restore_value: false
     initial_value: '{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}'
   # Momentanwerte fuer die Statusleiste (ov_status): Hausnetz in W, Netz
-  # in W (positiv = Bezug), Restprognose heute in kWh
+  # in W (positiv = Bezug), Restprognose heute in kWh (Solcast-Entitaet,
+  # nur ohne Prognose je Dach fuer den Hausnetz-Kreis gezeigt)
   - id: ov_now
     type: std::array<float, 3>
     restore_value: false
@@ -248,9 +249,12 @@ script:
   #                                     grid_update und der Shelly)
   #   ov_house(power, energy)           Hausnetz: alles auf der
   #                                     Verbraucherschiene, W; kWh heute
-  #   ov_totals(gen, use, feed, draw, full_feed, surplus, remaining)
-  #                                     Kacheln und Ringe, kWh heute;
-  #                                     remaining = Restprognose
+  #   ov_totals(gen, use, feed, draw, full_feed, surplus, remaining,
+  #             total)                  Kacheln und Ringe, kWh heute;
+  #                                     remaining = Restprognose der
+  #                                     Solcast-Entitaet (Ersatz, ov_status);
+  #                                     total = ganzer Verbrauch fuer die
+  #                                     Autarkie, ohne Wert gilt use
   # ---------------------------------------------------------------------
   - id: ov_roof
     parameters:
@@ -400,7 +404,9 @@ script:
       - script.execute: ov_status
 
   # Kacheln der Energiebilanz und die zwei Ringe (Tageswerte, docs/01):
-  #   Autarkie        = (Verbrauch - Netzbezug) / Verbrauch
+  #   Autarkie        = (Verbrauch - Netzbezug) / Verbrauch, Verbrauch =
+  #                     total (alles hinter dem Hausanschluss, mit Heizung
+  #                     und Ladepunkten), ohne Wert use (Kachel Verbrauch)
   #   Eigenverbrauch  = (Hybrid-Erzeugung - Ueberschuss) / Hybrid-Erzeugung,
   #                     Hybrid-Erzeugung = gen - full_feed (ohne Voll-WR)
   # Unter 0,05 kWh Nenner bleiben die Ringe auf Strichen.
@@ -413,6 +419,7 @@ script:
       full_feed: float
       surplus: float
       remaining: float
+      total: float
     then:
       - lambda: |-
           auto &num = id(fmt_num);
@@ -430,7 +437,8 @@ script:
               return NAN;
             return std::clamp(z / nn * 100.0f, 0.0f, 100.0f);
           };
-          const float aut = quote(dif(use, draw), use);
+          const float verbrauch = std::isfinite(total) ? total : use;
+          const float aut = quote(dif(verbrauch, draw), verbrauch);
           const float hyb = dif(gen, full_feed);
           const float own = quote(dif(hyb, surplus), hyb);
           lv_arc_set_value(id(ring_cover_autarky), !std::isfinite(aut) ? 100 : (int32_t) lroundf(100.0f - aut));
@@ -443,7 +451,12 @@ script:
       - script.execute: ov_status
 
   # Statusleiste links: Autarkie JETZT (Momentanwert, docs/01) aus Hausnetz
-  # und Netzbezug, dazu die Restprognose. Nur von den Skripten oben gerufen.
+  # und Netzbezug, dazu die Restprognose. Die Restprognose gilt dem
+  # Hausnetz-Kreis (Entscheidung des Nutzers, 11.10.2026): mit Prognose je
+  # Dach fuer dessen Daecher dieselbe Rechnung wie die Seiten Prognose und
+  # PV (fc_rest_house), dann "Restprognose Haus"; sonst die Solcast-Entitaet
+  # aus ov_totals. Gerufen von den Skripten oben, von fc_redraw und beim
+  # Minutenwechsel (interval der Seite Prognose).
   - id: ov_status
     then:
       - lambda: |-
@@ -452,8 +465,10 @@ script:
           if (std::isfinite(house) && std::isfinite(grid) && house > 10.0f)
             aut = std::clamp((house - std::max(grid, 0.0f)) / house * 100.0f, 0.0f, 100.0f);
           auto &num = id(fmt_num);
+          const float haus = id(fc_rest_house)();
+          const bool dach = std::isfinite(haus);
           const std::string s = "Autarkie " + num(aut, "%.0f", "--") + " % · Restprognose " +
-                                num(id(ov_now)[2], "%.1f", "--,-") + " kWh";
+                                (dach ? "Haus " : "") + num(dach ? haus : id(ov_now)[2], "%.1f", "--,-") + " kWh";
           id(lbl_set)(id(lbl_status_left), s.c_str());
 
   # Zeichnet Balken (Ist) und Linie (Prognose) aus beiden Reihen. Sie liegen

@@ -38,8 +38,8 @@ Erzeugte Dateien nie von Hand ändern:
 - **Freigaben des Nutzers (Stand 11.10.2026).** Was gebaut werden darf, darf
   ohne weitere Rückfrage committet, als PR gestellt und gemergt werden.
 - **Prüfen vor jedem Release:**
-  - `python -m unittest discover tests` (40 Tests)
-  - `python tests/ha_probe.py --shots` (76 Prüfungen gegen ein nachgebautes
+  - `python -m unittest discover tests` (41 Tests)
+  - `python tests/ha_probe.py --shots` (102 Prüfungen gegen ein nachgebautes
     Home Assistant, dazu der Bildlauf)
   - Die PNG-Bilder unter `shots/` ansehen.
 - **Gerätedateien.** `pv-dashboard.yaml` und die eigene

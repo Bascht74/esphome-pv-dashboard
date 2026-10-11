@@ -193,6 +193,13 @@ feed_limit_pct: "60"
 # ha_pv_energy_today: none
 # ha_selfuse_energy_today: none
 #
+# Autarkie heute = (Verbrauch - Bezug) / Verbrauch. Verbrauch ist alles
+# hinter dem Hausanschluss, auch Heizung und Ladepunkte, zum Beispiel ein
+# Helfer "Min/Max" mit Typ Summe in Home Assistant. Nicht belegt oder ohne
+# Wert gilt ha_home_energy_today wie in der Kachel Verbrauch.
+#
+# ha_total_energy_today: sensor.gesamtverbrauch_heute
+#
 # Stoerung aus dem Statustext: ha_inv<N>_fault nicht belegt, ha_inv<N>_status
 # belegt -> ein Text aus inv_fault_texts (ganzer Text, Gross-/Klein-
 # schreibung egal) ist eine Stoerung. Sie haelt inv_fault_hold_s Sekunden

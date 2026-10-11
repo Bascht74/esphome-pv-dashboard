@@ -378,12 +378,13 @@ time:
     id: dash_time
     timezone: Europe/Berlin
     # Sobald die Zeit steht, sofort anzeigen -- sonst stuende bis zur naechsten
-    # vollen Minute weiter "--:--" auf dem Panel.
+    # Sekunde weiter "--:--:--" auf dem Panel.
     on_time_sync:
       - then:
           - script.execute: update_clock
     on_time:
-      - seconds: 0
+      # Uhr mit Sekunden (Wunsch des Nutzers, 11.10.2026): jede Sekunde
+      - seconds: /1
         then:
           - script.execute: update_clock
       # Zur vollen Stunde die Tagesreihe fortschreiben

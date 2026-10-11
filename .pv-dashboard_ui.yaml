@@ -261,19 +261,20 @@ globals:
         return std::string(b);
       }
 
-# Uhr oben links. Die Zeitquelle heisst auf beiden Seiten "dash_time" (Geraet:
+# Uhr oben rechts. Die Zeitquelle heisst auf beiden Seiten "dash_time" (Geraet:
 # Home Assistant, Simulator: Systemuhr) und ruft dieses Skript beim
-# Zeitabgleich und danach zu jeder vollen Minute auf. Die Formatierung steht
-# deshalb genau einmal -- hier.
+# Zeitabgleich und danach jede Sekunde auf (Uhr mit Sekunden, Wunsch des
+# Nutzers 11.10.2026). Die Formatierung steht deshalb genau einmal -- hier.
 script:
   # Systemzustand: WLAN, Home Assistant und Datenalter je Quelle, fuer die
   # drei Symbole in der Statusleiste und das Systemfenster (Tipp auf die
   # Symbole). Laeuft alle 10 s (interval unten). Bleibt eine Quelle, die
   # schon einmal geliefert hat, laenger als data_stale_s aus, kommt einmal
   # eine Warnung in die Meldungen; liefert sie wieder, verschwindet die
-  # Warnung (alert_clear) und darf erneut kommen. Fehlt die Verbindung zu
-  # Home Assistant (WLAN oder API), kommt statt der Einzelwarnungen eine
-  # Stoerung "Keine Verbindung zu Home Assistant".
+  # Warnung (alert_clear) und darf erneut kommen. Mit verbundenem Home
+  # Assistant gilt keine Quelle als veraltet (ha_live, Begruendung unten).
+  # Fehlt die Verbindung zu Home Assistant (WLAN oder API), kommt statt der
+  # Einzelwarnungen eine Stoerung "Keine Verbindung zu Home Assistant".
   # Im Simulator gibt es weder WLAN noch API -- dort steht "Simulator".
   # Diagnose einhaengen: eigene Ereignisse am LVGL-Display, ohne die von
   # ESPHome (on_draw_start/-end) zu benutzen -- REFR_START/REFR_READY
@@ -375,6 +376,20 @@ script:
           // braucht eine Flaeche oder einen Wechselrichter, Speicher einen
           // Speicher usw. Die uebrigen Quellen haengen an keinem Geraeteplatz.
           static const uint32_t NEED[8] = {0xFFFu, 7u << 12, 3u << 15, 1u << 17, 0, 0, 0, 0};
+          // Mit Home Assistant ist die Verbindung das Lebenszeichen
+          // (11.10.2026): HA schickt einen Wert nur, wenn er sich aendert
+          // (ESPHome-Integration, manager.py). Eine Wallbox ohne Fahrzeug, PV
+          // in der Nacht oder ein ruhiges Wetter melden so lange nichts, ohne
+          // dass etwas fehlt. Faellt eine Quelle in HA aus, kommt "unavailable":
+          // ihr Wert wird leer bzw. das Geraet verschwindet (Referenz,
+          // dev_present). Solange HA verbunden ist, gilt deshalb keine Quelle
+          // als veraltet, das Alter zeigt die Zeit seit der letzten Aenderung.
+          // Ohne Verbindung kommt die Sammelmeldung unten; ohne API
+          // (Simulator, Screenshots) gilt data_stale_s wie bisher.
+          bool ha_live = false;
+          #ifdef USE_API
+          ha_live = link_ok;
+          #endif
           const uint32_t now = millis();
           const uint32_t limit = (uint32_t) ${data_stale_s} * 1000u;
           int seen = 0, stale = 0;
@@ -402,7 +417,7 @@ script:
               lv_label_set_text_fmt(age[k], "vor %u min", (unsigned) (a / 60));
             else
               lv_label_set_text_fmt(age[k], "vor %u h", (unsigned) (a / 3600));
-            const bool old = now - t > limit;
+            const bool old = !ha_live && now - t > limit;
             lv_obj_set_style_text_color(age[k], old ? lv_color_hex($col_warn) : lv_color_hex($col_ink), 0);
             if (old) {
               stale++;
@@ -640,38 +655,35 @@ script:
           condition:
             lambda: 'return !id(ota_running);'
           then:
-            - lvgl.label.update:
-                id: lbl_clock
-                text: !lambda |-
-                  auto t = id(dash_time).now();
-                  if (!t.is_valid())
-                    return std::string("--:--");
-                  char buf[6];
-                  snprintf(buf, sizeof(buf), "%02d:%02d", t.hour, t.minute);
-                  return std::string(buf);
-            - lvgl.label.update:
-                id: lbl_date
-                text: !lambda |-
-                  auto t = id(dash_time).now();
-                  if (!t.is_valid())
-                    return std::string("");
-                  // strftime richtet sich nach der C-Locale und liefert
-                  // englische Namen -- deshalb von Hand. day_of_week zaehlt
-                  // ab Sonntag = 1.
-                  static const char *const WD[] = {"", "Sonntag", "Montag",
-                                                   "Dienstag", "Mittwoch",
-                                                   "Donnerstag", "Freitag",
-                                                   "Samstag"};
-                  static const char *const MO[] = {"", "Januar", "Februar",
-                                                   "März", "April", "Mai",
-                                                   "Juni", "Juli", "August",
-                                                   "September", "Oktober",
-                                                   "November", "Dezember"};
-                  char buf[48];
-                  snprintf(buf, sizeof(buf), "%s, %d. %s %d",
-                           WD[t.day_of_week], t.day_of_month, MO[t.month],
-                           t.year);
-                  return std::string(buf);
+            # Ueber lbl_set: Jede Sekunde aendert sich nur die Uhr; das Datum
+            # zeichnet LVGL nur beim Tageswechsel neu.
+            - lambda: |-
+                auto t = id(dash_time).now();
+                if (!t.is_valid()) {
+                  id(lbl_set)(id(lbl_clock), "--:--:--");
+                  id(lbl_set)(id(lbl_date), "");
+                  return;
+                }
+                char uhr[32];
+                snprintf(uhr, sizeof(uhr), "%02d:%02d:%02d", t.hour, t.minute, t.second);
+                id(lbl_set)(id(lbl_clock), uhr);
+                // strftime richtet sich nach der C-Locale und liefert
+                // englische Namen -- deshalb von Hand. day_of_week zaehlt
+                // ab Sonntag = 1.
+                static const char *const WD[] = {"", "Sonntag", "Montag",
+                                                 "Dienstag", "Mittwoch",
+                                                 "Donnerstag", "Freitag",
+                                                 "Samstag"};
+                static const char *const MO[] = {"", "Januar", "Februar",
+                                                 "März", "April", "Mai",
+                                                 "Juni", "Juli", "August",
+                                                 "September", "Oktober",
+                                                 "November", "Dezember"};
+                char buf[48];
+                snprintf(buf, sizeof(buf), "%s, %d. %s %d",
+                         WD[t.day_of_week], t.day_of_month, MO[t.month],
+                         t.year);
+                id(lbl_set)(id(lbl_date), buf);
             # Tageswechsel: Meldungen von gestern bekommen ihr Datum. Der erste
             # gueltige Zeitpunkt nach dem Start zaehlt mit (last_day = -1):
             # Beide Zeitquellen rufen update_clock in on_time_sync auf, so
@@ -1142,7 +1154,8 @@ lvgl:
                 text_font: f_bar
             # Systemzustand: WLAN, Home Assistant, Datenalter. Ein Tipp oeffnet
             # das Systemfenster. Liegt zwischen den Kennzahlen (bis x 628)
-            # und dem Datum (Text ab etwa x 870), drei Symbole je 32 breit.
+            # und dem Datum (Text ab x 828 beim laengsten Datum), drei
+            # Symbole je 32 breit.
             - obj:
                 id: sys_icons
                 x: 700
@@ -1163,12 +1176,15 @@ lvgl:
                   - label: { id: lbl_sys_api, x: 38, y: 3, width: 32, text_align: CENTER, text: "\U000F07D0", text_font: f_icon, text_color: $col_ink3 }
                   - label: { id: lbl_sys_data, x: 76, y: 3, width: 32, text_align: CENTER, text: "\U000F05E1", text_font: f_icon, text_color: $col_ink3 }
             # Rechts Datum, dann Uhr. Die Uhr steht aussen und hat eine feste
-            # Breite, damit das Datum daneben nicht wandert, wenn aus 09:05
-            # ein 10:05 wird.
+            # Breite, damit das Datum daneben nicht wandert. Gemessen in f_bar
+            # (11.10.2026): Ziffern je 13, Doppelpunkt 7, "HH:MM:SS" 92 von
+            # 96; laengstes Datum "Donnerstag, 30. September 2026" 336 von
+            # 420, Text x 828..1164, 18 Luft zu den Symbolen (bis x 810) und
+            # 20 zur Uhr (Text ab x 1184).
             - label:
                 id: lbl_date
                 align: RIGHT_MID
-                x: -104
+                x: -116
                 width: 420
                 height: 29
                 long_mode: DOT
@@ -1181,7 +1197,7 @@ lvgl:
             - label:
                 id: lbl_diag
                 align: RIGHT_MID
-                x: -104
+                x: -116
                 width: 420
                 height: 34
                 long_mode: CLIP
@@ -1194,9 +1210,9 @@ lvgl:
                 id: lbl_clock
                 align: RIGHT_MID
                 x: -$pad_page
-                width: 88
+                width: 96
                 text_align: RIGHT
-                text: "--:--"
+                text: "--:--:--"
                 text_font: f_bar
                 text_color: $col_ink
 

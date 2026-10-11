@@ -336,24 +336,33 @@ die Schlüssel `ha_solcast_today_p10`/`_p90`, `_power_now`, `_next_hour`,
 `_peak`, `_peak_time`, `_last_poll`, `_api_used`, `_api_limit` und
 `_d2` … `_d7` samt P10/P90 sind entfernt; stehen sie noch in der eigenen
 Anlage, schaden sie nicht (ungenutzte Substitution). Geblieben sind
-`ha_solcast_today` (nur noch sein `detailedForecast` für `forecast_curve`,
-solange es keine Prognose je Dach gibt) und `ha_solcast_remaining`
-(Statusleiste „Restprognose“, Seite Haus).
+`ha_solcast_today` (nur noch sein `detailedForecast` für `forecast_curve`
+und die Restprognose der Seite PV, solange es keine Prognose je Dach gibt)
+und `ha_solcast_remaining` (Statusleiste „Restprognose“, Seite Haus; nur
+noch, solange die Flächen des Hausnetz-Kreises keine Prognose je Dach
+haben).
 
 Offen bzw. bewusst so:
 
 - Mehr als sechs Dächer mit Prognose: die ersten sechs in Flächenreihenfolge
-  bekommen eine Kachel, der Rest fehlt auch in den Summen der Kopfzeile.
+  bekommen eine Kachel. Die Summen der Kopfzeile zählen alle Dächer, ihr Rest
+  ist derselbe wie auf der Seite PV.
 - Die Kachel hängt nur an der Prognose, nicht an `dev_present`: Fällt die
   Leistung einer Fläche aus, bleibt die Kachel mit Prognose, ohne Ist.
-- Die Restprognose der Statusleiste kommt weiter aus `ha_solcast_remaining`
-  (beim Nutzer nur vier der sechs Dächer); die Kopfzeile der Seite Prognose
-  rechnet ihren Rest selbst aus den Halbstunden aller Dächer. Auf Zuruf
-  ließe sich die Statusleiste auf diese Summe umstellen.
-- Datenalter „Prognose“ im Systemfenster: Der Abruf kommt alle 30 min, die
-  Leistung der Dächer hält den Stempel dazwischen frisch; nachts, wenn
-  sich keine Leistung ändert, kann nach `data_stale_s` (300 s) eine Warnung
-  „Keine Daten von Prognose“ kommen. Am Gerät beobachten.
+- Erledigt (11.10.2026, Entscheidung des Nutzers): Rest heute an allen
+  Stellen mit einer Rechnung (`fc_rest`: P50 der Halbstunden ab jetzt, die
+  laufende anteilig). Vorher rechneten die Seite PV ab der laufenden vollen
+  Stunde, die Kopfzeile der Seite Prognose ab jetzt, Statusleiste und Haus
+  zeigten `ha_solcast_remaining`. Jetzt: Seiten PV und Prognose über alle
+  Dächer, Statusleiste und Haus über die Dächer des Hausnetz-Kreises
+  („Restprognose Haus“), solange jede Fläche dort, die vorhanden ist oder
+  einen Tageswert hat, auch Halbstunden hat; sonst bleibt die Entität. Beim
+  Nutzer sind das die vier Hausdächer, Süd und West speisen voll ein.
+  Halbstunden von gestern zählen nach 0 Uhr nicht, der Abruf holt ab 00:01
+  die neuen. Dokument 03, „Rest heute“.
+- Erledigt (11.10.2026): Datenalter „Prognose“ nachts. Mit verbundenem
+  Home Assistant gilt keine Quelle mehr als veraltet (Abschnitt
+  „Systemstatus“); eine Nacht ohne neue Leistung meldet nichts mehr.
 - Ein echter Lauf gegen das eigene Home Assistant steht aus; die Vorlage je
   Dach ist am 10.10.2026 in seinem Home Assistant (nur lesend, Template-Test)
   mit allen sechs Dächern fehlerfrei gelaufen (Antwort 4,3 kB).
@@ -396,6 +405,20 @@ acht Warnungen da). Seit dem 25.09.2026 gilt: Fehlt die Verbindung zu Home
 Assistant (WLAN oder API), kommt statt einer Warnung je Quelle **eine**
 Sammelmeldung „Keine Verbindung zu Home Assistant“ (Störung, sobald eine Quelle
 schon geliefert hat); sie verschwindet, wenn die Verbindung wieder steht.
+
+Seit dem 11.10.2026 gilt mit verbundenem Home Assistant **keine** Quelle als
+veraltet. Anlass: Im Simulator mit echtem Home Assistant stand „Keine Daten von
+Wallboxen“, obwohl die Seite Wallboxen frische Werte zeigte. Ursache: Die
+ESPHome-Integration schickt einen Zustand nur, wenn er sich ändert
+(`homeassistant/components/esphome/manager.py`, gleicher Zustand wird
+übersprungen); eine Wallbox ohne Fahrzeug (Leistung 0, Modus, Sitzung
+unverändert) meldet so stundenlang nichts, ebenso PV und Prognose nachts.
+`last_reported` von Home Assistant erreicht das Panel nicht. Fällt eine Quelle
+in Home Assistant aus, kommt `unavailable`: Ihr Wert wird leer bzw. das Gerät
+verschwindet über seine Referenz. Die Verbindung ist darum das Lebenszeichen;
+das Alter im Systemfenster zeigt die Zeit seit der letzten Änderung,
+`data_stale_s` gilt nur ohne API (Simulator, Screenshots) und für das Symbol
+bei getrennter Verbindung. Geprüft im Fall T von `tests/ha_probe.py`.
 
 ## Geldwerte
 

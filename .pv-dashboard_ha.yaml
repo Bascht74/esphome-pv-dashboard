@@ -250,11 +250,12 @@ substitutions:
   ha_rule_smart_meter: input_boolean.smart_meter_eingebaut
   ha_pv_energy_today: sensor.pv_erzeugung_heute  # Summe beider Kreise [A]
   ha_home_energy_today: sensor.hausverbrauch_heute  # [A]
+  ha_total_energy_today: sensor.gesamtverbrauch_heute  # ganzer Verbrauch mit Heizung und Ladepunkten, nur Autarkie [A]
   ha_selfuse_energy_today: sensor.eigenverbrauch_heute  # [A]
   ha_pv_energy_total: sensor.pv_erzeugung_gesamt  # nur Statistik [A]; auch Liste, kommagetrennt, z. B. die Gesamtzaehler der Wechselrichter
   ha_home_energy_total: sensor.hausverbrauch_gesamt  # nur Statistik [A]; auch Liste, kommagetrennt
   ha_solcast_today: sensor.solcast_pv_forecast_prognose_heute  # nur Attribut detailedForecast (forecast_curve)
-  ha_solcast_remaining: sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute
+  ha_solcast_remaining: sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute  # Statusleiste, Haus; nur ohne Prognose je Dach der Flaechen 3..8
   ha_pv1_fc_d1: none  # Solcast-Prognose heute dieser Flaeche (mit detailedForecast)
   ha_pv1_fc_d2: none  # morgen
   ha_pv1_fc_d3: none  # Tag 3
@@ -460,6 +461,7 @@ substitutions:
   ha_meter_house_power_faktor: "1"
   ha_pv_energy_today_faktor: "1"
   ha_home_energy_today_faktor: "1"
+  ha_total_energy_today_faktor: "1"
   ha_selfuse_energy_today_faktor: "1"
   ha_solcast_remaining_faktor: "1"
   ha_wx_temp_faktor: "1"
@@ -1749,6 +1751,14 @@ sensor:
     on_value:
       - lambda: 'id(ha_dirty) |= 0x02200000u;'
   - platform: homeassistant
+    id: ha_total_energy_today
+    entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_total_energy_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_total_energy_today }"
+    internal: true
+    filters:
+      - multiply: ${ha_total_energy_today_faktor}
+    on_value:
+      - lambda: 'id(ha_dirty) |= 0x02000000u;'
+  - platform: homeassistant
     id: ha_selfuse_energy_today
     entity_id: "${ 'sensor.pv_dashboard_nicht_belegt' if (ha_selfuse_energy_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_selfuse_energy_today }"
     internal: true
@@ -2216,16 +2226,17 @@ script:
           response_template: |-
             {%- set src = response.get('data') or [] -%}
 
+            {%- set heute = now().date() -%}
             {%- set o = namespace(a=['nan'] * 48) -%}
             {%- for x in src -%}
             {%- set ps = x.get('period_start') -%}
             {%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}
-            {%- if t and t.date() == now().date() -%}
+            {%- if t and t.date() == heute -%}
             {%- set i = t.hour * 2 + t.minute // 30 -%}
             {%- set o.a = o.a[:i] + [((x.get('pv_estimate')) | round(2)) if (x.get('pv_estimate')) is number else 'nan'] + o.a[i + 1:] -%}
             {%- endif -%}
             {%- endfor -%}
-            {{ {'a': o.a | join(',')} | tojson }}
+            {{ {'a': o.a | join(','), 't': heute.strftime('%Y%j')} | tojson }}
           on_success:
             - lambda: |-
                 if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;
@@ -2244,12 +2255,17 @@ script:
                 auto F = [](const std::vector<std::string> &v, size_t i) -> float {
                   return (i < v.size() && !v[i].empty()) ? strtof(v[i].c_str(), nullptr) : NAN;
                 };
-                if (id(fc_roof_on) != 0)
-                  return;
                 const auto a = L(S("a"));
                 std::array<float, 48> P;
                 for (size_t i = 0; i < 48; i++)
                   P[i] = F(a, i);
+                // Halbstunden der ganzen Anlage: Restprognose der Seite PV ohne Prognose je
+                // Dach (fc_rest). Immer setzen, auch mit Prognose je Dach -- fallen die
+                // Daecher spaeter weg, stuende sonst ein alter Stand da.
+                id(fc_sys_p50) = P;
+                id(fc_sys_day) = atoi(S("t").c_str());
+                if (id(fc_roof_on) != 0)
+                  return;
                 {
                   char buf[128];
                   int n = 0;
@@ -2285,6 +2301,7 @@ script:
             ['${ '' if (ha_pv7_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d1 }', '${ '' if (ha_pv7_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d2 }', '${ '' if (ha_pv7_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d3 }', '${ '' if (ha_pv7_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d4 }', '${ '' if (ha_pv7_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d5 }', '${ '' if (ha_pv7_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d6 }', '${ '' if (ha_pv7_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv7_fc_d7 }'],
             ['${ '' if (ha_pv8_fc_d1 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d1 }', '${ '' if (ha_pv8_fc_d2 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d2 }', '${ '' if (ha_pv8_fc_d3 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d3 }', '${ '' if (ha_pv8_fc_d4 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d4 }', '${ '' if (ha_pv8_fc_d5 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d5 }', '${ '' if (ha_pv8_fc_d6 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d6 }', '${ '' if (ha_pv8_fc_d7 | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else ha_pv8_fc_d7 }']
             ] -%}
+            {%- set heute = now().date() -%}
             {%- set o = namespace(l=[]) -%}
             {%- for k in range(q | length) -%}
             {%- set ids = q[k] -%}
@@ -2293,7 +2310,7 @@ script:
             {%- for x in state_attr(ids[0], 'detailedForecast') or [] -%}
             {%- set ps = x.get('period_start') -%}
             {%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}
-            {%- if t and t.date() == now().date() -%}
+            {%- if t and t.date() == heute -%}
             {%- set i = t.hour * 2 + t.minute // 30 -%}
             {%- set a = x.get('pv_estimate') -%}
             {%- set b = x.get('pv_estimate10') -%}
@@ -2312,7 +2329,7 @@ script:
             {%- set o.l = o.l + [['a' ~ n, h.a | join(',')], ['b' ~ n, h.b | join(',')], ['d' ~ n, d.p | join(',')], ['e' ~ n, d.q | join(',')]] -%}
             {%- endif -%}
             {%- endfor -%}
-            {{ dict(o.l) | tojson }}
+            {{ dict(o.l + [['t', heute.strftime('%Y%j')]]) | tojson }}
           on_success:
             - lambda: |-
                 if (id(ha_offen)[0] > 0) id(ha_offen)[0]--;
@@ -2338,6 +2355,7 @@ script:
                   id(fc_roof_fc).execute(k, S(("a" + n).c_str()), S(("b" + n).c_str()), S(("d" + n).c_str()),
                                          S(("e" + n).c_str()));
                 }
+                id(fc_roof_day) = atoi(S("t").c_str());
                 id(fc_redraw).execute();
                 if (id(fc_roof_on) == 0)
                   return;
@@ -2382,16 +2400,17 @@ script:
           response_template: |-
             {%- set src = state_attr('${ha_solcast_today}', 'detailedForecast') or [] -%}
 
+            {%- set heute = now().date() -%}
             {%- set o = namespace(a=['nan'] * 48) -%}
             {%- for x in src -%}
             {%- set ps = x.get('period_start') -%}
             {%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}
-            {%- if t and t.date() == now().date() -%}
+            {%- if t and t.date() == heute -%}
             {%- set i = t.hour * 2 + t.minute // 30 -%}
             {%- set o.a = o.a[:i] + [((x.get('pv_estimate')) | round(2)) if (x.get('pv_estimate')) is number else 'nan'] + o.a[i + 1:] -%}
             {%- endif -%}
             {%- endfor -%}
-            {{ {'a': o.a | join(',')} | tojson }}
+            {{ {'a': o.a | join(','), 't': heute.strftime('%Y%j')} | tojson }}
           on_success:
             - lambda: |-
                 const bool txt = response["response"].is<const char *>();
@@ -2409,12 +2428,17 @@ script:
                 auto F = [](const std::vector<std::string> &v, size_t i) -> float {
                   return (i < v.size() && !v[i].empty()) ? strtof(v[i].c_str(), nullptr) : NAN;
                 };
-                if (id(fc_roof_on) != 0)
-                  return;
                 const auto a = L(S("a"));
                 std::array<float, 48> P;
                 for (size_t i = 0; i < 48; i++)
                   P[i] = F(a, i);
+                // Halbstunden der ganzen Anlage: Restprognose der Seite PV ohne Prognose je
+                // Dach (fc_rest). Immer setzen, auch mit Prognose je Dach -- fallen die
+                // Daecher spaeter weg, stuende sonst ein alter Stand da.
+                id(fc_sys_p50) = P;
+                id(fc_sys_day) = atoi(S("t").c_str());
+                if (id(fc_roof_on) != 0)
+                  return;
                 {
                   char buf[128];
                   int n = 0;
@@ -3242,6 +3266,7 @@ interval:
           constexpr bool B_tariff_feedin = ${ 'false' if (ha_tariff_feedin | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_tariff_grid = ${ 'false' if (ha_tariff_grid | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_tariff_home = ${ 'false' if (ha_tariff_home | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
+          constexpr bool B_total_energy_today = ${ 'false' if (ha_total_energy_today | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_warn_level = ${ 'false' if (ha_warn_level | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_wb1_energy = ${ 'false' if (ha_wb1_energy | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
           constexpr bool B_wb1_limit = ${ 'false' if (ha_wb1_limit | string | lower | trim) in ['none', 'false', 'off', 'null', ''] else 'true' };
@@ -3564,7 +3589,9 @@ interval:
             {
               const bool con = id(ha_wb1_connected).state, chg = id(ha_wb1_charging).state;
               const float kw = V(id(ha_wb1_power), B_wb1_power), kwh = V(id(ha_wb1_energy), B_wb1_energy);
-              const char *st = chg ? "Ladevorgang aktiv" : (con ? "Fahrzeug verbunden" : "Kein Fahrzeug");
+              // Ohne Fahrzeug bleibt die Statuszeile leer, der Name heisst dann schon
+              // "Kein Fahrzeug" (wallbox_update)
+              const char *st = chg ? "Ladevorgang aktiv" : (con ? "Fahrzeug verbunden" : "");
               id(wallbox_update).execute(0, T(id(ha_wb1_mode), B_wb1_mode), chg, kw, I(V(id(ha_wb1_phases), B_wb1_phases), 0), kwh, V(id(ha_wb1_solar), B_wb1_solar), I(V(id(ha_wb1_minutes), B_wb1_minutes), -1),
                                          con ? T(id(ha_wb1_vehicle), B_wb1_vehicle) : std::string(), std::string(st), V(id(ha_wb1_soc), B_wb1_soc), V(id(ha_wb1_range), B_wb1_range),
                                          V(id(ha_wb1_limit), B_wb1_limit), when(T(id(ha_wb1_plan), B_wb1_plan), true));
@@ -3582,7 +3609,9 @@ interval:
             {
               const bool con = id(ha_wb2_connected).state, chg = id(ha_wb2_charging).state;
               const float kw = V(id(ha_wb2_power), B_wb2_power), kwh = V(id(ha_wb2_energy), B_wb2_energy);
-              const char *st = chg ? "Ladevorgang aktiv" : (con ? "Fahrzeug verbunden" : "Kein Fahrzeug");
+              // Ohne Fahrzeug bleibt die Statuszeile leer, der Name heisst dann schon
+              // "Kein Fahrzeug" (wallbox_update)
+              const char *st = chg ? "Ladevorgang aktiv" : (con ? "Fahrzeug verbunden" : "");
               id(wallbox_update).execute(1, T(id(ha_wb2_mode), B_wb2_mode), chg, kw, I(V(id(ha_wb2_phases), B_wb2_phases), 0), kwh, V(id(ha_wb2_solar), B_wb2_solar), I(V(id(ha_wb2_minutes), B_wb2_minutes), -1),
                                          con ? T(id(ha_wb2_vehicle), B_wb2_vehicle) : std::string(), std::string(st), V(id(ha_wb2_soc), B_wb2_soc), V(id(ha_wb2_range), B_wb2_range),
                                          V(id(ha_wb2_limit), B_wb2_limit), when(T(id(ha_wb2_plan), B_wb2_plan), true));
@@ -3695,8 +3724,8 @@ interval:
               (ready || id(ha_inv1_energy).has_state() || id(ha_inv2_energy).has_state() || id(ha_inv3_energy).has_state() ||
                id(ha_inv4_energy).has_state() || id(ha_meter0_today).has_state() || id(ha_meter1_today).has_state() ||
                id(ha_meter2_today).has_state() || id(ha_meter3_today).has_state() || id(ha_meter4_today).has_state() ||
-               id(ha_pv_energy_today).has_state() || id(ha_home_energy_today).has_state() || id(ha_selfuse_energy_today).has_state() ||
-               id(ha_solcast_remaining).has_state())) {
+               id(ha_pv_energy_today).has_state() || id(ha_home_energy_today).has_state() || id(ha_total_energy_today).has_state() ||
+               id(ha_selfuse_energy_today).has_state() || id(ha_solcast_remaining).has_state())) {
             {
               // Volleinspeisung nur mit PV-Zaehler; ohne Hauszaehler ist der
               // Ueberschuss die Einspeisung am Hausanschluss ohne die Volleinspeisung [A]
@@ -3740,7 +3769,10 @@ interval:
                   hyb = sub(gen, full);
               }
               const float own = B_selfuse_energy_today ? V(id(ha_selfuse_energy_today), B_selfuse_energy_today) : pos(sub(hyb, surplus));
-              id(ov_totals).execute(gen, V(id(ha_home_energy_today), B_home_energy_today), feed, V(id(ha_meter0_today), B_meter0_today), full, surplus, V(id(ha_solcast_remaining), B_solcast_remaining));
+              // Autarkie mit dem ganzen Verbrauch (total_energy_today), ohne ihn mit
+              // home_energy_today (ov_totals)
+              id(ov_totals).execute(gen, V(id(ha_home_energy_today), B_home_energy_today), feed, V(id(ha_meter0_today), B_meter0_today), full, surplus, V(id(ha_solcast_remaining), B_solcast_remaining),
+                                    V(id(ha_total_energy_today), B_total_energy_today));
               id(money_update).execute(full, surplus, own, V(id(ha_meter0_today), B_meter0_today));
             }
           }
@@ -3759,10 +3791,11 @@ interval:
           // 28 Wetterwarnung
           if ((d & (1u << 28)) &&
               (ready || id(ha_warn_level).has_state() || id(ha_warn_text).has_state())) {
-            id(wx_warning).execute(I(V(id(ha_warn_level), B_warn_level), 0), T(id(ha_warn_text), B_warn_level));
+            id(wx_warning).execute(B_warn_level ? I(V(id(ha_warn_level), B_warn_level), -2) : -1, T(id(ha_warn_text), B_warn_level));
           }
   # Abrufe: 20 s nach dem Verbinden die Prognosen, 30 s danach die
-  # Statistik; dann Prognosen alle 30 min, Statistik zu jeder neuen Stunde
+  # Statistik; dann Prognosen alle 30 min und ab 00:01 eines neuen Tages
+  # (Solcast stellt um 0 Uhr um), Statistik zu jeder neuen Stunde
   # ab Minute 2 (Home Assistant schreibt die Stundenstatistik kurz nach der
   # vollen Stunde), Tageswerte aus der Statistik alle 5 min ab Minute 1.
   # Beim Trennen beginnt alles von vorn.
@@ -3771,7 +3804,7 @@ interval:
       - lambda: |-
           static bool war = false;
           static uint32_t seit = 0, fc_zuletzt = 0;
-          static int stat_schluessel = -1, heute_schluessel = -1;
+          static int stat_schluessel = -1, heute_schluessel = -1, fc_tag = -1;
           const bool ist = api::global_api_server != nullptr && api::global_api_server->is_connected_with_state_subscription();
           if (ist != war) {
             war = ist;
@@ -3788,6 +3821,14 @@ interval:
           }
           if (!ist || millis() - seit < 20000)
             return;
+          // Neuer Tag: Prognosen neu ab 00:01; bis dahin zaehlen die
+          // Halbstunden von gestern nicht (fc_sys_day, fc_roof_day, fc_rest)
+          const ESPTime t = id(dash_time).now();
+          if (t.is_valid() && (t.hour > 0 || t.minute >= 1) && t.day_of_year != fc_tag) {
+            if (fc_tag >= 0)
+              fc_zuletzt = 0;
+            fc_tag = t.day_of_year;
+          }
           if (fc_zuletzt == 0 || millis() - fc_zuletzt >= 30u * 60u * 1000u) {
             fc_zuletzt = millis() | 1u;
             id(ha_nochmal)[0] = 0;
@@ -3813,7 +3854,6 @@ interval:
           }
           if (millis() - seit < 30000)
             return;
-          const ESPTime t = id(dash_time).now();
           const int schluessel = t.is_valid() ? t.day_of_year * 24 + t.hour : 0;
           if (schluessel != stat_schluessel && (stat_schluessel < 0 || !t.is_valid() || t.minute >= 2)) {
             stat_schluessel = schluessel;
