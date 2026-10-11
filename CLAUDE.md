@@ -10,6 +10,9 @@ bis `docs/06`.
   ausschnittsweise, auch nicht zur Prüfung, ob ein Schlüssel existiert. Bei
   Suchen ausschließen (`grep --exclude=secrets.yaml`).
 - Werte nur über `!secret <name>`, und das steht **nur** in `pv-dashboard.yaml`.
+  Einzige Ausnahme (Freigabe des Nutzers am 11.10.2026): `pv-dashboard-sim-ha.yaml`
+  mit genau einem `!secret`, dem API-Schlüssel `sim_encryption_key` des
+  Simulators mit echtem Home Assistant.
 - `.pv-dashboard_anlage.yaml` hält die eigene Anlage (Beschriftungen, Tarife)
   und bleibt lokal (`.gitignore`). Zum Messen von Breiten darf sie gelesen
   werden; ihre Werte aber nie in Repo-Dateien, Commits oder Doku übernehmen.
@@ -80,7 +83,8 @@ Kastenhöhen ausrechnen statt schätzen.
 `config pv-dashboard.yaml` ist **erlaubt**, die einzige lokale Kontrolle der
 geräteeigenen Pakete, nie mit `--show-secrets`; `run`/`compile` darauf
 **nicht**, das macht der Device Builder. Lokal laufen nur `-sim`
-(**blockiert**), `-shots` und `-demo*`.
+(**blockiert**), `-sim-ha` (**blockiert**, holt echte Werte aus Home
+Assistant, `docs/03`), `-shots` und `-demo*`.
 
 ## Packages kommen aus dem Repo
 
@@ -117,6 +121,3 @@ normales Deutsch mit Umlauten.
   es verlangt (`docs/06`). Alle Detailseiten sind gebaut (PV & Prognose
   23.09.2026, Wallboxen, Wärmepumpe und Haus 24.09.2026, Netz, Statistik,
   Prognose und Wetter 25.09.2026); ihre Werte kommen über je ein Skript, bis dahin stehen Striche.
-- Die sechs `docs/`-Dateien liegen als Kopie im Claude-Projekt; nach einer
-  Änderung sagen, welche neu hochzuladen ist (Anleitung im Ordner
-  `~/esphome-claude-projekt`).

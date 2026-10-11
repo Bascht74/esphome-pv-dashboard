@@ -1,0 +1,40 @@
+##############################################################################
+# Simulator mit echtem Home Assistant
+#
+# Dieselbe Oberflaeche wie pv-dashboard-sim.yaml, dazu der Datenweg
+# (.pv-dashboard_ha.yaml) und eine verschluesselte API. Home Assistant meldet
+# sich am Rechner an wie am Panel und liefert die echten Werte.
+#
+#   ~/.venvs/esphome-beta/bin/esphome run pv-dashboard-sim-ha.yaml
+#
+# Voraussetzungen (docs/03, "Simulator mit echtem Home Assistant"):
+# - .pv-dashboard_anlage.yaml liegt neben dieser Datei: eine Kopie der
+#   Anlagedatei aus dem ESPHome-Ordner von Home Assistant. Sie bleibt lokal
+#   (.gitignore).
+# - secrets.yaml enthaelt sim_encryption_key, einen eigenen Schluessel, nicht
+#   den des Panels.
+# - In Home Assistant ist das Geraet pv-dashboard-sim-ha mit diesem Schluessel
+#   angelegt, und "Allow the device to perform Home Assistant actions" ist an.
+#
+# Ausnahme von der Regel "!secret nur in pv-dashboard.yaml" (Freigabe des
+# Nutzers am 11.10.2026): Hier steht genau ein !secret, der API-Schluessel.
+#
+# Was der Simulator auch so NICHT zeigt: die Bildrate auf dem P4 und alles
+# Hardwarenahe (Backlight, BLE). Zum Steuern (Wallbox-Modus) schickt er
+# dieselben Aktionen wie das Panel -- er steuert also wirklich.
+##############################################################################
+
+substitutions:
+  <<: !include .pv-dashboard_anlage.yaml
+
+packages:
+  sim: !include pv-dashboard-sim.yaml
+  ha: !include .pv-dashboard_ha.yaml
+
+esphome:
+  name: pv-dashboard-sim-ha
+  friendly_name: PV-Dashboard Simulator HA
+
+api:
+  encryption:
+    key: !secret sim_encryption_key

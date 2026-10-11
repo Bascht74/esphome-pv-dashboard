@@ -774,6 +774,45 @@ Beispieldaten für Meldungen, Speicher, PV-Werte, Wallboxen, Wärmepumpe, Haus, 
 
 **Laufzeit.** `-sim` und `-shots` sind **getrennte Bauziele** unter `.esphome/build/`. Der erste Lauf eines Ziels ist ein Vollbuild über mehrere Minuten und holt die Schriften über `gfonts://` aus dem Netz, die Symbolschrift als Web-Font von Material Design Icons, seit 25.09.2026 fest auf das Release v7.4.47 statt `master` (Substitution `mdi_font_url` in `.pv-dashboard_utility.yaml`, Dokument 04); spätere Läufe nutzen den Cache. Ein kurzes Kommando-Zeitlimit bricht den ersten Lauf ab — kein Fehler der Konfiguration.
 
+### Simulator mit echtem Home Assistant (seit 11.10.2026)
+
+`pv-dashboard-sim-ha.yaml` ist der Simulator plus Datenweg (`.pv-dashboard_ha.yaml`)
+plus eine verschlüsselte API. Home Assistant meldet sich am Rechner an wie am
+Panel und liefert die echten Werte, der Simulator zeigt sie im Fenster:
+
+```
+~/.venvs/esphome-beta/bin/esphome run pv-dashboard-sim-ha.yaml
+```
+
+Voraussetzungen, einmalig:
+
+- **Anlagedatei:** eine Kopie von `.pv-dashboard_anlage.yaml` aus dem
+  ESPHome-Ordner von Home Assistant neben die Datei legen. Sie bleibt lokal
+  (`.gitignore`).
+- **Schlüssel:** `sim_encryption_key` in `secrets.yaml`, ein eigener Schlüssel,
+  nicht der des Panels (Vorlage `secrets.yaml.example`). Es ist die einzige
+  Ausnahme von der Regel „`!secret` nur in `pv-dashboard.yaml`“ (`CLAUDE.md`).
+- **Home Assistant:** das Gerät `pv-dashboard-sim-ha` über die
+  ESPHome-Integration hinzufügen (mDNS findet es, sonst die Adresse des Rechners,
+  Port 6053) und dabei den Schlüssel eingeben. In den Optionen des Geräts
+  **„Allow the device to perform Home Assistant actions“** einschalten, sonst
+  bleiben Prognose, Stundenwerte und Statistik auf Strichen.
+- **macOS:** Beim ersten Start fragt die Firewall, ob `program` eingehende
+  Verbindungen annehmen darf. Erlauben, sonst erreicht Home Assistant den
+  Simulator nicht.
+
+Gut zu wissen:
+
+- Solange der Simulator läuft, schickt Home Assistant die Werte an zwei Geräte.
+  Danach steht `pv-dashboard-sim-ha` in Home Assistant als nicht verfügbar; das
+  Gerät kann dort bleiben oder gelöscht werden.
+- Der Simulator **steuert wirklich**: Ein Tipp auf den Modus einer Wallbox
+  schickt dieselbe Aktion wie das Panel.
+- Er startet wie der Simulator mit allen Geräten eingeblendet und blendet aus,
+  was laut Home Assistant fehlt. Die Demo-Leistungen der Kugeln enden, sobald
+  echte Leistungen kommen.
+- Bildrate und alles Hardwarenahe zeigt auch er nicht.
+
 ### Vom BMP zum ansehbaren Bild
 
 Die **einzige ausführliche Quelle** dafür; README, CLAUDE.md, Dokument 04 und
