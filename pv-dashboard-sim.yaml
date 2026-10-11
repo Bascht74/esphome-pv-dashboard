@@ -68,7 +68,8 @@ time:
       - then:
           - script.execute: update_clock
     on_time:
-      - seconds: 0
+      # Uhr mit Sekunden, wie am Geraet
+      - seconds: /1
         then:
           - script.execute: update_clock
       # Zur vollen Stunde die Tagesreihe fortschreiben

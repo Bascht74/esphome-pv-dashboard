@@ -36,6 +36,15 @@
 #   fc_redraw      Kacheln anordnen und zeichnen (ruft fc_text)
 #   fc_text        nur die Texte (Kopfzeile, Kacheltitel)
 #
+# Rest heute (Entscheidung des Nutzers, 11.10.2026): EINE Rechnung fuer
+# alle Stellen, fc_rest -- P50 der Halbstunden ab jetzt, die laufende
+# anteilig. Seite Prognose und Seite PV ueber alle Daecher, Statusleiste
+# und Haus ueber die Daecher des Hausnetz-Kreises (fc_rest_house), sonst
+# die Solcast-Entitaet. Alle Stellen schreibt fc_redraw nach neuen Daten
+# neu, dazu das interval unten bei jedem Minutenwechsel. Halbstunden, die
+# nicht von heute sind, zaehlen nicht (fc_sys_day, fc_roof_day); der Abruf
+# holt ab 00:01 die neuen.
+#
 # Flaeche x 4..1276, y 84..736:
 #   Kopfzeile y 84..128: Umschalter x 4, 220 x 44 (Pille wie Seite
 #             Wallboxen, Rahmen 1, zwei Teile je 108 x 38 bei x 2 / 110,
@@ -108,6 +117,83 @@ globals:
     type: std::array<float, 8>
     restore_value: false
     initial_value: '[] { std::array<float, 8> a; a.fill(NAN); return a; }()'
+  # Halbstunden P50 heute der ganzen Anlage (kW, 48 Plaetze ab 00:00) aus
+  # der Solcast-Gesamtprognose, mit jedem Abruf gesetzt
+  # (.pv-dashboard_ha.yaml); ohne Prognose je Dach rechnet die Seite PV
+  # ihren Rest daraus
+  - id: fc_sys_p50
+    type: std::array<float, 48>
+    restore_value: false
+    initial_value: '[] { std::array<float, 48> a; a.fill(NAN); return a; }()'
+  # Tag der Halbstunden laut Home Assistant (Jahr * 1000 + Tag im Jahr, wie
+  # curve_day): fc_sys_day fuer fc_sys_p50, fc_roof_day fuer fc_r_p50. Jede
+  # erfolgreiche Antwort stempelt nur ihre eigene Reihe
+  # (.pv-dashboard_ha.yaml); -1 = noch keine
+  - id: fc_sys_day
+    type: int
+    restore_value: false
+    initial_value: '-1'
+  - id: fc_roof_day
+    type: int
+    restore_value: false
+    initial_value: '-1'
+  # Rest heute in kWh ueber die Daecher der Maske (Bit k = Flaeche k + 1),
+  # soweit sie eine Prognose haben: P50 der Halbstunden ab jetzt, die
+  # laufende anteilig. Maske 0xFF ohne jede Prognose je Dach: fc_sys_p50.
+  # Uhrzeit wie fc_text (fc_clock, sonst dash_time). NAN ohne Uhrzeit, ohne
+  # Wert oder wenn die Halbstunden der Reihe nicht von heute sind (nach 0
+  # Uhr bis zum Abruf ab 00:01, oder ihr Abruf scheitert); der
+  # Screenshot-Lauf mit fc_clock prueft den Tag nicht.
+  - id: fc_rest
+    type: std::function<float(uint32_t)>
+    restore_value: false
+    initial_value: |-
+      [](uint32_t mask) -> float {
+        int m = id(fc_clock), heute = -1;
+        if (m < 0) {
+          const ESPTime t = id(dash_time).now();
+          if (!t.is_valid())
+            return NAN;
+          m = t.hour * 60 + t.minute;
+          heute = t.year * 1000 + t.day_of_year;
+        }
+        auto frisch = [heute](int tag) { return heute < 0 || tag == heute; };
+        float r = NAN;
+        auto sum = [&r, m](const std::array<float, 48> &p) {
+          for (int i = m / 30; i < 48; i++)
+            if (std::isfinite(p[i]))
+              r = (std::isfinite(r) ? r : 0.0f) + p[i] * 0.5f * std::min(1.0f, ((i + 1) * 30 - m) / 30.0f);
+        };
+        const uint32_t on = id(fc_roof_on);
+        if (on == 0 && mask == 0xFFu && frisch(id(fc_sys_day)))
+          sum(id(fc_sys_p50));
+        if (frisch(id(fc_roof_day)))
+          for (int k = 0; k < 8; k++)
+            if (((on & mask) >> k) & 1u)
+              sum(id(fc_r_p50)[k]);
+        return r;
+      }
+  # Rest der Daecher des Hausnetz-Kreises (Flaechen 3..8; 1 und 2 haengen
+  # am Voll-WR, docs/01) fuer Statusleiste und Haus. Nur wenn jede Flaeche
+  # dieses Kreises, die vorhanden ist (dev_present) oder einen Tageswert hat
+  # (fc_roof_on), auch Halbstunden hat und mindestens eine da ist -- sonst
+  # NAN, und der Aufrufer nimmt die Solcast-Entitaet (ha_solcast_remaining).
+  - id: fc_rest_house
+    type: std::function<float()>
+    restore_value: false
+    initial_value: |-
+      []() -> float {
+        const uint32_t HAUS = 0xFCu;
+        const uint32_t on = id(fc_roof_on);
+        uint32_t hat = 0;
+        for (int k = 2; k < 8; k++)
+          if (((on >> k) & 1u) && std::any_of(id(fc_r_p50)[k].begin(), id(fc_r_p50)[k].end(),
+                                              [](float v) { return std::isfinite(v); }))
+            hat |= 1u << k;
+        if (hat == 0 || ((id(dev_present) | on) & HAUS & ~hat) != 0)
+          return NAN;
+        return id(fc_rest)(hat);
+      }
   # Welche Flaeche (0..7) in Kachel 0..5 steht, -1 = keine (fc_redraw)
   - id: fc_tile_roof
     type: std::array<int, 6>
@@ -242,6 +328,8 @@ script:
   # ---------------------------------------------------------------------
   # Kacheln anordnen und zeichnen. Ruft das interval unten jede Minute
   # (Marke jetzt, Rest), sonst nach neuen Daten bzw. dem Umschalter.
+  # Danach den Rest der anderen Stellen (fc_rest): Seite PV, Statusleiste,
+  # Haus.
   # ---------------------------------------------------------------------
   - id: fc_redraw
     then:
@@ -494,11 +582,15 @@ script:
             }
           }
       - script.execute: fc_text
+      - script.execute: pv_rest
+      - script.execute: ov_status
+      - script.execute: house_rest
 
-  # Nur die Texte: Kopfzeile (Summen ueber die gezeigten Daecher) und die
-  # Werte in den Kacheltiteln. Rest = P50 der Halbstunden ab jetzt (die
-  # laufende anteilig); bisher = Ertrag heute, ohne Wert die Summe der
-  # Stundenbalken.
+  # Nur die Texte: Kopfzeile (Summen ueber alle Daecher mit Prognose, auch
+  # ueber die sechste Kachel hinaus -- derselbe Rest wie die Seite PV) und
+  # die Werte in den Kacheltiteln. Rest = fc_rest je Dach (P50 der
+  # Halbstunden ab jetzt, die laufende anteilig); bisher = Ertrag heute,
+  # ohne Wert die Summe der Stundenbalken.
   - id: fc_text
     then:
       - lambda: |-
@@ -520,9 +612,8 @@ script:
           };
           float done_s = NAN, prog_s = NAN, rest_s = NAN, now_s = NAN, d1_s = NAN, six_s = NAN, six10_s = NAN;
           int n = 0;
-          for (int t = 0; t < 6; t++) {
-            const int k = id(fc_tile_roof)[t];
-            if (k < 0)
+          for (int k = 0; k < 8; k++) {
+            if (!((id(fc_roof_on) >> k) & 1u))
               continue;
             n++;
             float done = id(fc_r_done)[k];
@@ -539,14 +630,7 @@ script:
               for (int i = 0; i < 48; i++)
                 add(prog, P50[k][i] * 0.5f);
             }
-            float rest = NAN;
-            if (m >= 0) {
-              for (int i = 0; i < 48; i++) {
-                const int ende = (i + 1) * 30;
-                if (ende > m)
-                  add(rest, P50[k][i] * 0.5f * std::min(1.0f, (ende - m) / 30.0f));
-              }
-            }
+            const float rest = id(fc_rest)(1u << k);
             float six = NAN, six10 = NAN;
             for (int d = 1; d < 7; d++) {
               add(six, D50[k][d]);
@@ -561,7 +645,9 @@ script:
             add(six10_s, six10);
             const std::string v = vor ? "6 Tage " + num(six, "%.1f", "--,-") + " kWh"
                                       : num(done, "%.1f", "--,-") + " / " + num(prog, "%.1f", "--,-") + " kWh";
-            id(lbl_set)(lv_obj_get_child(T[t], 1), v.c_str());
+            for (int t = 0; t < 6; t++)
+              if (id(fc_tile_roof)[t] == k)
+                id(lbl_set)(lv_obj_get_child(T[t], 1), v.c_str());
           }
           std::string s;
           if (n == 0)
@@ -578,6 +664,28 @@ interval:
   - interval: 60s
     then:
       - script.execute: fc_redraw
+  # Rest heute rechnet minutengenau (fc_rest). Beim Minutenwechsel alle
+  # Stellen zugleich neu -- Kopfzeile, Seite PV, Statusleiste, Haus --,
+  # sonst stuende eine davon bis zum naechsten fc_redraw auf der Minute
+  # davor. Waehrend eines Updates nicht (ota_running, wie die Uhr).
+  - interval: 1s
+    then:
+      - lambda: |-
+          static int alt = -1;
+          if (id(ota_running))
+            return;
+          int m = id(fc_clock);
+          if (m < 0) {
+            const ESPTime t = id(dash_time).now();
+            m = t.is_valid() ? t.hour * 60 + t.minute : -1;
+          }
+          if (m == alt)
+            return;
+          alt = m;
+          id(fc_text).execute();
+          id(pv_rest).execute();
+          id(ov_status).execute();
+          id(house_rest).execute();
 
 lvgl:
   pages:

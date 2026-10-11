@@ -6,14 +6,19 @@
 # Kreis Hausnetz. Unten der Tagesverlauf Ist gegen Prognose in gross, links
 # daneben vier Kennzahlen daraus.
 #
-# Zwei Skripte gehoeren dazu:
+# Vier Skripte gehoeren dazu:
+#   pv_status       Zustand eines Wechselrichters (Stoerung, Fehlertext,
+#                   Temperatur).
 #   pv_update       fuellt Wechselrichter- und Flaechenkaesten. Kuenftige
 #                   Sensoren (Modbus der Wechselrichter) rufen nur dieses
 #                   Skript auf; bis dahin stehen dort Striche.
 #   pv_redraw_curve zeichnet Balken und Prognoselinie aus day_curve und
-#                   forecast_curve und rechnet die vier Kennzahlen. Es haengt
-#                   wie redraw_curve der Uebersicht an on_value beider
-#                   Reihen (.pv-dashboard_ui.yaml) und schreibt keine Reihe.
+#                   forecast_curve und rechnet drei Kennzahlen; die
+#                   Restprognose schreibt pv_rest. Es haengt wie
+#                   redraw_curve der Uebersicht an on_value beider Reihen
+#                   (.pv-dashboard_ui.yaml) und schreibt keine Reihe.
+#   pv_rest         Kennzahl Restprognose: fc_rest ueber alle Daecher, wie
+#                   die Seite Prognose (.pv-dashboard_page_forecast.yaml).
 #
 # Flaeche x 4..1276, y 84..736 (je 8 Abstand zu Meldungszeile und
 # Menueleiste). Zwei Spalten wie die Kreise: links x 4, 322 breit (innen
@@ -162,10 +167,10 @@ script:
   # dritten Mal da (record_hour, redraw_curve) -- mit Absicht gleich, jede
   # Stelle baut fuer sich.
   # Kennzahlen: "abgeschlossen" sind die Plaetze vor der laufenden Stunde
-  # (Stunde - 6). Restprognose = Prognose ab der laufenden Stunde bis
-  # 22 Uhr. Ohne gueltige Uhrzeit bleiben diese beiden auf Strichen. Neu
+  # (Stunde - 6). Ohne gueltige Uhrzeit bleibt der Anteil auf Strichen. Neu
   # gerechnet wird mit jeder Reihe, also spaetestens um HH:00:05, wenn
-  # record_hour die abgelaufene Stunde schreibt.
+  # record_hour die abgelaufene Stunde schreibt. Die Restprognose schreibt
+  # pv_rest (unten).
   # ---------------------------------------------------------------------
   - id: pv_redraw_curve
     then:
@@ -223,27 +228,35 @@ script:
           id(lbl_set)(id(pv_kpi_ist), fmt(sum_ist, "%.1f").c_str());
           id(lbl_set)(id(pv_kpi_pro), fmt(sum_pro, "%.1f").c_str());
 
+          id(pv_rest).execute();
           auto t = id(dash_time).now();
           if (!t.is_valid()) {
-            id(lbl_set)(id(pv_kpi_rest), "--,-");
             id(lbl_set)(id(pv_kpi_ratio), "--");
             return;
           }
           const int cur = std::clamp((int) t.hour - 6, 0, 16);   // erster offener Platz
-          float rest = 0.0f, done_ist = 0.0f, done_pro = 0.0f;
-          for (int i = 0; i < 16; i++) {
-            if (i < cur) {
-              done_ist += ist[i];
-              done_pro += pro[i];
-            } else {
-              rest += pro[i];
-            }
+          float done_ist = 0.0f, done_pro = 0.0f;
+          for (int i = 0; i < cur; i++) {
+            done_ist += ist[i];
+            done_pro += pro[i];
           }
-          id(lbl_set)(id(pv_kpi_rest), fmt(rest, "%.1f").c_str());
           // Unter 0,1 kWh Prognose (vor 7 Uhr, trueber Morgen) waere der
           // Anteil nur Rauschen
           std::string ratio = done_pro >= 0.1f ? fmt(done_ist / done_pro * 100.0f, "%.0f") : std::string("--");
           id(lbl_set)(id(pv_kpi_ratio), ratio.c_str());
+
+  # ---------------------------------------------------------------------
+  # Restprognose: dieselbe Rechnung wie die Seite Prognose (fc_rest, P50
+  # der Halbstunden ab jetzt, die laufende anteilig) ueber alle Daecher --
+  # beide Seiten zeigen dieselbe Zahl (Entscheidung des Nutzers,
+  # 11.10.2026). Ohne Prognose je Dach aus den Halbstunden der ganzen
+  # Anlage (fc_sys_p50). Rufen pv_redraw_curve, fc_redraw und der
+  # Minutenwechsel (interval der Seite Prognose).
+  # ---------------------------------------------------------------------
+  - id: pv_rest
+    then:
+      - lambda: |-
+          id(lbl_set)(id(pv_kpi_rest), id(fmt_num)(id(fc_rest)(0xFFu), "%.1f", "--,-").c_str());
 
 lvgl:
   pages:
@@ -395,7 +408,7 @@ lvgl:
               - label: { x: 0, y: 156, width: 300, height: 17, long_mode: DOT, styles: st_sub, text: "kWh, 06 – 22 Uhr" }
               - label: { x: 0, y: 188, width: 300, height: 17, long_mode: DOT, styles: st_label, text: "RESTPROGNOSE" }
               - label: { id: pv_kpi_rest, x: 0, y: 209, width: 300, height: 39, long_mode: DOT, text: "--,-", text_font: f_val_xl, text_color: $col_ink }
-              - label: { x: 0, y: 250, width: 300, height: 17, long_mode: DOT, styles: st_sub, text: "kWh ab der laufenden Stunde" }
+              - label: { x: 0, y: 250, width: 300, height: 17, long_mode: DOT, styles: st_sub, text: "kWh ab jetzt · alle Dächer" }
               - label: { x: 0, y: 282, width: 300, height: 17, long_mode: DOT, styles: st_label, text: "IST ZU PROGNOSE" }
               - label: { id: pv_kpi_ratio, x: 0, y: 303, width: 300, height: 39, long_mode: DOT, text: "--", text_font: f_val_xl, text_color: $col_ink }
               - label: { x: 0, y: 344, width: 300, height: 17, long_mode: DOT, styles: st_sub, text: "% der abgeschlossenen Stunden" }

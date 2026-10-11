@@ -43,7 +43,8 @@
 #             sieben Spalten je 178,6: Tag 28..50, Bild 54..98 (f_wx_l),
 #             Lage 102..119, Hoechst 128..158 (f_val_l), Tiefst 160..185
 #             (f_val_m), Linie 196, drei Zeilen 206..226 / 232..252 /
-#             258..278
+#             258..278; ohne Sonnenscheindauer zwei (Wind 232..252,
+#             Trennlinien 28..252, wx_day)
 ##############################################################################
 
 globals:
@@ -92,6 +93,12 @@ globals:
   - id: wx_warning_last
     type: std::string
     restore_value: false
+  # Tage mit Sonnenscheindauer (Bit je Tag, wx_day). Ohne einen einzigen
+  # faellt die Zeile Sonne weg.
+  - id: wx_sun_days
+    type: int
+    restore_value: false
+    initial_value: '0'
 
 script:
   # ---------------------------------------------------------------------
@@ -194,6 +201,11 @@ script:
   #   cond   Lage                    tmax, tmin  in °C
   #   rain   Niederschlag in mm      prob   Wahrscheinlichkeit in %
   #   sun_h  Sonnenscheindauer in h  wind   Wind in km/h
+  # Die Sonnenscheindauer liefert die DWD-Integration nur mit ihrer Option
+  # fuer Zusatzwerte. Hat kein Tag einen Wert (wx_sun_days), faellt die
+  # Zeile Sonne in allen Spalten weg, Wind rueckt auf ihren Platz (y 258 ->
+  # 232) und die Trennlinien enden mit ihm (Hoehe 250 -> 224). Bis zum
+  # ersten Aufruf stehen alle drei Zeilen mit Strichen da.
   # ---------------------------------------------------------------------
   - id: wx_day
     parameters:
@@ -229,16 +241,38 @@ script:
           id(lbl_set)(r1[day], ("Regen " + num(rain, "%.1f", "-,-") + " mm · " + num(prob, "%.0f", "--") + " %").c_str());
           id(lbl_set)(r2[day], ("Sonne " + num(sun_h, "%.1f", "-,-") + " h").c_str());
           id(lbl_set)(r3[day], ("Wind " + num(wind, "%.0f", "--") + " km/h").c_str());
+          // Zeile Sonne nur, wenn wenigstens ein Tag einen Wert hat
+          if (std::isfinite(sun_h))
+            id(wx_sun_days) |= 1 << day;
+          else
+            id(wx_sun_days) &= ~(1 << day);
+          const bool sonne = id(wx_sun_days) != 0;
+          if (lv_obj_has_flag(r2[0], LV_OBJ_FLAG_HIDDEN) != sonne)
+            return;  // steht schon so
+          lv_obj_t *const sep[6] = {id(wx_dl_1), id(wx_dl_2), id(wx_dl_3), id(wx_dl_4), id(wx_dl_5), id(wx_dl_6)};
+          for (int k = 0; k < 7; k++) {
+            if (sonne)
+              lv_obj_clear_flag(r2[k], LV_OBJ_FLAG_HIDDEN);
+            else
+              lv_obj_add_flag(r2[k], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_y(r3[k], sonne ? 258 : 232);
+          }
+          for (lv_obj_t *l : sep)
+            lv_obj_set_height(l, sonne ? 250 : 224);
 
   # ---------------------------------------------------------------------
   # DWD-Warnung (Integration "DWD Weather Warnings" in Home Assistant):
   #   level  0 = keine, 1 = Wetterwarnung, 2 = markant, 3 = Unwetter,
-  #          4 = extremes Unwetter (Stufen des DWD)
+  #          4 = extremes Unwetter (Stufen des DWD); -1 = keine Quelle
+  #          eingerichtet (ha_warn_level nicht belegt), < -1 = Quelle ohne
+  #          Wert (in Home Assistant nicht verfuegbar oder nicht vorhanden)
   #   text   Kurztext, z. B. "Sturmboeen bis Fr 18:00"
   # Ab Stufe 1 steht der Text oben rechts in der Kachel Tage; eine neue
   # Warnung geht einmal in die Meldungen (Stufe 1..2 Warnung, ab 3 Stoerung).
-  # Aufgehoben (Stufe 0) oder durch eine neue ersetzt, verschwindet sie dort
-  # wieder (alert_clear).
+  # Aufgehoben (Stufe 0), ohne Quelle oder durch eine neue ersetzt,
+  # verschwindet sie dort wieder (alert_clear). "Keine Warnung des DWD"
+  # steht nur, wenn eine Quelle Stufe 0 meldet (11.10.2026); bis zum ersten
+  # Aufruf bleibt die Stelle leer.
   # ---------------------------------------------------------------------
   - id: wx_warning
     parameters:
@@ -247,7 +281,9 @@ script:
     then:
       - lambda: |-
           if (level <= 0) {
-            id(lbl_set)(id(wx_warn), "Keine Warnung des DWD");
+            id(lbl_set)(id(wx_warn), level == 0    ? "Keine Warnung des DWD"
+                                     : level == -1 ? "DWD-Warnungen nicht eingerichtet"
+                                                   : "DWD-Warnungen nicht verfügbar");
             lv_obj_set_style_text_color(id(wx_warn), lv_color_hex($col_ink3), 0);
             id(wx_warning_last).clear();
             id(alert_clear).execute(std::string("Wetter"), std::string(""));
@@ -456,7 +492,7 @@ lvgl:
             height: 344
             widgets:
               - label: { x: 0, y: 0, width: 400, height: 17, long_mode: DOT, styles: st_label, text: "NÄCHSTE TAGE" }
-              - label: { id: wx_warn, x: 400, y: 0, width: 850, height: 17, long_mode: DOT, text_align: RIGHT, text: "Keine Warnung des DWD", text_font: f_label, text_color: $col_ink3 }
+              - label: { id: wx_warn, x: 400, y: 0, width: 850, height: 17, long_mode: DOT, text_align: RIGHT, text: "", text_font: f_label, text_color: $col_ink3 }
               - obj: { x: 0, y: 196, width: 1250, height: 1, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
               - label: { id: wx_d_0, x: 4, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
               - label: { id: wx_di_0, x: 4, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
@@ -474,7 +510,7 @@ lvgl:
               - label: { id: wx_dr_1, x: 183, y: 206, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Regen -,- mm · -- %", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_ds_1, x: 183, y: 232, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Sonne -,- h", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_dw_1, x: 183, y: 258, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Wind -- km/h", text_font: f_text_s, text_color: $col_ink2 }
-              - obj: { x: 179, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wx_dl_1, x: 179, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
               - label: { id: wx_d_2, x: 361, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
               - label: { id: wx_di_2, x: 361, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
               - label: { id: wx_dc_2, x: 361, y: 102, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "--", styles: st_unit }
@@ -483,7 +519,7 @@ lvgl:
               - label: { id: wx_dr_2, x: 361, y: 206, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Regen -,- mm · -- %", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_ds_2, x: 361, y: 232, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Sonne -,- h", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_dw_2, x: 361, y: 258, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Wind -- km/h", text_font: f_text_s, text_color: $col_ink2 }
-              - obj: { x: 357, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wx_dl_2, x: 357, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
               - label: { id: wx_d_3, x: 540, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
               - label: { id: wx_di_3, x: 540, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
               - label: { id: wx_dc_3, x: 540, y: 102, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "--", styles: st_unit }
@@ -492,7 +528,7 @@ lvgl:
               - label: { id: wx_dr_3, x: 540, y: 206, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Regen -,- mm · -- %", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_ds_3, x: 540, y: 232, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Sonne -,- h", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_dw_3, x: 540, y: 258, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Wind -- km/h", text_font: f_text_s, text_color: $col_ink2 }
-              - obj: { x: 536, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wx_dl_3, x: 536, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
               - label: { id: wx_d_4, x: 718, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
               - label: { id: wx_di_4, x: 718, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
               - label: { id: wx_dc_4, x: 718, y: 102, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "--", styles: st_unit }
@@ -501,7 +537,7 @@ lvgl:
               - label: { id: wx_dr_4, x: 718, y: 206, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Regen -,- mm · -- %", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_ds_4, x: 718, y: 232, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Sonne -,- h", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_dw_4, x: 718, y: 258, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Wind -- km/h", text_font: f_text_s, text_color: $col_ink2 }
-              - obj: { x: 714, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wx_dl_4, x: 714, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
               - label: { id: wx_d_5, x: 897, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
               - label: { id: wx_di_5, x: 897, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
               - label: { id: wx_dc_5, x: 897, y: 102, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "--", styles: st_unit }
@@ -510,7 +546,7 @@ lvgl:
               - label: { id: wx_dr_5, x: 897, y: 206, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Regen -,- mm · -- %", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_ds_5, x: 897, y: 232, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Sonne -,- h", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_dw_5, x: 897, y: 258, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Wind -- km/h", text_font: f_text_s, text_color: $col_ink2 }
-              - obj: { x: 893, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wx_dl_5, x: 893, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
               - label: { id: wx_d_6, x: 1075, y: 28, width: 171, height: 22, long_mode: DOT, text_align: CENTER, text: "--", text_font: f_text, text_color: $col_ink }
               - label: { id: wx_di_6, x: 1075, y: 54, width: 171, height: 44, long_mode: CLIP, text_align: CENTER, text: "", text_font: f_wx_l, text_color: $col_ink3 }
               - label: { id: wx_dc_6, x: 1075, y: 102, width: 171, height: 17, long_mode: DOT, text_align: CENTER, text: "--", styles: st_unit }
@@ -519,4 +555,4 @@ lvgl:
               - label: { id: wx_dr_6, x: 1075, y: 206, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Regen -,- mm · -- %", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_ds_6, x: 1075, y: 232, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Sonne -,- h", text_font: f_text_s, text_color: $col_ink2 }
               - label: { id: wx_dw_6, x: 1075, y: 258, width: 171, height: 20, long_mode: DOT, text_align: CENTER, text: "Wind -- km/h", text_font: f_text_s, text_color: $col_ink2 }
-              - obj: { x: 1071, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }
+              - obj: { id: wx_dl_6, x: 1071, y: 28, width: 1, height: 250, radius: 0, bg_color: $col_line, bg_opa: COVER, border_width: 0, pad_all: 0, clickable: false, scrollable: false }

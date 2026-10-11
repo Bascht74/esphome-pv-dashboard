@@ -431,7 +431,8 @@ class PrognoseJeDach(unittest.TestCase):
         attrs[("sensor.solcast_nord_heute", "estimate10")] = 4.2319
         r = ha_jinja(x["t"], states=states, attrs=attrs)
         # Flaeche 7: belegt, aber ohne Zustand -> Schluessel da, Tag 1 leer
-        self.assertEqual(sorted(r), ["a1", "a6", "a7", "b1", "b6", "b7", "d1", "d6", "d7", "e1", "e6", "e7"])
+        self.assertEqual(sorted(r), ["a1", "a6", "a7", "b1", "b6", "b7", "d1", "d6", "d7", "e1", "e6", "e7", "t"])
+        self.assertEqual(r["t"], "2026283")         # Tag laut HA fuer fc_roof_day: 10.10.2026
         a = r["a1"].split(",")
         self.assertEqual(len(a), 48)
         self.assertEqual(a[26], "1.45")            # 1.4475 mit drei Stellen
@@ -446,6 +447,16 @@ class PrognoseJeDach(unittest.TestCase):
         self.assertEqual(r["d7"], ",,,,,,")
         # Groesse: sechs Daecher mit vollen Halbstunden bleiben klein
         self.assertLess(len(__import__("json").dumps(r)) * 6 / 3, 4000)
+
+    def test_vorlage_solcast_tag(self):
+        """Halbstunden der ganzen Anlage: nur heute, dazu der Tag laut HA
+        (fc_sys_day), damit fc_rest Halbstunden von gestern erkennt."""
+        r = ha_jinja(hb.jinja_solcast("liste"), liste=self._echte_halbstunden(-1) + self._echte_halbstunden())
+        self.assertEqual(sorted(r), ["a", "t"])
+        self.assertEqual(r["t"], "2026283")
+        a = r["a"].split(",")
+        self.assertEqual(len(a), 48)
+        self.assertEqual(a[26], "1.45")
 
     def test_heute_stundenbalken(self):
         subs = {f"ha_{n}": e["ent"] for n, e in hb.NAMEN.items() if not e["attr"]}

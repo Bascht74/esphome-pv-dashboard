@@ -17,10 +17,13 @@
 # offene Systemmeldungen, Prognose- und Statistikreihen. Die Probe liest
 # nur diese Zeilen. probe_shot(name) legt auf Wunsch ein Bild ab.
 # probe_page(page) zeigt eine Seite (overview, pv, house, grid, alerts,
-# forecast), probe_fc_mode(mode) tippt den Umschalter der Seite Prognose an,
+# forecast, wallbox, weather), probe_fc_mode(mode) tippt den Umschalter der Seite Prognose an,
 # damit probe_shot sie aufnimmt. probe_tap(wb, seg) tippt einen Teil des Modus-Schalters an: Es schickt
 # LV_EVENT_CLICKED an wb<N>_seg<S>, also denselben Weg wie ein Finger
 # (on_click -> wallbox_mode_set); einen Touchscreen hat der Test nicht.
+# probe_p50_day(shift) verschiebt den Tag beider Halbstunden-Reihen
+# (fc_sys_day, fc_roof_day), als waere 0 Uhr ohne neuen Abruf vorbei;
+# probe_fetch_fc ruft die Prognosen ab wie der Takt (Fall W).
 ##############################################################################
 
 substitutions:
@@ -62,6 +65,12 @@ substitutions:
   ha_pv2_fc_d1: sensor.solcast_test_west_prognose_heute
   ha_pv2_fc_d2: sensor.solcast_test_west_prognose_morgen
   ha_pv3_fc_d1: sensor.solcast_test_weg_prognose_heute
+  # Rest heute (Fall W): Flaeche 5 im Hausnetz-Kreis, anfangs unavailable,
+  # nach dem Wiederverbinden (Fall H) mit Prognose
+  ha_pv5_fc_d1: sensor.solcast_test_ost_prognose_heute
+  # Datenalter mit HA (Fall T): kurze Grenze, damit gleichbleibende Werte
+  # im Lauf ueber sie kommen -- mit verbundenem HA trotzdem keine Meldung
+  data_stale_s: "15"
 
 packages:
   sim: !include ../pv-dashboard-sim.yaml
@@ -115,6 +124,16 @@ api:
               lambda: 'return page == "forecast";'
             then:
               - lvgl.page.show: page_forecast
+        - if:
+            condition:
+              lambda: 'return page == "wallbox";'
+            then:
+              - lvgl.page.show: page_wallbox
+        - if:
+            condition:
+              lambda: 'return page == "weather";'
+            then:
+              - lvgl.page.show: page_weather
     - action: probe_fc_mode
       variables:
         mode: int
@@ -132,6 +151,15 @@ api:
             lv_obj_t *const S[2][3] = {{id(wb1_seg0), id(wb1_seg1), id(wb1_seg2)}, {id(wb2_seg0), id(wb2_seg1), id(wb2_seg2)}};
             if (wb >= 0 && wb <= 1 && seg >= 0 && seg <= 2)
               lv_obj_send_event(S[wb][seg], LV_EVENT_CLICKED, nullptr);
+    - action: probe_p50_day
+      variables:
+        shift: int
+      then:
+        - lambda: 'id(fc_sys_day) += shift; id(fc_roof_day) += shift;'
+        - script.execute: fc_redraw
+    - action: probe_fetch_fc
+      then:
+        - script.execute: ha_fetch_fc
 
 logger:
   level: INFO
@@ -171,7 +199,8 @@ interval:
             for (lv_obj_t *l : {id(hp_season), id(hp_bypass), id(hp_compressor), id(gr_rule_0), id(pv_str_sub_1),
                                 id(pv_inv_sub_3), id(ht_c3_d), id(gm_today_2), id(fc_total),
                                 lv_obj_get_child(id(fc_t0), 0), lv_obj_get_child(id(fc_t0), 1),
-                                lv_obj_get_child(id(fc_t1), 1)})
+                                lv_obj_get_child(id(fc_t1), 1), id(wb1_vehicle), id(wb1_status), id(wx_warn),
+                                id(pv_kpi_rest), id(ht_pv_d), id(lbl_status_left)})
               lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_CLIP);
             clip = true;
           }
@@ -231,7 +260,28 @@ interval:
           j += ",\"ht_c_total\":" + txt(id(ht_c_total)) + ",\"ht_out_total\":" + txt(id(ht_out_total));
           j += ",\"pv_sub1\":" + txt(id(pv_str_sub_1)) + ",\"inv_sub3\":" + txt(id(pv_inv_sub_3));
           j += ",\"dev2_d\":" + txt(id(ht_c3_d)) + ",\"meter1_today\":" + txt(id(gm_today_2));
-          j += ",\"val_gen\":" + txt(id(val_gen)) + ",\"money_split\":" + txt(id(money_split)) + "}";
+          j += ",\"val_gen\":" + txt(id(val_gen)) + ",\"money_split\":" + txt(id(money_split));
+          // Autarkie heute und Kachel Verbrauch (Fall X)
+          j += ",\"val_autarky\":" + txt(id(val_autarky)) + ",\"val_use\":" + txt(id(val_use));
+          j += ",\"wb1_vehicle\":" + txt(id(wb1_vehicle)) + ",\"wb1_status\":" + txt(id(wb1_status));
+          j += ",\"wb1_soc\":" + txt(id(wb1_soc)) + ",\"wb1_plan\":" + txt(id(wb1_plan));
+          j += ",\"wb1_limit\":" + txt(id(wb1_limit)) + ",\"wx_warn\":" + txt(id(wx_warn));
+          // Rest heute (Fall W): Seite PV, Haus, Statusleiste
+          j += ",\"pv_rest\":" + txt(id(pv_kpi_rest)) + ",\"ht_rest\":" + txt(id(ht_pv_d));
+          j += ",\"status_left\":" + txt(id(lbl_status_left)) + "}";
+          // Wetter, Zeile Sonne der Tage (Fall V): versteckt, y der Zeile
+          // Wind, Hoehe einer Trennlinie
+          j += std::string(",\"wx_sun\":[") + hid(id(wx_ds_0)) + "," + std::to_string(lv_obj_get_style_y(id(wx_dw_0), LV_PART_MAIN)) + "," +
+               std::to_string(lv_obj_get_style_height(id(wx_dl_1), LV_PART_MAIN)) + "]";
+          // Alter je Quelle in s (data_seen; -1 = noch nie), Fall T
+          {
+            std::string a;
+            for (int k = 0; k < 8; k++) {
+              const uint32_t t = id(data_seen)[k];
+              a += std::string(k ? "," : "") + (t == 0 ? std::string("-1") : std::to_string((millis() - t) / 1000u));
+            }
+            j += ",\"age\":[" + a + "]";
+          }
           j += ",\"alerts\":[" + alerts + "]";
           // Kein Label irgendwo darf "inf" oder "nan" zeigen: alle Seiten und
           // die oberste Ebene rekursiv, Wort mit Nicht-Buchstaben daneben
@@ -305,7 +355,10 @@ interval:
                  ",\"tiles\":" + std::to_string(tiles) + ",\"t0\":" + txt(lv_obj_get_child(id(fc_t0), 1)) +
                  ",\"t1\":" + txt(lv_obj_get_child(id(fc_t1), 1)) + ",\"t0n\":" + txt(lv_obj_get_child(id(fc_t0), 0)) +
                  ",\"total\":" + txt(id(fc_total)) + ",\"act\":[" + std::to_string(zahl(id(fc_r_act)[0])) + "," +
-                 std::to_string(zahl(id(fc_r_act)[1])) + "]}";
+                 std::to_string(zahl(id(fc_r_act)[1])) + "]";
+            // Uhrzeit des Panels in Minuten (Fall W rechnet den Rest nach)
+            const ESPTime jetzt = id(dash_time).now();
+            j += ",\"min\":" + std::to_string(jetzt.is_valid() ? jetzt.hour * 60 + jetzt.minute : -1) + "}";
           }
           j += ",\"wx_stamp\":\"" + esc(id(ha_wx_stamp)) + "\"}";
           printf("PROBE %s\n", j.c_str());

@@ -27,13 +27,14 @@
 # evcc nennt den Hausverbrauch "Verbrauch"; er enthaelt hier wie dort alles
 # ausser Ladepunkten und Speicher, also auch die Waermepumpe.
 #
-# Fuenf Skripte gehoeren dazu; kuenftige Sensoren rufen nur diese auf,
-# bis dahin stehen Striche:
+# Sechs Skripte gehoeren dazu; kuenftige Sensoren rufen nur die ersten
+# fuenf auf, bis dahin stehen Striche:
 #   house_flow     Energiefluss, Tabelle In / Out, Verbrauch jetzt
 #   house_battery  Unterzeile je Speicher
 #   house_loadpoint Unterzeile je Ladepunkt
 #   house_update   Verbraucher (dritte Spalte)
 #   house_history  Verbrauch der letzten 24 Stunden
+#   house_rest     "Rest" der Zeile Erzeugung (fc_rest_house, sonst forecast)
 #
 # Flaeche x 4..1276, y 84..736.
 #   Fluss        x 4, y 84, 1272 x 150, innen 1250 x 128:
@@ -65,6 +66,13 @@ substitutions:
   name_dryer: "Trockner"           #  62 von 168
   name_baseload: "Grundlast"       #  67 von 168
 
+globals:
+  # forecast aus house_flow (Solcast-Entitaet), Ersatz fuer house_rest
+  - id: house_rest_ent
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+
 script:
   # ---------------------------------------------------------------------
   # Energiefluss des Hausnetzes, Leistungen in W (>= 0), wie evcc sie
@@ -75,7 +83,9 @@ script:
   #   home        Verbrauch (alles ausser Ladepunkten und Speicher)
   #   loadpoints  beide Ladepunkte zusammen
   #   soc         Ladestand der Speicher zusammen in %
-  #   forecast    Restprognose PV heute in kWh
+  #   forecast    Restprognose PV heute in kWh (Solcast-Entitaet); steht
+  #               nur da, solange die Daecher des Hausnetz-Kreises keine
+  #               Prognose je Dach haben (house_rest)
   #   price_grid  Bezugspreis in ct/kWh    price_feed Verguetung in ct/kWh
   #   price_home  Preis des Verbrauchs in ct/kWh (Mischpreis, wie evcc)
   #   NAN = kein Wert (Striche). Stimmen In und Out nicht ueberein, zeigt
@@ -218,7 +228,8 @@ script:
           shade(id(ht_lp_n), id(ht_lp), loadpoints);
           shade(id(ht_bat_in_n), id(ht_bat_in), bat_in);
           shade(id(ht_grid_out_n), id(ht_grid_out), grid_out);
-          id(lbl_set)(id(ht_pv_d), ("Rest " + num(forecast, "%.1f", "--,-") + " kWh").c_str());
+          id(house_rest_ent) = forecast;
+          id(house_rest).execute();
           id(lbl_set)(id(ht_bat_out_d), (num(soc, "%.0f", "--") + " %").c_str());
           id(lbl_set)(id(ht_bat_in_d), (num(soc, "%.0f", "--") + " %").c_str());
           id(lbl_set)(id(ht_grid_in_d), (num(price_grid, "%.1f", "--,-") + " ct/kWh").c_str());
@@ -271,6 +282,21 @@ script:
               lv_obj_clear_flag(sb[i], LV_OBJ_FLAG_HIDDEN);
             sx += std::max(sw, 0);
           }
+
+  # ---------------------------------------------------------------------
+  # "Rest" in der Zeile Erzeugung: Der Hausnetz-Kreis hat nur die Daecher
+  # 3..8, also der Rest dieser Daecher nach derselben Rechnung wie die Seiten
+  # Prognose und PV (fc_rest_house, Entscheidung des Nutzers 11.10.2026);
+  # ohne Prognose je Dach fuer sie die Solcast-Entitaet aus house_flow.
+  # Rufen house_flow, fc_redraw und der Minutenwechsel (interval der Seite
+  # Prognose).
+  # ---------------------------------------------------------------------
+  - id: house_rest
+    then:
+      - lambda: |-
+          const float h = id(fc_rest_house)();
+          const float r = std::isfinite(h) ? h : id(house_rest_ent);
+          id(lbl_set)(id(ht_pv_d), ("Rest " + id(fmt_num)(r, "%.1f", "--,-") + " kWh").c_str());
 
   # ---------------------------------------------------------------------
   # Unterzeile je Speicher unter "Speicher entladen", wie evcc sie je

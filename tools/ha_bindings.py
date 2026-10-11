@@ -113,7 +113,9 @@ SO LAEUFT EIN WERT (docs/03, Abschnitt "Datenweg"):
       belegten Wechselrichter, deren Geraet da ist (keiner -> leer);
       ha_selfuse_energy_today nicht belegt -> nach docs/01
       Hybrid-Erzeugung (WR 2..4) - Ueberschuss, ohne WR 2..4 Erzeugung -
-      Volleinspeisung - Ueberschuss, nie unter 0.
+      Volleinspeisung - Ueberschuss, nie unter 0. Die Autarkie heute
+      rechnet mit ha_total_energy_today (ganzer Verbrauch), nicht belegt
+      oder ohne Wert mit ha_home_energy_today.
 
 8. STOERUNG AUS DEM STATUSTEXT: ha_inv<N>_fault nicht belegt und
    ha_inv<N>_status belegt -> ein Text aus inv_fault_texts (Standard
@@ -269,7 +271,9 @@ for k in range(2):
 {{
   const bool con = @wb{n}_connected, chg = @wb{n}_charging;
   const float kw = @wb{n}_power, kwh = @wb{n}_energy;
-  const char *st = chg ? "Ladevorgang aktiv" : (con ? "Fahrzeug verbunden" : "Kein Fahrzeug");
+  // Ohne Fahrzeug bleibt die Statuszeile leer, der Name heisst dann schon
+  // "Kein Fahrzeug" (wallbox_update)
+  const char *st = chg ? "Ladevorgang aktiv" : (con ? "Fahrzeug verbunden" : "");
   id(wallbox_update).execute({k}, @wb{n}_mode, chg, kw, I(@wb{n}_phases, 0), kwh, @wb{n}_solar, I(@wb{n}_minutes, -1),
                              con ? @wb{n}_vehicle : std::string(), std::string(st), @wb{n}_soc, @wb{n}_range,
                              @wb{n}_limit, when(@wb{n}_plan, true));
@@ -370,7 +374,10 @@ gruppe(25, 0, "Tageswerte", """
       hyb = sub(gen, full);
   }
   const float own = B_selfuse_energy_today ? @selfuse_energy_today : pos(sub(hyb, surplus));
-  id(ov_totals).execute(gen, @home_energy_today, feed, @meter0_today, full, surplus, @solcast_remaining);
+  // Autarkie mit dem ganzen Verbrauch (total_energy_today), ohne ihn mit
+  // home_energy_today (ov_totals)
+  id(ov_totals).execute(gen, @home_energy_today, feed, @meter0_today, full, surplus, @solcast_remaining,
+                        @total_energy_today);
   id(money_update).execute(full, surplus, own, @meter0_today);
 }""")
 # Bit 26 (Prognose) ist frei: Die Seite Prognose bekommt ihre Werte je Dach
@@ -382,8 +389,10 @@ gruppe(27, 0, "Wetter jetzt", """
   id(wx_now).execute(@weather, @wx_temp, t[0], t[1], @wx_humidity, @wx_pressure, @wx_wind, @wx_bearing, h[0], h[1],
                      t[2], @wx_sun, when(@sun_rising, false), when(@sun_setting, false), id(ha_wx_stamp));
 }""")
+# Ohne Quelle (nicht belegt) -1, Quelle ohne Wert (nicht verfuegbar, in HA
+# nicht vorhanden) -2: "Keine Warnung" nur, wenn eine Quelle 0 meldet
 gruppe(28, 0, "Wetterwarnung", """
-id(wx_warning).execute(I(@warn_level, 0), @warn_text);""")
+id(wx_warning).execute(B_warn_level ? I(@warn_level, -2) : -1, @warn_text);""")
 
 G = {g["name"]: g["bit"] for g in GRUPPEN}
 
@@ -581,6 +590,11 @@ z("rule_smart_meter", "b", "input_boolean.smart_meter_eingebaut", NV, demo=False
 # --- Tageswerte und Zaehlerstaende fuer die Statistik -------------------------
 z("pv_energy_today", "n", "sensor.pv_erzeugung_heute", [TW], "kWh", 147.0, hin="Summe beider Kreise [A]")
 z("home_energy_today", "n", "sensor.hausverbrauch_heute", [TW, HN], "kWh", 21.3, hin="[A]")
+# Ganzer Verbrauch hinter dem Hausanschluss (Entscheidung des Nutzers,
+# 11.10.2026): nur fuer die Autarkie heute; nicht belegt oder ohne Wert gilt
+# home_energy_today. Demo: Haus + Waermepumpe + Wallbox 1 (21,3 + 5,4 + 12,8)
+z("total_energy_today", "n", "sensor.gesamtverbrauch_heute", [TW], "kWh", 39.5,
+  hin="ganzer Verbrauch mit Heizung und Ladepunkten, nur Autarkie [A]")
 z("selfuse_energy_today", "n", "sensor.eigenverbrauch_heute", [TW], "kWh", 19.9, hin="[A]")
 z("pv_energy_total", "z", "sensor.pv_erzeugung_gesamt", [], "kWh", 6.1,
   hin="nur Statistik [A]; auch Liste, kommagetrennt, z. B. die Gesamtzaehler der Wechselrichter")
@@ -589,13 +603,18 @@ z("home_energy_total", "z", "sensor.hausverbrauch_gesamt", [], "kWh", 0.9,
 
 # --- Prognose (Solcast, deutsche IDs) -----------------------------------------
 # Nur noch zwei Werte fuer die ganze Anlage: Tagesprognose heute (ihr Attribut
-# detailedForecast ergibt die Tagesreihe forecast_curve der Seite PV, falls
-# keine Prognose je Dach belegt ist) und Rest heute (Statusleiste, Haus).
-# Die Seite Prognose zeigt die Daecher einzeln (ha_pv<N>_fc_d<T>, unten).
+# detailedForecast ergibt die Tagesreihe forecast_curve und die Restprognose
+# der Seite PV, falls keine Prognose je Dach belegt ist) und Rest heute
+# (Statusleiste, Haus). Den Rest heute zeigen Statusleiste und Haus nur, bis
+# jede vorhandene Flaeche des Hausnetz-Kreises (3..8) eine Prognose je Dach
+# hat; dann rechnen sie ihn wie die Seite Prognose aus deren Halbstunden
+# (fc_rest_house). Die Seite Prognose zeigt die Daecher einzeln
+# (ha_pv<N>_fc_d<T>, unten).
 SC = "sensor.solcast_pv_forecast_"
 z("solcast_today", "n", SC + "prognose_heute", [], "kWh", 155.0,
   hin="nur Attribut detailedForecast (forecast_curve)")
-z("solcast_remaining", "n", SC + "prognose_verbleibende_leistung_heute", [TW, HN], "kWh", 12.6)
+z("solcast_remaining", "n", SC + "prognose_verbleibende_leistung_heute", [TW, HN], "kWh", 12.6,
+  hin="Statusleiste, Haus; nur ohne Prognose je Dach der Flaechen 3..8")
 
 # --- Prognose je Dach (Seite Prognose, Wunsch des Nutzers 10.10.2026) ---------
 # Je Flaeche N ein Solcast-Eintrag (eigene Anlage in Solcast), Tag T = 1
@@ -706,18 +725,21 @@ JINJA_TAG = """
 
 def jinja_solcast(quelle):
     """Halbstunden P50 heute (48 Plaetze ab 00:00, kW) der ganzen Anlage --
-    nur noch fuer die Tagesreihe forecast_curve (Seite PV, Uebersicht)."""
+    fuer fc_sys_p50 und, ohne Prognose je Dach, die Tagesreihe
+    forecast_curve (Seite PV, Uebersicht). t = Tag dieser Halbstunden laut
+    Home Assistant (Jahr * 1000 + Tag im Jahr, fc_sys_day)."""
     return ("{%- set src = " + quelle + " -%}\n" + """
+{%- set heute = now().date() -%}
 {%- set o = namespace(a=['nan'] * 48) -%}
 {%- for x in src -%}
 {%- set ps = x.get('period_start') -%}
 {%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}
-{%- if t and t.date() == now().date() -%}
+{%- if t and t.date() == heute -%}
 {%- set i = t.hour * 2 + t.minute // 30 -%}
 {%- set o.a = o.a[:i] + [A] + o.a[i + 1:] -%}
 {%- endif -%}
 {%- endfor -%}
-{{ {'a': o.a | join(',')} | tojson }}
+{{ {'a': o.a | join(','), 't': heute.strftime('%Y%j')} | tojson }}
 """.replace("[A]", "[" + j_n("x.get('pv_estimate')", 2) + "]")).strip("\n")
 
 
@@ -878,6 +900,7 @@ def jinja_dach():
         "{%- set q = [",
         q,
         "] -%}",
+        "{%- set heute = now().date() -%}",
         "{%- set o = namespace(l=[]) -%}",
         "{%- for k in range(q | length) -%}",
         "{%- set ids = q[k] -%}",
@@ -886,7 +909,7 @@ def jinja_dach():
         "{%- for x in state_attr(ids[0], 'detailedForecast') or [] -%}",
         "{%- set ps = x.get('period_start') -%}",
         "{%- set t = as_local(as_datetime(ps) if ps is string else ps) if ps else none -%}",
-        "{%- if t and t.date() == now().date() -%}",
+        "{%- if t and t.date() == heute -%}",
         "{%- set i = t.hour * 2 + t.minute // 30 -%}",
         "{%- set a = x.get('pv_estimate') -%}",
         "{%- set b = x.get('pv_estimate10') -%}",
@@ -906,7 +929,7 @@ def jinja_dach():
         " ['e' ~ n, d.q | join(',')]] -%}",
         "{%- endif -%}",
         "{%- endfor -%}",
-        "{{ dict(o.l) | tojson }}",
+        "{{ dict(o.l + [['t', heute.strftime('%Y%j')]]) | tojson }}",
     ])
 
 
@@ -1056,13 +1079,26 @@ KURVE_SETZEN = """
     id(forecast_curve).make_call().set_value(buf).perform();
 }"""
 
+# Tag der Halbstunden laut Home Assistant (t der Antwort, Jahr * 1000 + Tag
+# im Jahr): fc_rest rechnet nur mit denen von heute. Jede Reihe hat ihren
+# eigenen Stempel -- scheitert nur der Abruf je Dach, gilt fc_r_p50 von
+# gestern nicht als heute, weil der Abruf der ganzen Anlage gelang.
+def tag_stempeln(ziel):
+    return f"""
+id({ziel}) = atoi(S("t").c_str());"""
+
+
 ERFOLG_SOLCAST = """
-if (id(fc_roof_on) != 0)
-  return;
 const auto a = L(S("a"));
 std::array<float, 48> P;
 for (size_t i = 0; i < 48; i++)
-  P[i] = F(a, i);""" + KURVE_SETZEN
+  P[i] = F(a, i);
+// Halbstunden der ganzen Anlage: Restprognose der Seite PV ohne Prognose je
+// Dach (fc_rest). Immer setzen, auch mit Prognose je Dach -- fallen die
+// Daecher spaeter weg, stuende sonst ein alter Stand da.
+id(fc_sys_p50) = P;""" + tag_stempeln("fc_sys_day") + """
+if (id(fc_roof_on) != 0)
+  return;""" + KURVE_SETZEN
 
 ERFOLG_DACH = """
 // Prognose je Dach -> Seite Prognose (fc_roof_fc speichert nur, fc_redraw
@@ -1071,7 +1107,7 @@ for (int k = 0; k < 8; k++) {
   const std::string n = std::to_string(k + 1);
   id(fc_roof_fc).execute(k, S(("a" + n).c_str()), S(("b" + n).c_str()), S(("d" + n).c_str()),
                          S(("e" + n).c_str()));
-}
+}""" + tag_stempeln("fc_roof_day") + """
 id(fc_redraw).execute();
 if (id(fc_roof_on) == 0)
   return;
@@ -1771,7 +1807,8 @@ def panel_bauen():
         w(einr(c_code(g["code"]), 12))
         w("          }")
     w("""  # Abrufe: 20 s nach dem Verbinden die Prognosen, 30 s danach die
-  # Statistik; dann Prognosen alle 30 min, Statistik zu jeder neuen Stunde
+  # Statistik; dann Prognosen alle 30 min und ab 00:01 eines neuen Tages
+  # (Solcast stellt um 0 Uhr um), Statistik zu jeder neuen Stunde
   # ab Minute 2 (Home Assistant schreibt die Stundenstatistik kurz nach der
   # vollen Stunde), Tageswerte aus der Statistik alle 5 min ab Minute 1.
   # Beim Trennen beginnt alles von vorn.
@@ -1780,7 +1817,7 @@ def panel_bauen():
       - lambda: |-
           static bool war = false;
           static uint32_t seit = 0, fc_zuletzt = 0;
-          static int stat_schluessel = -1, heute_schluessel = -1;
+          static int stat_schluessel = -1, heute_schluessel = -1, fc_tag = -1;
           const bool ist = api::global_api_server != nullptr && api::global_api_server->is_connected_with_state_subscription();
           if (ist != war) {
             war = ist;
@@ -1797,6 +1834,14 @@ def panel_bauen():
           }
           if (!ist || millis() - seit < 20000)
             return;
+          // Neuer Tag: Prognosen neu ab 00:01; bis dahin zaehlen die
+          // Halbstunden von gestern nicht (fc_sys_day, fc_roof_day, fc_rest)
+          const ESPTime t = id(dash_time).now();
+          if (t.is_valid() && (t.hour > 0 || t.minute >= 1) && t.day_of_year != fc_tag) {
+            if (fc_tag >= 0)
+              fc_zuletzt = 0;
+            fc_tag = t.day_of_year;
+          }
           if (fc_zuletzt == 0 || millis() - fc_zuletzt >= 30u * 60u * 1000u) {
             fc_zuletzt = millis() | 1u;
             id(ha_nochmal)[0] = 0;
@@ -1822,7 +1867,6 @@ def panel_bauen():
           }
           if (millis() - seit < 30000)
             return;
-          const ESPTime t = id(dash_time).now();
           const int schluessel = t.is_valid() ? t.day_of_year * 24 + t.hour : 0;
           if (schluessel != stat_schluessel && (stat_schluessel < 0 || !t.is_valid() || t.minute >= 2)) {
             stat_schluessel = schluessel;
