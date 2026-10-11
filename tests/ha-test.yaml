@@ -23,7 +23,8 @@
 # (on_click -> wallbox_mode_set); einen Touchscreen hat der Test nicht.
 # probe_p50_day(shift) verschiebt den Tag beider Halbstunden-Reihen
 # (fc_sys_day, fc_roof_day), als waere 0 Uhr ohne neuen Abruf vorbei;
-# probe_fetch_fc ruft die Prognosen ab wie der Takt (Fall W).
+# probe_fetch_fc ruft die Prognosen ab wie der Takt (Fall W),
+# probe_fetch_today den Tagesabruf (Fall Y).
 ##############################################################################
 
 substitutions:
@@ -160,6 +161,9 @@ api:
     - action: probe_fetch_fc
       then:
         - script.execute: ha_fetch_fc
+    - action: probe_fetch_today
+      then:
+        - script.execute: ha_fetch_today
 
 logger:
   level: INFO
@@ -358,7 +362,30 @@ interval:
                  std::to_string(zahl(id(fc_r_act)[1])) + "]";
             // Uhrzeit des Panels in Minuten (Fall W rechnet den Rest nach)
             const ESPTime jetzt = id(dash_time).now();
-            j += ",\"min\":" + std::to_string(jetzt.is_valid() ? jetzt.hour * 60 + jetzt.minute : -1) + "}";
+            j += ",\"min\":" + std::to_string(jetzt.is_valid() ? jetzt.hour * 60 + jetzt.minute : -1);
+            // Laufende Stunde live, Dach 1 (Fall Y): Wert des Balkens (kW,
+            // null = keiner), 5-min-Zeilen von HA (n, Ende j, gilt fuer
+            // diese Stunde), eigene Sekunden, Schalter; Hinweise der Seite
+            auto zahl_j = [](float v) { return std::isfinite(v) ? std::to_string(v) : std::string("null"); };
+            const int H = jetzt.is_valid() ? jetzt.day_of_year * 24 + jetzt.hour : -1;
+            float own_t = 0.0f;
+            for (float x : id(fc_lv_t)[0])
+              own_t += x;
+            j += ",\"cur\":" + zahl_j(H >= 0 ? id(fc_val)(0, jetzt.hour, jetzt.hour, H) : NAN) +
+                 ",\"n\":" + std::to_string(id(fc_lv_n)[0]) + ",\"j\":" + std::to_string(id(fc_lv_j)[0]) +
+                 ",\"hh\":" + std::to_string(H >= 0 && id(fc_lv_i)[1] == H ? 1 : 0) + ",\"own_t\":" + zahl_j(own_t) +
+                 ",\"live\":" + std::to_string(id(fc_live_on) ? 1 : 0) + ",\"hint\":" + txt(id(fc_ist_hint)) +
+                 ",\"empty\":" + txt(id(fc_empty)) + ",\"empty_hid\":" + hid(id(fc_empty));
+            // Gezeichneter Balken der laufenden Stunde in Kachel 1 (halb
+            // deckend, sichtbar): Hoehe in px, 0 = keiner
+            int lauf_h = 0;
+            lv_obj_t *ch = lv_obj_get_child(id(fc_t0), 2);
+            for (int b = 1; b <= 20; b++) {
+              lv_obj_t *bar = lv_obj_get_child(ch, b);
+              if (!lv_obj_has_flag(bar, LV_OBJ_FLAG_HIDDEN) && lv_obj_get_style_bg_opa(bar, LV_PART_MAIN) == LV_OPA_50)
+                lauf_h = lv_obj_get_style_height(bar, LV_PART_MAIN);
+            }
+            j += ",\"lauf_h\":" + std::to_string(lauf_h) + "}";
           }
           j += ",\"wx_stamp\":\"" + esc(id(ha_wx_stamp)) + "\"}";
           printf("PROBE %s\n", j.c_str());

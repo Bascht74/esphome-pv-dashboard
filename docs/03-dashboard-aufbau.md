@@ -126,10 +126,10 @@ Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnun
 
 | Datei | Zeilen | Blöcke, Zeilennummern |
 | --- | --- | --- |
-| `.pv-dashboard_ui.yaml` | 1616 | `esphome:` 35, `substitutions:` 42, `packages:` 54, `text:` 76, `globals:` 106, `script:` 268, `lvgl:` 703, `interval:` 1524, `switch:` 1534, `sensor:` 1561 |
-| `.pv-dashboard_page_overview.yaml` | 1640 | `substitutions:` 43, `globals:` 105, `sensor:` 146, `script:` 180, `lvgl:` 548, `interval:` 1384 |
+| `.pv-dashboard_ui.yaml` | 1633 | `esphome:` 35, `substitutions:` 42, `packages:` 59, `text:` 81, `globals:` 111, `script:` 273, `lvgl:` 716, `interval:` 1541, `switch:` 1551, `sensor:` 1578 |
+| `.pv-dashboard_page_overview.yaml` | 1647 | `substitutions:` 43, `globals:` 105, `sensor:` 146, `script:` 180, `lvgl:` 548, `interval:` 1391 |
 | `.pv-dashboard_page_pv.yaml` | 492 | `globals:` 36, `script:` 59, `lvgl:` 261 |
-| `.pv-dashboard_page_forecast.yaml` | 1454 | `globals:` 73, `script:` 233, `interval:` 663, `lvgl:` 690 |
+| `.pv-dashboard_page_forecast.yaml` | 1721 | `substitutions:` 95, `globals:` 98, `script:` 433, `interval:` 921, `lvgl:` 952 |
 | `.pv-dashboard_page_weather.yaml` | 558 | `globals:` 50, `script:` 103, `lvgl:` 356 |
 | `.pv-dashboard_page_battery.yaml` | 348 | `substitutions:` 35, `globals:` 43, `script:` 49, `lvgl:` 129 |
 | `.pv-dashboard_page_wallbox.yaml` | 531 | `substitutions:` 54, `globals:` 58, `script:` 72, `lvgl:` 257 |
@@ -138,18 +138,19 @@ Packages deklariert sind; die Reiter der Menüleiste zählen auf dieselbe Ordnun
 | `.pv-dashboard_page_grid.yaml` | 315 | `substitutions:` 56, `script:` 60, `lvgl:` 183 |
 | `.pv-dashboard_page_stats.yaml` | 400 | `globals:` 31, `script:` 46, `lvgl:` 217 |
 | `.pv-dashboard_page_alerts.yaml` | 721 | `globals:` 26, `script:` 41, `lvgl:` 473 |
-| `.pv-dashboard_ha.yaml` (nur Gerät, erzeugt) | 3875 | `substitutions:` 54, `globals:` 490, `sensor:` 660, `text_sensor:` 1880, `binary_sensor:` 2007, `script:` 2093, `interval:` 3125 |
+| `.pv-dashboard_ha.yaml` (nur Gerät, erzeugt) | 3930 | `substitutions:` 54, `globals:` 493, `sensor:` 672, `text_sensor:` 1892, `binary_sensor:` 2019, `script:` 2105, `interval:` 3172 |
 
 Im Kern steht nur, was alle Seiten teilen: die Tagesreihen `day_curve` und
 `forecast_curve`, die Build-Option `LV_INV_BUF_SIZE` (`esphome:` 35, Abschnitt
-„Diagnose“), die Globals `ota_running` 107, `curve_day` 115, `data_seen` 126,
-`dev_present` 150, `diag` 165 und `data_stale_reported` 171, der Sonderwert
-`val_leer` 206, die Formatierer `fmt_num` 210, `fmt_watt` 226 und `fmt_power` 244
+„Diagnose“), die Version `pv_version` 48 (Regel in `UEBERGABE.md`),
+die Globals `ota_running` 112, `curve_day` 120, `data_seen` 131,
+`dev_present` 155, `diag` 170 und `data_stale_reported` 176, der Sonderwert
+`val_leer` 211, die Formatierer `fmt_num` 215, `fmt_watt` 231 und `fmt_power` 249
 (Dezimalkomma, Tausenderpunkt, Striche bei `NAN`, **leer** bei `val_leer`; alle
-Seiten benutzen sie), die Skripte `diag_hook` 284, `diag_window` 324,
-`sys_refresh` 352, `record_hour` 471, `dev_apply` 536 und `update_clock` 651,
-unter `lvgl:` die Basis, `style_definitions` 752, `gradients` 829 und
-`top_layer` 1119, am Ende das `interval:` für `sys_refresh` und `diag_window`,
+Seiten benutzen sie), die Skripte `diag_hook` 289, `diag_window` 329,
+`sys_refresh` 357, `record_hour` 484, `dev_apply` 549 und `update_clock` 664,
+unter `lvgl:` die Basis, `style_definitions` 765, `gradients` 842 und
+`top_layer` 1132, am Ende das `interval:` für `sys_refresh` und `diag_window`,
 der Schalter `diag_switch` und die Sensoren der Diagnose. Einen
 `pages:`-Schlüssel hat der Kern **nicht** — die Seiten bringen ihn mit.
 
@@ -159,12 +160,16 @@ Eingabeskripte `ov_roof` 259, `ov_inverter` 276, `ov_battery` 295,
 `ov_house` 392, `ov_totals` 413 und `ov_status` 460 sowie `redraw_curve` 477 in
 der Übersicht (dazu dort die globals `flow_ch` 134 und `ov_now` 141),
 `pv_status` 70, `pv_update` 128, `pv_redraw_curve` 175 und `pv_rest` 256 auf
-der Seite PV & Prognose, `fc_roof_fc` 245,
-`fc_roof_hours` 275, `fc_roof_live` 295, `fc_mode_set` 314, `fc_redraw` 334 und
-`fc_text` 594 in der Prognose (dazu dort die globals `fc_mode` 75, `fc_roof_on`
-80, `fc_r_*` ab 88, `fc_sys_p50` 124, `fc_sys_day` 132, `fc_roof_day` 136,
-`fc_rest` 147, `fc_rest_house` 181, `fc_tile_roof` 198, `fc_clock` 205 und
-`fc_parse` 210),
+der Seite PV & Prognose, `fc_roof_fc` 440,
+`fc_roof_hours` 470, `fc_roof_rows` 491, `fc_roof_live` 517, `fc_mode_set` 536,
+`fc_redraw` 556 und `fc_text` 846 in der Prognose (dazu dort die Substitution
+`fc_ha` 96 und die globals `fc_mode` 100, `fc_roof_on` 105, `fc_r_*` ab 113,
+`fc_sys_p50` 149, `fc_sys_day` 157, `fc_roof_day` 161, `fc_rest` 172,
+`fc_rest_house` 206, `fc_tile_roof` 223, `fc_clock` 230, `fc_parse` 235, für
+die laufende Stunde `fc_lv_*` ab 261, `fc_live_on` 287, `fc_cur_kw` 295,
+`fc_live_tick` 324 und `fc_val` 356, für die Hinweise `fc_ist_soll` 373,
+`fc_ist_ms` 379, `fc_ist_fehler` 384, `fc_ist_je` 390, `fc_fc_da` 395 und
+`fc_ist_text` 406),
 `wx_now` 117, `wx_hour` 167,
 `wx_day` 210, `wx_warning` 277 und `wx_redraw` 304 im Wetter (dazu dort das global
 `wx_cond` 53), `storage_update` 56 und `storage_mean` 113 im Speicher (global `storage_soc` 44),
@@ -217,9 +222,9 @@ Die Meldungszeile steht auch ohne Meldung da — `lbl_alert` zeigt dann „Keine
 
 Kachelkonvention im Repo: x 4, Breite 1272, Kacheln von **y 84 bis y 736** — je 8 px Luft zur Meldungszeile und zur Menüleiste. `schema_area` nutzt die Fläche dagegen voll (x 4, y 76, 904 x 668).
 
-- `page_overview` – links das Anlagenschema (`schema_area`, 904 × 668, 37 Leitungen, seit 25.09.2026 mit IDs `ln00` … `ln36`), rechts die Kennzahlenspalte: Tagesverlauf (16 `bar`-Widgets `bar_h00`…`bar_h15` plus Prognoselinie `line_forecast`; ESPHomes LVGL hat kein chart-Widget), vier Kacheln der Energiebilanz, Tagesertrag, Ringe Autarkie und Eigenverbrauch.
+- `page_overview` – links das Anlagenschema (`schema_area`, 904 × 668, 37 Leitungen, seit 25.09.2026 mit IDs `ln00` … `ln36`), rechts die Kennzahlenspalte: Tagesverlauf (16 `bar`-Widgets `bar_h00`…`bar_h15` plus Prognoselinie `line_forecast`; ESPHomes LVGL hat kein chart-Widget), vier Kacheln der Energiebilanz, Tagesertrag, Ringe Autarkie und Eigenverbrauch. Unten links unter dem PV-Zähler klein die Version (`lbl_version`, „v“ und `pv_version`, `st_unit`).
 - `page_pv` – seit 23.09.2026. Oben zwei Kacheln wie die zwei Energiekreise: links Volleinspeisung (x 4, 322 breit), rechts Hausnetz (x 334, 942 breit); je Wechselrichter eine Gruppe aus Wechselrichterkasten und seinen zwei Flächen, Leistung in W und Tageswert in kWh. Unten dieselbe Teilung: links vier Kennzahlen (Ist heute, Prognose heute, Restprognose, Ist zu Prognose der abgeschlossenen Stunden), rechts der Tagesverlauf mit 16 Balken und Prognoselinie im großen Maßstab. Seit 25.09.2026 zeigt jeder Wechselrichterkasten einen Statuspunkt (grün / rot) und die Temperatur in der Unterzeile; bei Störung wird der Rahmen rot und die Unterzeile zeigt den Fehlertext (`pv_status`). Geometrie und Höhenrechnung im Kopf der Datei.
-- `page_forecast` – seit 10.10.2026 je Dachfläche (Wunsch des Nutzers; die Fassung vom 25.09.2026 mit einer Solcast-Kachel, Halbstundenband und sieben Tagen ist ersetzt). Oben ein Umschalter **Heute / Vorschau** (Pille wie auf der Seite Wallboxen, aktiver Teil `col_solar`), daneben die Summen über alle Dächer mit Prognose und die Legende mit der Skala. Darunter bis zu sechs Kacheln, eine je Fläche mit Prognose (`ha_pv<N>_fc_d1` belegt und mit Wert), in Flächenreihenfolge; das Raster passt sich an (1, 2 oder 3 Spalten, eine oder zwei Reihen) und füllt immer y 136 bis 736. **Heute:** je Dach Stundenbalken der Ist-Leistung wie im Energie-Dashboard (Stundenmittel aus der Statistik in kW = kWh je Stunde, laufende Stunde halb deckend), Linie P50 (weiß, 3 px), Linie P10 (hell, 2 px, 70 %), Marke „jetzt“ (cyan); Titel „bisher / Prognose kWh“; Kopfzeile „bisher X / Prognose Y kWh · Rest Z kWh · jetzt W kW“. **Vorschau:** je Dach die kommenden sechs Tage (morgen bis Tag 7) als Balken P50, der Teil bis P10 dunkel (`col_solar_deep`), darüber der Wert, darunter Wochentag und „P10 …“; Titel „6 Tage … kWh“, Kopfzeile „Morgen … · 6 Tage … · P10 …“. P90 zeigt die Seite bewusst nicht. Beide Ansichten haben **einen** Maßstab für alle Kacheln (runder Wert, in der Legende), damit die Dächer vergleichbar bleiben. Zeitachse Heute: volle Stunden um alles über 0, gemeinsam, 8 bis 20 Stunden. Ohne eine einzige Prognose steht ein Hinweis da. Geometrie und Höhenrechnung im Kopf der Datei.
+- `page_forecast` – seit 10.10.2026 je Dachfläche (Wunsch des Nutzers; die Fassung vom 25.09.2026 mit einer Solcast-Kachel, Halbstundenband und sieben Tagen ist ersetzt). Oben ein Umschalter **Heute / Vorschau** (Pille wie auf der Seite Wallboxen, aktiver Teil `col_solar`), daneben die Summen über alle Dächer mit Prognose und die Legende mit der Skala. Darunter bis zu sechs Kacheln, eine je Fläche mit Prognose (`ha_pv<N>_fc_d1` belegt und mit Wert), in Flächenreihenfolge; das Raster passt sich an (1, 2 oder 3 Spalten, eine oder zwei Reihen) und füllt immer y 136 bis 736. **Heute:** je Dach Stundenbalken der Ist-Leistung wie im Energie-Dashboard (Stundenmittel aus der Statistik in kW = kWh je Stunde, laufende Stunde halb deckend und live gefüllt, Abschnitt „Laufende Stunde live“), Linie P50 (weiß, 3 px), Linie P10 (hell, 2 px, 70 %), Marke „jetzt“ (cyan); Titel „bisher / Prognose kWh“; Kopfzeile „bisher X / Prognose Y kWh · Rest Z kWh · jetzt W kW“. **Vorschau:** je Dach die kommenden sechs Tage (morgen bis Tag 7) als Balken P50, der Teil bis P10 dunkel (`col_solar_deep`), darüber der Wert, darunter Wochentag und „P10 …“; Titel „6 Tage … kWh“, Kopfzeile „Morgen … · 6 Tage … · P10 …“. P90 zeigt die Seite bewusst nicht. Beide Ansichten haben **einen** Maßstab für alle Kacheln (runder Wert, in der Legende), damit die Dächer vergleichbar bleiben. Zeitachse Heute: volle Stunden um alles über 0, gemeinsam, 8 bis 20 Stunden. Ohne eine einzige Prognose steht ein Hinweis da, mit dem Datenweg bis zur ersten Antwort des Abrufs je Dach stattdessen „Prognose wird geladen …“. Fehlen Ist-Werte, steht in der Legende Heute zwischen „jetzt“ und der Skala klein in `col_warn` „Ist wird geladen …“ (vor der ersten Antwort seit dem Start) bzw. „Ist unvollständig“ (`fc_ist_hint`, Abschnitt „Hinweise der Seite Prognose“). Geometrie und Höhenrechnung im Kopf der Datei.
 - `page_weather` – seit 25.09.2026, Wetter vom DWD (HACS-Integration „DWD Weather“). Links „jetzt“ mit großem Wetterbild (`f_wx_xl`), Temperatur, Lage, Höchst- und Tiefstwert, Wind mit Richtung, Böen, Feuchte, Luftdruck, Wolken, Regen heute, Sonne auf und unter, Sonnenscheindauer; rechts zwölf Spalten zu 2 Stunden mit Bild, Temperatur als Kurve, Regen als Balken und Wahrscheinlichkeit; unten sieben Tage mit Bild (`f_wx_l`), Lage, Höchst, Tiefst, Regen, Sonne (nur, wenn ein Tag einen Wert hat, sonst rückt Wind nach), Wind und oben rechts der DWD-Warnung („Keine Warnung des DWD“ nur mit eingerichteter Quelle).
 - `page_battery` – drei SoC-Ringe und Tabelle `tbl_storage`: Ladezustand, Strom, Zelle min/max, Zelldifferenz, Temperatur min/max, Zyklen. Erste fertig gebaute Detailseite — **Vorlage für jede neue**.
 - `page_wallbox` – seit 24.09.2026, am selben Tag nach dem Vorbild von evcc (0.316.0) umgebaut. Zwei Ladepunkt-Karten je 632 × 512: Kopf mit Name und Modus-Schalter Aus / Smart / Schnell (seit 25.09.2026 bedienbar: Pille 300 × 44, jeder Teil 98 × 38 ganz Tippfläche, gedrückt halb grün; `wallbox_mode_set`), Sitzungswerte Leistung (mit Blitz und drei Phasenstrichen), Geladen, Sonne, Ladedauer; nach der Trennlinie Fahrzeug und Statuszeile, Ladestandsbalken mit dunklerem Rest bis zum Limit und Limit-Marke, darunter Ladestand (mit Reichweite), Ladeplan, Ladelimit. Unten die Monatskachel „Ladevorgänge im Monat“ (Geladen, Sonnenanteil, Kosten, Ø Preis). Akzent `col_evcc`, Flächen und Einheitenregel bleiben die des Dashboards. Höhenrechnung im Kopf der Datei.
@@ -316,13 +321,19 @@ Angebunden wird später nur über diese Skripte; wo noch etwas fehlt, steht in D
 
 **`fc_roof_fc(roof, p50, p10, days, days10)`** – Seite Prognose, ein Dach (`roof` 0…7 = Fläche 1…8, Name `name_pv_<N>`): je 48 kommagetrennte Halbstunden heute ab 00:00 in kW (`pv_estimate`, `pv_estimate10` aus `detailedForecast`), dazu je sieben Tageswerte P50 und P10 in kWh (heute, morgen, Tag 3 … 7). Ein leeres Feld ist „kein Wert“. Hat „heute“ keinen Wert, bekommt das Dach keine Kachel. Stempelt `data_seen[6]`. Zeichnet nicht selbst: nach dem letzten Dach `fc_redraw`.
 
-**`fc_roof_hours(roof, hours, cur)`** – Ist eines Daches: 24 Stundenmittel heute in kW (Platz = Stunde nach Ortszeit, leeres Feld = keins) und das Mittel der laufenden Stunde. Zeichnet nicht selbst.
+**`fc_roof_hours(roof, hours, cur)`** – Ist eines Daches: 24 Stundenmittel heute in kW (Platz = Stunde nach Ortszeit, leeres Feld = keins) und das Mittel der 5-min-Zeilen der laufenden Stunde (`fc_r_cur`). Zeichnet nicht selbst.
+
+**`fc_roof_rows(rows, hour)`** – aus derselben Antwort für die Live-Füllung: je Fläche 1 … 8 zwei Zahlen „n,j“ (Zahl der 5-min-Zeilen ab der vollen Stunde und Ende der letzten als 5-min-Fach 0 … 12, fehlend = 0) und die Stunde laut Home Assistant. Die Zeilen gelten nur, wenn diese Stunde die laufende des Panels ist. Zeichnet nicht selbst.
 
 **`fc_roof_live(roof, power, energy)`** – Leistung jetzt in W und Ertrag heute in kWh („bisher“; ohne Wert die Summe der Stundenbalken). Ändert nur Texte (`fc_text`), stempelt `data_seen[6]`, wenn das Dach eine Prognose hat – der Prognoseabruf kommt nur alle 30 min.
 
 **`fc_mode_set(mode)`** – Umschalter, 0 = Heute, 1 = Vorschau; das Tippen auf die Pille ruft es.
 
-**`fc_redraw`** / **`fc_text`** – ordnet die Kacheln an und zeichnet Balken, Linien, Marke und Tage neu (jede Minute und nach neuen Daten) bzw. nur die Texte. Die Kinder einer Kachel haben keine `id`; die Skripte erreichen sie über ihre Reihenfolge (`lv_obj_get_child`, steht im YAML an den Blöcken). Das global `fc_clock` (Minuten seit 0 Uhr, sonst −1) setzt nur der Screenshot-Lauf, damit das Bild nicht von der Uhrzeit des Laufs abhängt. Nach den Kacheln schreibt `fc_redraw` den Rest der anderen Stellen neu (`pv_rest`, `ov_status`, `house_rest`); ein `interval` von 1 s tut dasselbe samt `fc_text` bei jedem Minutenwechsel, damit alle Stellen zur selben Minute rechnen (nicht während eines Updates, `ota_running`).
+**`fc_redraw`** / **`fc_text`** – ordnet die Kacheln an und zeichnet Balken, Linien, Marke und Tage neu (beim Minutenwechsel und nach neuen Daten) bzw. nur die Texte; `fc_redraw` setzt auch die Hinweise. Den Wert jedes Stundenbalkens und „bisher“ ohne Tageswert liefert `fc_val`. Die Kinder einer Kachel haben keine `id`; die Skripte erreichen sie über ihre Reihenfolge (`lv_obj_get_child`, steht im YAML an den Blöcken). Das global `fc_clock` (Minuten seit 0 Uhr, sonst −1) setzt nur der Screenshot-Lauf, damit das Bild nicht von der Uhrzeit des Laufs abhängt; dann gilt für die laufende Stunde `fc_r_cur` ohne Live-Füllung. Nach den Kacheln schreibt `fc_redraw` den Rest der anderen Stellen neu (`fc_text`, `pv_rest`, `ov_status`, `house_rest`). Ein `interval` von 1 s summiert jede Sekunde die Leistung je Dach (`fc_live_tick`, ohne LVGL) und ruft beim Minutenwechsel genau einmal `fc_redraw`, damit alle Stellen zur selben Minute rechnen (nicht während eines Updates, `ota_running`).
+
+**Laufende Stunde live (seit 11.10.2026, Entscheidung des Nutzers).** Der Balken der laufenden Stunde folgt mit höchstens einer Minute Verzug. Die Seite summiert dafür die Leistung jedes Daches selbst (`fc_r_now` aus `fc_roof_live`): jede Sekunde Leistung × Zeit in eines von zwölf 5-min-Fächern (`fc_lv_e`, abgedeckte Sekunden `fc_lv_t`); leer oder `NAN` zählt nicht, `dt` höchstens 2 s, und solange Home Assistant nicht bereit ist (`fc_live_on`, setzt der Datenweg mit `ha_ready`), zählt nichts. `fc_cur_kw` nimmt bis zum Ende der letzten fertigen 5-min-Zeile von Home Assistant deren Mittel (`fc_lv_n` Zeilen, Ende `fc_lv_j`, aus `fc_roof_rows`), danach die eigene Summe; unter 30 s Abdeckung gibt es keinen Balken. Zur vollen Stunde rechnet der Takt die Vorstunde fertig (`fc_lv_prev`, nur wenn sie direkt davor lag, auch über Mitternacht) und zeichnet sie sofort; der Stundenwert von Home Assistant ersetzt sie mit dem nächsten Tagesabruf ab Minute 1, dabei kann der Balken um wenige Prozent springen. Stundenschlüssel ist Tag im Jahr × 24 + Stunde (`fc_lv_i`). Der Stil der laufenden Stunde bleibt halb deckend. Ein Faktor ≠ 1 bei `ha_pv<N>_power` läuft durch die eigene Summe, nicht durch die Statistik: Mit reinem Einheitenfaktor passt beides, mit Vorzeichenwechsel nicht.
+
+**Hinweise der Seite Prognose (seit 11.10.2026).** Nur mit dem Datenweg: Die Substitution `fc_ha` steht auf der Seite auf `"false"`, `.pv-dashboard_ha.yaml` sticht sie mit `"true"`; Simulator und Screenshots zeigen also keinen. `fc_empty` zeigt „Prognose wird geladen …“, bis der Abruf je Dach geantwortet hat (`fc_fc_da`, Erfolg oder Fehler), danach wie bisher „Keine Prognose je Dach …“. Den Hinweis Ist-Werte rechnet `fc_ist_text` für die Dächer mit Kachel, deren Ist aus der Statistik kommt (`fc_ist_soll`, setzt der Datenweg beim Verbinden). Er erscheint, wenn seit dem Verbinden keine gute Antwort des Tagesabrufs kam (`fc_ist_ms`), die letzte ein Fehler war (`fc_ist_fehler`, Stunden- oder 5-min-Abruf) oder älter als 11 min ist, oder wenn ein Dach für keine fertige Stunde einen Wert hat, obwohl die Prognose in einer davon Ertrag erwartet (nachts melden Wechselrichter oft gar keinen Wert). Vor der ersten guten Antwort seit dem Start heißt er „Ist wird geladen …“, danach „Ist unvollständig“ (`fc_ist_je`). Gesetzt wird er nur in `fc_redraw` über `lbl_set`; jeder Wechsel steht im Log „fc“, ebenso die Zahl der Kacheln.
 
 **Rest heute (seit 11.10.2026, Entscheidung des Nutzers).** Alle Stellen, die einen Rest der Tagesprognose zeigen, rechnen ihn auf **eine** Weise: das global `fc_rest(maske)` der Seite Prognose summiert P50 der Halbstunden ab jetzt, die laufende Halbstunde anteilig (Minute aus `fc_clock`, sonst `dash_time`), über die Dächer der Maske mit Prognose je Dach. Ohne jede Prognose je Dach nimmt die Maske „alle“ die Halbstunden der ganzen Anlage (`fc_sys_p50`, setzt der Datenweg mit jedem Abruf aus der Solcast-Gesamtprognose). Jede Reihe trägt den Tag ihrer Halbstunden laut Home Assistant: Die Antwortvorlage gibt ihn mit (`t`), und jede erfolgreiche Antwort stempelt nur ihre eigene Reihe (`fc_sys_day` für die ganze Anlage, `fc_roof_day` für die Dächer). Eine Reihe, deren Stempel nicht von heute ist, zählt `fc_rest` nicht; nach 0 Uhr bis zum nächsten Abruf oder wenn nur der Abruf je Dach scheitert, gibt es so `NAN` statt des gestrigen Tages als Rest (nicht im Screenshot-Lauf mit `fc_clock`). Der Abruf kommt alle 30 min und zusätzlich ab 00:01 eines neuen Tages; Solcast stellt seine Tagesentitäten um 0 Uhr um. Wer welche Dächer zählt:
 
@@ -356,7 +367,7 @@ Statusleiste und Haus zeigen mit Absicht nur den Hausnetz-Kreis: Die Flächen 1 
 
 **`dev_apply`** – Kern. Liest `dev_present` (ein Bit je Platz: 0–7 Flächen, 8–11 Wechselrichter, 12–14 Speicher, 15/16 Wallboxen, 17 Wärmepumpe, 18 PV-Zähler, 19 Hauszähler, 20 Hausanschluss mit Hausnetz und Sonstige; **nicht** im NVS, Anfangswert `dev_present_start`: im Simulator alle an, am Gerät 0, bis die Referenz-Entitäten melden) und blendet fehlende Geräte aus, ohne dass sich etwas verschiebt: Kästen (seit 10.10.2026 auch Hausnetz, Sonstige und Hausanschluss, Bit 20), Dachgruppen und Rahmen der Übersicht, Wechselrichter und Flächen der Seite PV, Ring, Name und Tabellenspalte im Speicher, Karten der Wallboxen, Kacheln der Wärmepumpe, Unterzeilen der Seite Haus. Setzt die Kanäle fehlender Geräte auf 0, hebt die Störung eines fehlenden Wechselrichters auf und rechnet den Speicher-Mittelwert neu. Leitungen und Kugeln zieht der erzeugte Block selbst nach (Regel 10). Gerufen beim Start (`on_boot` von `bar_status`) und vom Datenweg, sobald eine Referenz-Entität kommt oder geht. Fehlt jedes Gerät einer Quelle, meldet `sys_refresh` für sie keine veralteten Daten („kein Gerät“).
 
-**`sys_refresh`** – Kern, alle 10 s und beim Öffnen des Systemfensters: Alter der Werte je Quelle aus `data_seen`, Symbole, WLAN, Home Assistant, Laufzeit, Version (Dokument 06). Von Hand ruft es niemand. Solange Home Assistant verbunden ist (API mit abonnierten Zuständen), gilt keine Quelle als veraltet (seit 11.10.2026, `ha_live`): Home Assistant schickt einen Wert nur, wenn er sich ändert, eine Wallbox ohne Fahrzeug meldet so stundenlang nichts. Fällt eine Quelle aus, kommt `unavailable` und ihr Wert wird leer bzw. das Gerät verschwindet. Das Alter zeigt dann die Zeit seit der letzten Änderung; `data_stale_s` greift nur ohne API (Simulator, Screenshots) und für das Symbol bei getrennter Verbindung.
+**`sys_refresh`** – Kern, alle 10 s und beim Öffnen des Systemfensters: Alter der Werte je Quelle aus `data_seen`, Symbole, WLAN, Home Assistant, Laufzeit, ESPHome-Version, in der Titelzeile Version (`pv_version`) und Bauzeit der Firmware (Dokument 06). Von Hand ruft es niemand. Solange Home Assistant verbunden ist (API mit abonnierten Zuständen), gilt keine Quelle als veraltet (seit 11.10.2026, `ha_live`): Home Assistant schickt einen Wert nur, wenn er sich ändert, eine Wallbox ohne Fahrzeug meldet so stundenlang nichts. Fällt eine Quelle aus, kommt `unavailable` und ihr Wert wird leer bzw. das Gerät verschwindet. Das Alter zeigt dann die Zeit seit der letzten Änderung; `data_stale_s` greift nur ohne API (Simulator, Screenshots) und für das Symbol bei getrennter Verbindung.
 
 **`pv_redraw_curve`** – Seite PV & Prognose, hängt wie `redraw_curve` an `on_value` beider Reihen und schreibt keine. Zeichnet Balken und Linie auf gemeinsamem Maßstab (Legende nennt die Skala) und rechnet die Kennzahlen: „abgeschlossen" sind die Plätze vor der laufenden Stunde (Stunde − 6), „Ist zu Prognose" braucht mindestens 0,1 kWh Prognose in den abgeschlossenen Stunden; ohne gültige Uhrzeit bleibt sie auf Strichen. Die Restprognose schreibt **`pv_rest`**: `fc_rest` über alle Dächer, dieselbe Zahl wie der Rest in der Kopfzeile der Seite Prognose (Unterzeile „kWh ab jetzt · alle Dächer“, Abschnitt „Rest heute“). Gerufen außerdem von `fc_redraw` und beim Minutenwechsel.
 
@@ -579,10 +590,16 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   | `ha_dev<N>_energy` | `ha_dev<N>_energy_total` (neu, Standard `none`), ein Zählerstand | Σ `change` |
   | `ha_meter<N>_today` | `ha_meter<N>_total` (schon zugeordnet) | Σ `change` |
 
-  Ablauf (`ha_fetch_today`): 30 s nach dem Verbinden und dann alle 5 min
+  Ablauf (`ha_fetch_today`): frühestens 45 s nach dem Verbinden (nach der
+  Statistik) und dann alle 5 min
   (ab Minute 1 des Takts) erst `period: hour` ab heute 0 Uhr
   (`types: mean, change`, `units: W, kWh`), danach `period: 5minute` ab dem
   Ende der letzten vollen Stunde für die laufende Stunde (Σ `mean` / 12000).
+  Für die Balken der Seite Prognose zählt die 5-min-Antwort je Fläche nur
+  Zeilen ab der vollen Stunde laut Home Assistant: ihr Mittel (`c`), ihre
+  Zahl und das Ende der letzten als 5-min-Fach (`cn`, „n,j“ je Fläche 1 … 8)
+  und die Stunde (`hh`); über `ha_fc_n`/`ha_fc_hh` gehen sie an
+  `fc_roof_rows`.
   Abgefragt werden nur die Quellen der Ziele auf `statistik` – das steht
   zur Compile-Zeit fest, ohne ein solches Ziel gibt es keinen Abruf. Die
   Vorlage liefert je Platz eine Zahl (18 Plätze, `TAGES_STAT` im Werkzeug),
@@ -591,7 +608,8 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
   er setzt sein Gruppenbit wie ein Wert aus Home Assistant. Der Sensor selbst
   hört auf die Ersatz-ID. **Verzug:** Home Assistant schreibt die
   5-min-Statistik kurz nach jedem Takt, der Wert hinkt also bis zu etwa
-  6 min nach; nach dem Start ist er bis zum ersten Abruf leer, kurz nach
+  6 min nach (der Balken der laufenden Stunde auf der Seite Prognose nicht,
+  er füllt sich live); nach dem Start ist er bis zum ersten Abruf leer, kurz nach
   Mitternacht beginnt er bei 0. Die bestehende Statistik (Woche, Monat,
   Jahr, 24 h) bleibt unverändert. Die Quelle braucht Langzeitstatistik:
   Leistung mit `state_class: measurement`, Zähler mit `total` oder
@@ -654,7 +672,7 @@ python3 tools/ha_bindings.py --write    # schreibt beide Dateien
 - **Zeitplan.** Ein Intervall von 10 s erkennt das Verbinden: Prognosen
   20 s danach und dann alle 30 min, Statistik 30 s danach und dann zu
   jeder neuen Stunde ab Minute 2 (damit auch beim Tageswechsel),
-  Tageswerte aus der Statistik 30 s danach und dann alle 5 min ab Minute 1
+  Tageswerte aus der Statistik frühestens 45 s danach und dann alle 5 min ab Minute 1
   — derselbe Abruf holt die Stundenmittel von `ha_pv<N>_power` jeder Fläche
   mit Prognose (Stunden ab 0 Uhr, laufende Stunde aus 5-min-Werten) für die
   Balken der Seite Prognose, auch ohne `ha_pv<N>_energy: statistik`.
@@ -711,6 +729,16 @@ Python-Umgebung von ESPHome (nichts nachzuinstallieren):
   "" für ±∞ und Striche für `NAN`, nie „inf“/„nan“; keine NAN-Kennung mehr im
   Repo; der Datenweg rechnet nicht an den Hilfen vorbei. Einen RISC-V-Compiler
   gibt es hier nicht, −∞ ist aber IEEE 754 und dort gleich.
+- **`test_fc_live_cpp.py`** (Sekunden, braucht `g++`): baut die echten
+  globals `fc_cur_kw`, `fc_live_tick`, `fc_val` und `fc_ist_text` der Seite
+  Prognose (`id(x)` → `x`) zu einem C++-Programm (`-O0` und `-O2`): eigene
+  Summe, Werte von Home Assistant bis zum Ende ihrer Zeilen und danach die
+  eigene Summe (auch mit Lücke), falsche Stunde, unter 30 s kein Wert, leer,
+  `NAN`, aus und `dt` 0 zählen nicht, Stundenwechsel samt Mitternacht und
+  Lücke, Screenshot-Lauf mit `fc_clock`, alle Bedingungen des Hinweises
+  Ist-Werte samt `millis()`-Überlauf. Dazu im YAML: ein Takt, der erst
+  summiert und dann je Minute genau einmal `fc_redraw` ruft, Balken und
+  Texte über `fc_val`, laufende Stunde weiter halb deckend.
 - **`test_ha_bindings.py`, `test_flow_animation.py`** (Sekunden): erzeugte
   Dateien aktuell (`ha_bindings.py`, `flow_animation.py`), jeder `ha_*`-Schlüssel
   mit Standard, je Platz eine Referenz (Zahl oder Text, kein Attribut),
@@ -729,11 +757,15 @@ Python-Umgebung von ESPHome (nichts nachzuinstallieren):
   Halbstunden mit drei Stellen, Tage mit `unavailable` leer, Flächen ohne
   Prognose fehlen; der Tagesabruf fragt jede Leistung nur einmal ab (auch
   wenn sie zugleich Quelle eines Tageswerts ist) und liefert je Fläche 24
-  Stundenmittel in Ortszeit bzw. das Mittel der laufenden Stunde; `none`, `FALSE`, `Off`, `""`, `null` … laufen durch ESPHomes eigene
+  Stundenmittel in Ortszeit bzw. das Mittel der laufenden Stunde nur aus
+  Zeilen ab der vollen Stunde, dazu je Fläche Zahl und Ende dieser Zeilen
+  und die Stunde (ohne Zeile 0,0, nie Mitternacht als Anker); Ladehinweise
+  nur mit dem Datenweg (`fc_ha`), ihren Stand setzen nur Antworten und
+  Verbinden; `none`, `FALSE`, `Off`, `""`, `null` … laufen durch ESPHomes eigene
   Substitution und ergeben Ersatz-ID und `B_… = false`; jeder Kasten des
   Schemas hat einen Platz, jede Strecke einen Kanal oder schweigt, jede Leitung
   eine Sichtbarkeitsregel, jedes Gerät steuert mindestens eine Leitung.
-- **`ha_probe.py`** (etwa 2 min, erster Bau länger): baut `tests/ha-test.yaml`
+- **`ha_probe.py`** (etwa 4 bis 5 min, erster Bau länger): baut `tests/ha-test.yaml`
   (Simulator + `.pv-dashboard_ha.yaml` + `api:` ohne Schlüssel auf Port 16063,
   nur localhost; Build unter `.esphome/build/pv-dashboard-test/`), startet es
   ohne Fenster und meldet sich mit `aioesphomeapi` als Home Assistant an:
@@ -792,6 +824,17 @@ Python-Umgebung von ESPHome (nichts nachzuinstallieren):
   Anlage; Autarkie heute (Fall X) aus dem Gesamtverbrauch, die Kachel
   „Verbrauch“ bleibt beim Hausverbrauch, Gesamtverbrauch `unavailable` →
   Autarkie aus dem Hausverbrauch, Bezug über dem Verbrauch → 0 %;
+  Seite Prognose (Fall Y): bis zur ersten Antwort je Dach „Prognose wird
+  geladen …“, die ersten Kacheln mit „Ist wird geladen …“, nie Kacheln ohne
+  Ist und ohne Hinweis, nach dem Tagesabruf keiner; die 5-min-Zeilen der
+  laufenden Stunde (Zahl, Ende, Stunde) kommen an
+  (`probe_fetch_today`), der Balken liegt zwischen dem Mittel von HA und der
+  festen Leistung, ohne 5-min-Zeilen ist er die eigene Leistung, Kachel 1
+  zeichnet ihn in beiden Fällen, getrennt
+  wächst die eigene Summe nicht, ein gescheiterter Tagesabruf zeigt „Ist
+  unvollständig“, der nächste gute und das Wiederverbinden samt Tagesabruf
+  nehmen es weg; die Zeiten Verbinden → Kacheln → Ist-Balken stehen als Info
+  in der Ausgabe;
   Trennung → genau eine Sammelmeldung, Verbinden → weg; über den
   ganzen Lauf in keinem der Labels aller Seiten „inf“ oder „nan“.
   `--shots` legt dazu BMP nach `shots/ha_probe/` (vorher gelöscht, `snapshot.take` überschreibt nicht);

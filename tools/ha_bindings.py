@@ -835,7 +835,13 @@ def jinja_heute(teiler):
     '' ohne Zeile; dazu das Ende der letzten Zeile (Start des 5-min-Abrufs).
     Ausserdem c: je Flaeche 1..8 (';' getrennt) die Stundenmittel in kW, 24
     Plaetze nach Ortszeit (Stunden-Abruf) bzw. das Mittel der laufenden
-    Stunde in kW (5-min-Abruf); '' = kein Wert oder Flaeche ohne Prognose."""
+    Stunde in kW (5-min-Abruf); '' = kein Wert oder Flaeche ohne Prognose.
+    Der 5-min-Abruf nimmt fuer c nur Zeilen ab der vollen Stunde laut Home
+    Assistant (hs; Zeilen der Vorstunde fehlen, solange ihr Stundenwert
+    noch nicht geschrieben ist) und liefert fuer die Live-Fuellung der
+    Seite Prognose dazu cn: je Flaeche 1..8 die Zahl dieser Zeilen und das
+    Ende der letzten als 5-min-Fach 0..12 ("n,j,n,j,..."; ohne Zeile 0,0)
+    und hh: die Stunde von hs."""
     stunde = teiler == 1000
     q = ",\n".join(f"['{j_stat_quelle(z_, quelle)}', '{art}']" for z_, quelle, art in TAGES_STAT)
     ende = [
@@ -851,9 +857,24 @@ def jinja_heute(teiler):
             "{%- set h.v = h.v[:s.hour] + ['%.3g' | format(w / 1000)] + h.v[s.hour + 1:] -%}",
         ]
         kurve_aus = "{%- set c.l = c.l + [(h.v | join(',')) if x else ''] -%}"
+        kopf, aus = [], ""
     else:
-        kurve = ["{%- set h.s = h.s + w -%}", "{%- set h.n = h.n + 1 -%}"]
-        kurve_aus = "{%- set c.l = c.l + [('%.3g' | format(h.s / h.n / 1000)) if h.n else ''] -%}"
+        # eigene Namen: ende benutzt t
+        kurve = [
+            "{%- set st = as_datetime(e.start) if e.start is string else e.start -%}",
+            "{%- set en = e.get('end') -%}",
+            "{%- set en = as_datetime(en) if en is string else en -%}",
+            "{%- if st and en and st >= hs -%}",
+            "{%- set h.s = h.s + w -%}",
+            "{%- set h.n = h.n + 1 -%}",
+            "{%- set h.j = [h.j, ((en - hs).total_seconds() / 300) | int] | max -%}",
+            "{%- endif -%}",
+        ]
+        kurve_aus = ("{%- set c.l = c.l + [('%.3g' | format(h.s / h.n / 1000)) if h.n else ''] -%}\n"
+                     "{%- set cn.l = cn.l + [h.n, h.j] -%}")
+        kopf = ["{%- set hs = now().replace(minute=0, second=0, microsecond=0) -%}",
+                "{%- set cn = namespace(l=[]) -%}"]
+        aus = ", 'cn': cn.l | join(','), 'hh': hs.hour | string"
     return "\n".join([
         "{%- set q = [",
         q,
@@ -873,8 +894,9 @@ def jinja_heute(teiler):
         "{%- endfor -%}",
         "{%- set k = [" + ", ".join(f"'{j_kurve(i)}'" for i in range(1, 9)) + "] -%}",
         "{%- set c = namespace(l=[]) -%}",
+    ] + kopf + [
         "{%- for x in k -%}",
-        "{%- set h = namespace(v=[''] * 24, s=0, n=0) -%}",
+        "{%- set h = namespace(v=[''] * 24, s=0, n=0, j=0) -%}",
         "{%- for e in (response.statistics.get(x, []) if x else []) -%}",
         "{%- set w = e.get('mean') -%}",
         "{%- if w is number -%}",
@@ -882,7 +904,7 @@ def jinja_heute(teiler):
         "{%- endfor -%}",
         kurve_aus,
         "{%- endfor -%}",
-        "{{ {'v': o.v | join(','), 'end': o.end.isoformat(), 'c': c.l | join(';')} | tojson }}",
+        "{{ {'v': o.v | join(','), 'end': o.end.isoformat(), 'c': c.l | join(';')" + aus + "} | tojson }}",
     ])
 
 
@@ -1108,6 +1130,7 @@ for (int k = 0; k < 8; k++) {
   id(fc_roof_fc).execute(k, S(("a" + n).c_str()), S(("b" + n).c_str()), S(("d" + n).c_str()),
                          S(("e" + n).c_str()));
 }""" + tag_stempeln("fc_roof_day") + """
+id(fc_fc_da) = true;  // erste Antwort: Seite Prognose laedt nicht mehr
 id(fc_redraw).execute();
 if (id(fc_roof_on) == 0)
   return;
@@ -1237,13 +1260,44 @@ const auto v = L(S("v"));
 for (size_t k = 0; k < {N_STAT}; k++)
   id(ha_stat_m)[k] = F(v, k);
 id(ha_fc_m) = S("c");
+// 5-min-Zeilen der laufenden Stunde je Flaeche und Stunde laut HA
+// (Live-Fuellung der Seite Prognose, fc_roof_rows)
+id(ha_fc_n) = S("cn");
+{{
+  const std::string hh = S("hh");
+  id(ha_fc_hh) = hh.empty() ? -1 : atoi(hh.c_str());
+}}
+// Stand fuer den Hinweis Ist-Werte der Seite Prognose. 0 heisst "keine
+// Antwort", millis() == 0 zaehlt als die Millisekunde davor: Der Stempel
+// liegt nie in der Zukunft (fc_ist_text rechnet das Alter unsigned).
+{{
+  const uint32_t j = millis();
+  id(fc_ist_ms) = j != 0 ? j : 0xFFFFFFFFu;
+}}
+id(fc_ist_fehler) = false;
+id(fc_ist_je) = true;
 id(ha_stat_today_set).execute();"""
 
 FEHLER_HEUTE_M = """- lambda: |-
     ESP_LOGW("ha", "Tageswerte 5 min: %s", error.c_str());
     id(ha_stat_m).fill(NAN);
     id(ha_fc_m).clear();
+    id(ha_fc_n).clear();
+    id(ha_fc_hh) = -1;
+    id(fc_ist_fehler) = true;
 - script.execute: ha_stat_today_set"""
+
+# Stunden-Abruf gescheitert: die 5-min-Werte kommen dann nicht, die Seite
+# Prognose zeigt "Ist unvollstaendig" (fc_redraw beim naechsten Minutenwechsel)
+FEHLER_HEUTE_H = """- lambda: |-
+    ESP_LOGW("ha", "Tageswerte Stunden: %s", error.c_str());
+    id(fc_ist_fehler) = true;"""
+
+# Abruf je Dach gescheitert: die Seite Prognose zeigt statt "Prognose wird
+# geladen" den Hinweis fuer fehlende Prognosen (fc_redraw)
+FEHLER_DACH = """- lambda: |-
+    ESP_LOGW("ha", "Prognose je Dach: %s", error.c_str());
+    id(fc_fc_da) = true;"""
 
 
 def stat_setzen():
@@ -1256,7 +1310,8 @@ def stat_setzen():
   # statistik): volle Stunden + laufende Stunde; beide ohne Zeile -> NAN
   # (leer). publish_state laeuft durch den Faktor des Ziels und setzt sein
   # Gruppenbit wie ein Wert aus Home Assistant. Danach die Stundenbalken je
-  # Flaeche mit Prognose an die Seite Prognose (fc_roof_hours).
+  # Flaeche mit Prognose an die Seite Prognose (fc_roof_hours, dazu die
+  # 5-min-Zeilen der laufenden Stunde fuer die Live-Fuellung, fc_roof_rows).
   - id: ha_stat_today_set
     then:
       - lambda: |-
@@ -1277,6 +1332,7 @@ def stat_setzen():
               id(fc_roof_hours).execute(k, k < h.size() ? h[k] : std::string(),
                                         k < m.size() && !m[k].empty() ? strtof(m[k].c_str(), nullptr) : NAN);
           }}
+          id(fc_roof_rows).execute(id(ha_fc_n), id(ha_fc_hh));
           id(fc_redraw).execute();"""
 
 
@@ -1390,6 +1446,9 @@ def panel_bauen():
     w("  # dev_present startet leer; die Referenzen (s. u.) melden die Geraete.\n"
       "  # Sticht den Wert aus .pv-dashboard_ui.yaml (Simulator: alles da).")
     w('  dev_present_start: "0u"')
+    w("  # Seite Prognose mit Ladehinweisen (Werte kommen aus Home Assistant).\n"
+      "  # Sticht \"false\" aus .pv-dashboard_page_forecast.yaml.")
+    w('  fc_ha: "true"')
     w("  # Jede ID darf none, false, off, null oder \"\" sein = nicht belegt.\n"
       "  # Referenz je Geraet (nicht verfuegbar oder nicht belegt = Geraet weg):")
     for platz, bit in PLAETZE:
@@ -1493,6 +1552,15 @@ def panel_bauen():
   - id: ha_fc_m
     type: std::string
     restore_value: false
+  # Dazu aus dem 5-min-Abruf je Flaeche Zahl und Ende der Zeilen der
+  # laufenden Stunde ("n,j,...") und deren Stunde laut HA (-1 = keine)
+  - id: ha_fc_n
+    type: std::string
+    restore_value: false
+  - id: ha_fc_hh
+    type: int
+    restore_value: false
+    initial_value: '-1'
   # Stoerung aus dem Statustext (ha_inv<N>_fault nicht belegt): Bit je
   # Wechselrichter, gehalten fuer inv_fault_hold_s; letzter Stoerungstext
   - id: ha_inv_fault_txt
@@ -1656,7 +1724,7 @@ def panel_bauen():
       "      # detailedForecast von ha_pv<N>_fc_d1..7 -- die Vorlage liest sie selbst,\n"
       "      # weather.get_forecasts ist nur der Traeger einer Antwort")
     w(aktion("weather.get_forecasts", [("entity_id", "${ha_weather}"), ("type", "daily")], [],
-             jinja_dach(), ERFOLG_DACH, "Prognose je Dach", zaehler=0))
+             jinja_dach(), ERFOLG_DACH, "Prognose je Dach", fehler_extra=FEHLER_DACH, zaehler=0))
     w("""
   # Ersatzweg fuer die Solcast-Halbstunden: das Attribut detailedForecast der
   # Tagesprognose. Die Vorlage braucht irgendeine Aktion mit Antwort --
@@ -1706,7 +1774,7 @@ def panel_bauen():
              ("units", "{{ {'energy': 'kWh', 'power': 'W'} }}")]
     w(aktion("recorder.get_statistics", [("period", "hour")],
              [daten[0], ("start_time", "{{ today_at('00:00').isoformat() }}")] + daten[1:],
-             jinja_heute(1000), ERFOLG_HEUTE_H, "Tageswerte Stunden"))
+             jinja_heute(1000), ERFOLG_HEUTE_H, "Tageswerte Stunden", fehler_extra=FEHLER_HEUTE_H))
     w("""
   - id: ha_fetch_today_5min
     then:""")
@@ -1826,10 +1894,18 @@ def panel_bauen():
             stat_schluessel = -1;
             heute_schluessel = -1;
             id(ha_offen) = {0, 0};
+            // Seite Prognose: Daecher mit Ist aus der Statistik; Ist-Werte
+            // gelten bis zum ersten Tagesabruf als unvollstaendig (Hinweis)
+            constexpr bool KURVE[8] = {""" + ", ".join(j_kurve_an(i) for i in range(1, 9)) + """};
+            id(fc_ist_soll) = 0;
+            for (int k = 0; k < 8; k++)
+              id(fc_ist_soll) |= KURVE[k] ? 1u << k : 0u;
+            id(fc_ist_ms) = 0;
           }
           const bool bereit = ist && millis() - seit >= 10000;
           if (bereit != id(ha_ready)) {
             id(ha_ready) = bereit;
+            id(fc_live_on) = bereit;  // getrennt: alte Leistung zaehlt nicht
             id(ha_dirty) = 0xFFFFFFFFu;
           }
           if (!ist || millis() - seit < 20000)

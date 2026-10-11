@@ -35,11 +35,15 @@ Erzeugte Dateien nie von Hand ändern:
 - **Zweige.** Gearbeitet wird auf `dev`. Das Gerät baut per Remote-Package aus
   `main` (`ref: main`, `refresh: always`). Ein Release ist ein PR `dev` →
   `main`.
+- **Version.** Der Release-Commit setzt `pv_version` in `.pv-dashboard_ui.yaml`
+  auf Jahr.Monat.x wie bei ESPHome, den Monat ohne führende Null: x zählt die
+  Releases im Monat ab 0 und beginnt im neuen Monat wieder bei 0 (2026.10.0,
+  2026.10.1, …, 2026.11.0, …, 2027.1.0).
 - **Freigaben des Nutzers (Stand 11.10.2026).** Was gebaut werden darf, darf
   ohne weitere Rückfrage committet, als PR gestellt und gemergt werden.
 - **Prüfen vor jedem Release:**
-  - `python -m unittest discover tests` (41 Tests)
-  - `python tests/ha_probe.py --shots` (102 Prüfungen gegen ein nachgebautes
+  - `python -m unittest discover tests` (45 Tests)
+  - `python tests/ha_probe.py --shots` (115 Prüfungen gegen ein nachgebautes
     Home Assistant, dazu der Bildlauf)
   - Die PNG-Bilder unter `shots/` ansehen.
 - **Gerätedateien.** `pv-dashboard.yaml` und die eigene

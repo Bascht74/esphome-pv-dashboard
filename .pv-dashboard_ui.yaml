@@ -41,6 +41,11 @@ esphome:
 # der Paketliste spaeter und sticht damit diesen Wert.
 substitutions:
   dev_present_start: "0x1FFFFFu"
+  # Version wie bei ESPHome: Jahr.Monat.x, Monat ohne fuehrende Null
+  # (2026.10.0, 2027.1.0). x zaehlt die Releases (PR dev -> main) im Monat ab 0
+  # und beginnt im neuen Monat wieder bei 0. Der Release-Commit setzt sie
+  # (UEBERGABE.md). Steht unten links auf der Uebersicht und im Systemfenster.
+  pv_version: "2026.10.0"
 
 # Die Seiten, jede in einer eigenen Datei. Wer diesen Kern einbindet, bekommt
 # sie alle mit -- Geraet, Simulator und Screenshots sehen dieselbe Oberflaeche.
@@ -455,6 +460,14 @@ script:
           const uint32_t up = now / 1000u;
           lv_label_set_text_fmt(id(sys_uptime), "%u d %02u:%02u", (unsigned) (up / 86400), (unsigned) (up / 3600 % 24), (unsigned) (up / 60 % 60));
           id(lbl_set)(id(sys_version), ESPHOME_VERSION);
+          // Version und Bauzeit der Firmware, damit sich Simulator- und
+          // Panel-Bau unterscheiden lassen. Ortszeit wie die Uhr (dash_time).
+          const ESPTime bau = ESPTime::from_epoch_local(App.get_build_time());
+          char bau_txt[64];
+          snprintf(bau_txt, sizeof(bau_txt), "Version ${pv_version} · gebaut %02u.%02u.%04u %02u:%02u",
+                   (unsigned) bau.day_of_month, (unsigned) bau.month, (unsigned) bau.year,
+                   (unsigned) bau.hour, (unsigned) bau.minute);
+          id(lbl_set)(id(sys_build), bau_txt);
 
   # Zur vollen Stunde um HH:00:05 aufgerufen (on_time in
   # .pv-dashboard_core.yaml bzw. pv-dashboard-sim.yaml): schreibt die
@@ -1398,7 +1411,11 @@ lvgl:
           on_click:
             - lvgl.widget.hide: sys_panel
           widgets:
-            - label: { x: 0, y: 0, width: 576, height: 17, long_mode: DOT, styles: st_label, text: "SYSTEM" }
+            # Titelzeile: links SYSTEM, rechts Version und Bauzeit
+            # (sys_refresh), gleiche Zeilenhoehe 17. "Version 2026.12.10 ·
+            # gebaut 31.12.2026 23:59" ist 283 breit, Platz 376.
+            - label: { x: 0, y: 0, width: 200, height: 17, long_mode: DOT, styles: st_label, text: "SYSTEM" }
+            - label: { id: sys_build, x: 200, y: 0, width: 376, height: 17, long_mode: DOT, text_align: RIGHT, styles: st_unit, text: "Version ${pv_version}" }
             - label: { x: 0, y: 36, width: 260, height: 20, long_mode: DOT, text: "WLAN", text_font: f_text_s, text_color: $col_ink2 }
             - label: { id: sys_wifi, x: 270, y: 35, width: 306, height: 22, long_mode: DOT, text_align: RIGHT, text: "--", text_font: f_text, text_color: $col_ink }
             - label: { x: 0, y: 72, width: 260, height: 20, long_mode: DOT, text: "Home Assistant", text_font: f_text_s, text_color: $col_ink2 }

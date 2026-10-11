@@ -1381,6 +1381,13 @@ lvgl:
                   { label: { id: e_batt, align: TOP_MID, y: 0, width: 176, height: 21, long_mode: DOT, text_align: CENTER, text: "---.---", text_font: f_val_s, text_color: $col_batt } },
                   { label: { id: sub_battery_total, align: TOP_MID, y: 22, width: 176, height: 17, long_mode: DOT, text_align: CENTER, text: "W · \U000F0045--,- kWh · \U000F005D--,- kWh", text_color: $col_ink2, text_font: f_unit } } ] }
 
+        # Version (pv_version im Kern) unten links, fester Text ohne Skript.
+        # Streifen zwischen PV-Zaehler (Unterkante 722) und Menueleiste
+        # (Linie 744): Label 724..740, x 4 wie der Schemarand. Breite 86:
+        # "v2026.12.10" ist 78 breit, "v2026.12.100" 86. Im Streifen liegt
+        # bis zum Hausanschluss (ab x 374) nichts.
+        - label: { id: lbl_version, x: 4, y: 724, width: 86, height: 17, long_mode: DOT, styles: st_unit, text: "v${pv_version}" }
+
 interval:
   # >>> flow-animation -- erzeugt von tools/flow_animation.py, nicht von Hand aendern
   - interval: 20ms

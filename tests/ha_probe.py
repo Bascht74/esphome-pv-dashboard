@@ -92,6 +92,16 @@ Entitaet weg -> nur der Wert weg):
      die Kachel Verbrauch bleibt ha_home_energy_today; Gesamtverbrauch
      unavailable -> Autarkie aus ha_home_energy_today; Bezug ueber dem
      Verbrauch -> 0 %
+  Y  Seite Prognose, laufende Stunde live und Hinweise (Entscheidung des
+     Nutzers, 11.10.2026): bis zur ersten Antwort des Abrufs je Dach
+     "Prognose wird geladen ...", nie Kacheln ohne Ist und ohne Hinweis,
+     erst "Ist wird geladen ...", nach dem Tagesabruf kein Hinweis; die
+     5-min-Zeilen der laufenden Stunde (Zahl, Ende, Stunde) kommen an, der
+     Balken liegt zwischen dem Mittel von HA und der festen Leistung;
+     getrennt waechst die eigene Summe nicht; ohne 5-min-Zeilen ist er die
+     eigene Leistung; Kachel 1 zeichnet ihn (halb deckend); ein gescheiterter Tagesabruf zeigt "Ist
+     unvollstaendig", der naechste gute nimmt es weg, ebenso nach dem
+     Wiederverbinden. Dazu die Zeiten Verbinden -> Kacheln -> Ist (Info).
 
 Liest keine secrets.yaml und nicht .pv-dashboard_anlage.yaml. Ergebnis:
 Exit-Code 0, wenn alle Faelle bestehen.
@@ -293,6 +303,9 @@ class FakeHA:
         self.select_fehler = False  # HA lehnt ab (wie eine unbekannte Option)
         self.stat_heute = {}       # period -> letzte Antwort auf den Tagesabruf (types mean)
         self.dach_fehler = False   # Abruf je Dach scheitert (Fall W), die uebrigen nicht
+        self.ohne_5min = False     # Tagesabruf 5 min ohne Zeilen (Fall Y)
+        self.heute_fehler = False  # Tagesabruf 5 min scheitert (Fall Y)
+        self.heute_n = 0           # Antworten auf den Tagesabruf 5 min
 
     async def verbinden(self, frist=60):
         self.cli = APIClient("127.0.0.1", PORT, None)
@@ -352,9 +365,16 @@ class FakeHA:
                     raise Exception("Prognose je Dach: Fehler (Probe)")
                 resp = {data["entity_id"]: {"forecast": self.stunde if data["type"] == "hourly" else self.tag}}
             elif c.service == "recorder.get_statistics":
+                fuenf = "mean" in data.get("types", []) and data["period"] == "5minute"
+                if fuenf and self.heute_fehler:
+                    raise Exception("Tageswerte 5 min: Fehler (Probe)")
                 resp = statistik(data)
+                if fuenf and self.ohne_5min:
+                    resp = {"statistics": {k: [] for k in resp["statistics"]}}
                 if "mean" in data.get("types", []):
                     self.stat_heute[data["period"]] = resp
+                if fuenf:
+                    self.heute_n += 1
             else:
                 raise Exception(f"Action {c.service} not found")
             r = parse(render(c.response_template, response=resp)) if c.response_template else resp
@@ -465,6 +485,96 @@ ERGEBNIS = []
 def pruefe(fall, text, ok, info=""):
     ERGEBNIS.append((fall, text, bool(ok)))
     print(f"  [{'ok ' if ok else 'FEHLER'}] {fall} {text}" + (f"  ({info})" if info and not ok else ""), flush=True)
+
+
+async def ablauf_y(panel, ha, n_verbunden):
+    """Fall Y: Ladehinweise und laufende Stunde der Seite Prognose."""
+    alle = list(panel.alle)
+    i0 = next((i for i, x in enumerate(alle) if x["fc"]["tiles"] > 0), None)
+    vorher = alle[:i0] if i0 is not None else alle
+    pruefe("Y", "bis zur ersten Antwort je Dach: \"Prognose wird geladen …\" statt \"Keine Prognose\"",
+           i0 is not None and vorher and all(x["fc"]["empty"] == "Prognose wird geladen …" and x["fc"]["empty_hid"] == 0
+                                              for x in vorher), sorted({x["fc"]["empty"] for x in vorher}))
+    erste = alle[i0] if i0 is not None else None
+    pruefe("Y", "erste Zeile mit Kacheln: noch ohne Ist, Hinweis \"Ist wird geladen …\"",
+           erste and erste["fc"]["act"][0] == 0 and erste["fc"]["hint"] == "Ist wird geladen …",
+           erste and (erste["fc"]["act"], erste["fc"]["hint"]))
+    ohne = [x for x in alle if x["fc"]["tiles"] > 0 and x["fc"]["mode"] == 0 and x["fc"]["act"][0] == 0
+            and x["fc"]["min"] >= 60 and x["fc"]["hint"] == ""]
+    pruefe("Y", "nie Kacheln ohne Ist und ohne Hinweis", not ohne, ohne[:1] and ohne[0]["fc"])
+    d = await panel.warten(lambda d: d["fc"]["act"][0] > 0 and d["fc"]["hint"] == "", 10)
+    pruefe("Y", "nach dem Tagesabruf: Ist da, kein Hinweis", d, panel.letzte["fc"]["hint"])
+    # Zeiten (Info) ab dem Verbinden: Kacheln (Linien), Ist-Balken. millis()
+    # zaehlt auf dem Rechner nicht ab dem Programmstart, darum nur Abstaende
+    alle = list(panel.alle)
+    t_v = alle[n_verbunden]["ms"] if len(alle) > n_verbunden else None
+    t_k = next((x["ms"] for x in alle if x["fc"]["tiles"] > 0), None)
+    t_i = next((x["ms"] for x in alle if x["fc"]["tiles"] > 0 and x["fc"]["act"][0] > 0), None)
+    if None not in (t_v, t_k, t_i):
+        print(f"  Zeiten ab dem Verbinden: Kacheln/Linien {(t_k - t_v) / 1000:.0f} s, "
+              f"Ist-Balken {(t_i - t_v) / 1000:.0f} s", flush=True)
+
+    # 5-min-Zeilen der laufenden Stunde; nicht ueber die volle Stunde hinweg
+    while (now().minute == 59 and now().second >= 30) or (now().minute == 0 and now().second < 10):
+        await asyncio.sleep(1)
+    own = float(ha.state[E("pv1_power")]) / 1000
+
+    async def heute_abrufen():
+        """Tagesabruf ausloesen und auf die 5-min-Antwort warten; laeuft er
+        gerade (Takt, Skript single), noch einmal."""
+        n0 = ha.heute_n
+        for _ in range(2):
+            await ha.dienst("probe_fetch_today", {})
+            ende = time.monotonic() + 8
+            while ha.heute_n == n0 and time.monotonic() < ende:
+                await asyncio.sleep(0.2)
+            if ha.heute_n != n0:
+                return True
+        return False
+
+    await heute_abrufen()
+    hs = now().replace(minute=0, second=0, microsecond=0)
+    lauf = [r for r in ha.stat_heute["5minute"]["statistics"].get(E("pv1_power"), []) if as_datetime(r["start"]) >= hs]
+    n_soll = len(lauf)
+    j_soll = max((int((as_datetime(r["end"]) - hs).total_seconds() // 300) for r in lauf), default=0)
+    d = await panel.warten(lambda d: d["fc"]["hh"] == 1 and d["fc"]["n"] == n_soll and d["fc"]["j"] == j_soll, 5)
+    pruefe("Y", f"5-min-Zeilen der laufenden Stunde: {n_soll} Zeilen bis Fach {j_soll}, Stunde laut HA = Panel", d,
+           {k_: panel.letzte["fc"][k_] for k_ in ("n", "j", "hh")})
+    c = sum(r["mean"] for r in lauf) / len(lauf) / 1000 if lauf else own
+    cur = panel.letzte["fc"]["cur"]
+    pruefe("Y", f"laufende Stunde zwischen HA-Mittel {c:.3f} und fester Leistung {own:.3f} kW",
+           cur is not None and min(c, own) - 0.01 <= cur <= max(c, own) + 0.01, cur)
+    # gezeichnet: Kachel 1 hat den halb deckenden Balken der laufenden Stunde
+    # Die Achse zeigt hoechstens 20 Stunden; die Testwerte haben Ist ab 0 Uhr,
+    # ab 20 Uhr liegt die laufende Stunde darum hinter der Achse
+    achse = now().hour < 20
+    pruefe("Y", "Kachel 1 zeichnet den Balken der laufenden Stunde" + ("" if achse else " (ab 20 Uhr nicht auf der Achse)"),
+           panel.letzte["fc"]["lauf_h"] > 0 if achse else panel.letzte["fc"]["lauf_h"] == 0,
+           panel.letzte["fc"]["lauf_h"])
+    # ohne 5-min-Zeilen: nur die eigene Summe
+    ha.ohne_5min = True
+    await heute_abrufen()
+    d = await panel.warten(lambda d: d["fc"]["n"] == 0 and d["fc"]["j"] == 0 and d["fc"]["cur"] is not None
+                           and abs(d["fc"]["cur"] - own) <= 0.005, 5)
+    pruefe("Y", f"ohne 5-min-Zeilen: Balken = eigene Leistung {own:.3f} kW", d,
+           {k_: panel.letzte["fc"][k_] for k_ in ("n", "j", "cur")})
+    # Ohne 5-min-Zeilen hat HA kein Mittel der Stunde (fc_r_cur leer): ein
+    # Balken kommt dann nur aus der eigenen Summe
+    pruefe("Y", "ohne 5-min-Zeilen: Kachel 1 zeichnet den Balken aus der eigenen Summe"
+           + ("" if achse else " (ab 20 Uhr nicht auf der Achse)"),
+           panel.letzte["fc"]["lauf_h"] > 0 if achse else panel.letzte["fc"]["lauf_h"] == 0, panel.letzte["fc"]["lauf_h"])
+    ha.ohne_5min = False
+    # Tagesabruf scheitert -> "Ist unvollstaendig"; der naechste gute nimmt es weg
+    ha.heute_fehler = True
+    await ha.dienst("probe_fetch_today", {})
+    d = await panel.warten(lambda d: d["fc"]["hint"] == "Ist unvollständig", 10)
+    pruefe("Y", "Tagesabruf scheitert: \"Ist unvollständig\"", d, panel.letzte["fc"]["hint"])
+    ha.heute_fehler = False
+    beantwortet = await heute_abrufen()
+    d = await panel.warten(lambda d: d["fc"]["hint"] == "" and d["fc"]["hh"] == 1, 5)
+    pruefe("Y", "naechster Tagesabruf gelingt: kein Hinweis", d,
+           (beantwortet, panel.letzte["fc"]["hint"], panel.letzte["fc"]["hh"],
+            [z for z in panel.log if "ha" in z or "fc" in z or "cript" in z][-6:]))
 
 
 async def ablauf(panel, ha, bilder):
@@ -778,6 +888,9 @@ async def ablauf(panel, ha, bilder):
     d = await panel.warten(lambda d: d["fc"]["mode"] == 0 and d["fc"]["t0"].endswith(f"/ {k(sued[0][0])} kWh"), 4)
     pruefe("R", "Tipp Heute: zurueck auf bisher / Prognose", d, panel.letzte["fc"])
 
+    # Y: Seite Prognose -- Start, laufende Stunde live, Hinweise
+    await ablauf_y(panel, ha, n_verbunden)
+
     # W: Rest heute, Teil 1 -- Daecher 1 und 2 (Volleinspeisung) mit
     # Prognose, Flaechen 3..7 da, aber ohne Prognose je Dach
     entitaet = k(hb.NAMEN["solcast_remaining"]["demo"])
@@ -849,6 +962,7 @@ async def ablauf(panel, ha, bilder):
            alt > 15 and not keine, keine[:3] or alt)
 
     # H
+    n_trennen = len(panel.alle)
     await ha.trennen()
     d = await panel.warten(lambda d: d["link"] >= 1, 30)
     pruefe("H", "Trennung: Sammelmeldung da", d, panel.letzte and panel.letzte["txt"]["lbl_alert"])
@@ -863,6 +977,12 @@ async def ablauf(panel, ha, bilder):
     # gesehen hat: Erst dann ruft er nach dem Verbinden die Prognosen neu ab
     # (Fall W, Teil 2); eine kuerzere Trennung fiele zwischen zwei Takte
     await asyncio.sleep(10.5)
+    # Y: getrennt zaehlt die alte Leistung nicht (fc_live_on aus)
+    getrennt = [x for x in panel.alle[n_trennen:] if x["fc"]["live"] == 0]
+    pruefe("Y", f"getrennt: eigene Summe der laufenden Stunde waechst nicht ({len(getrennt)} Zeilen)",
+           len(getrennt) >= 5 and all(b["fc"]["own_t"] <= a["fc"]["own_t"] for a, b in zip(getrennt, getrennt[1:])),
+           [x["fc"]["own_t"] for x in getrennt[:6]])
+    n_wieder = len(panel.alle)
     await ha.verbinden()
     d = await panel.warten(lambda d: d["link"] == 0, 30)
     pruefe("H", "wieder verbunden: Sammelmeldung behoben", d)
@@ -888,6 +1008,12 @@ async def ablauf(panel, ha, bilder):
     pruefe("W", "Seite PV = Kopfzeile Prognose, jetzt mit Flaeche 5",
            d and rest_passt(zahl(d["txt"]["pv_rest"]), list(DACH) + [OST], d["fc"]["min"]),
            (panel.letzte["txt"]["pv_rest"], panel.letzte["fc"]["total"]))
+    # Y: nach dem Wiederverbinden "Ist unvollstaendig", bis der Tagesabruf antwortet
+    d = await panel.warten(lambda d: d["fc"]["tiles"] > 0 and d["fc"]["hint"] == "" and d["fc"]["live"] == 1, 60)
+    nach = panel.alle[n_wieder:]
+    pruefe("Y", "wiederverbunden: erst \"Ist unvollständig\", nach dem Tagesabruf kein Hinweis",
+           d and any(x["fc"]["hint"] == "Ist unvollständig" for x in nach),
+           sorted({x["fc"]["hint"] for x in nach}))
     if bilder:
         await ha.bild("probe_15_rest_uebersicht.bmp", "overview")
         await ha.bild("probe_16_rest_haus.bmp", "house")
