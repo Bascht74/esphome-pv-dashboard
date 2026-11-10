@@ -38,7 +38,8 @@ Erzeugte Dateien nie von Hand ändern:
 - **Version.** Der Release-Commit setzt `pv_version` in `.pv-dashboard_ui.yaml`
   auf Jahr.Monat.x wie bei ESPHome, den Monat ohne führende Null: x zählt die
   Releases im Monat ab 0 und beginnt im neuen Monat wieder bei 0 (2026.10.0,
-  2026.10.1, …, 2026.11.0, …, 2027.1.0).
+  2026.10.1, …, 2026.11.0, …, 2027.1.0). Eine Beta hängt wie bei ESPHome
+  b1, b2, … an (2026.11.0b1).
 - **Freigaben des Nutzers (Stand 11.10.2026).** Was gebaut werden darf, darf
   ohne weitere Rückfrage committet, als PR gestellt und gemergt werden.
 - **Prüfen vor jedem Release:**

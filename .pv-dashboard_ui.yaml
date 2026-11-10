@@ -43,9 +43,10 @@ substitutions:
   dev_present_start: "0x1FFFFFu"
   # Version wie bei ESPHome: Jahr.Monat.x, Monat ohne fuehrende Null
   # (2026.10.0, 2027.1.0). x zaehlt die Releases (PR dev -> main) im Monat ab 0
-  # und beginnt im neuen Monat wieder bei 0. Der Release-Commit setzt sie
-  # (UEBERGABE.md). Steht unten links auf der Uebersicht und im Systemfenster.
-  pv_version: "2026.10.0"
+  # und beginnt im neuen Monat wieder bei 0; eine Beta haengt wie bei ESPHome
+  # b1, b2 ... an (2026.11.0b1). Der Release-Commit setzt sie (UEBERGABE.md).
+  # Steht unten links auf der Uebersicht und im Systemfenster.
+  pv_version: "2026.11.0b1"
 
 # Die Seiten, jede in einer eigenen Datei. Wer diesen Kern einbindet, bekommt
 # sie alle mit -- Geraet, Simulator und Screenshots sehen dieselbe Oberflaeche.
