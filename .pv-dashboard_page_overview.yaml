@@ -1488,8 +1488,8 @@ interval:
             id(ln35)->obj, id(ln36)->obj };
             for (int k = 0; k < 37; k++) {
               const bool v = (da & L_ALL[k]) == L_ALL[k] && (!L_A[k] || (da & L_A[k])) && (!L_B[k] || (da & L_B[k]));
-              if (v) { lvis |= 1ULL << k; lv_obj_remove_flag(lines[k], LV_OBJ_FLAG_HIDDEN); }
-              else   { lvis &= ~(1ULL << k); lv_obj_add_flag(lines[k], LV_OBJ_FLAG_HIDDEN); }
+              if (v) { lvis |= 1ULL << k; lv_obj_set_hidden(lines[k], false); }
+              else   { lvis &= ~(1ULL << k); lv_obj_set_hidden(lines[k], true); }
             }
           }
           // Leistung je Strecke aus ihrem Kanal; versteckte Strecken und
@@ -1507,7 +1507,7 @@ interval:
             // Negativ: rueckwaerts, endlos, ohne Ausloesen (Regel 9).
             const bool rev = WATT[i] < 0.0f;
             if (dots[i] && rev) live[i] = true;
-            if (!dots[i] || !live[i] || WATT[i] == 0.0f) { if (dots[i]) lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            if (!dots[i] || !live[i] || WATT[i] == 0.0f) { if (dots[i]) lv_obj_set_hidden(dots[i], true); continue; }
 
             float wl = fabsf(WATT[i]), umlauf;
             if (wl <= 500.0f) umlauf = 16.0f / powf(fmaxf(wl, 50.0f) / 50.0f, 0.30103f);
@@ -1553,7 +1553,7 @@ interval:
                 if (!live[t]) live[t] = true;
                 else if (dotsB[t] && !liveB[t]) { liveB[t] = true; posB[t] = 0; }
               }
-              if (!live[i]) { lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }
+              if (!live[i]) { lv_obj_set_hidden(dots[i], true); continue; }
             }
             float rest = rev ? total - pos[i] : pos[i];
             int16_t px = SX[OFF[i]], py = SY[OFF[i]];
@@ -1568,7 +1568,7 @@ interval:
               }
               rest -= SL[k];
             }
-            lv_obj_remove_flag(dots[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(dots[i], false);
             if (px != lx[i] || py != ly[i]) {
               lv_obj_set_pos(dots[i], px - 4, py - 4);
               lx[i] = px; ly[i] = py; bewegt++;
@@ -1576,7 +1576,7 @@ interval:
           }
           for (int i = 0; i < 37; i++) {
             if (!dotsB[i]) continue;
-            if (!liveB[i] || WATT[i] <= 0.0f) { lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            if (!liveB[i] || WATT[i] <= 0.0f) { lv_obj_set_hidden(dotsB[i], true); continue; }
             float wl = fabsf(WATT[i]), umlauf;
             if (wl <= 500.0f) umlauf = 16.0f / powf(fmaxf(wl, 50.0f) / 50.0f, 0.30103f);
             else              umlauf = 8.0f / powf(wl / 500.0f, 0.48945f);
@@ -1621,7 +1621,7 @@ interval:
                 if (!live[t]) live[t] = true;
                 else if (dotsB[t] && !liveB[t]) { liveB[t] = true; posB[t] = 0; }
               }
-              if (!liveB[i]) { lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }
+              if (!liveB[i]) { lv_obj_set_hidden(dotsB[i], true); continue; }
             }
             float rest = posB[i];
             int16_t px = SX[OFF[i]], py = SY[OFF[i]];
@@ -1636,7 +1636,7 @@ interval:
               }
               rest -= SL[k];
             }
-            lv_obj_remove_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(dotsB[i], false);
             if (px != lxB[i] || py != lyB[i]) {
               lv_obj_set_pos(dotsB[i], px - 4, py - 4);
               lxB[i] = px; lyB[i] = py; bewegt++;

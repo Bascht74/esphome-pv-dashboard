@@ -49,9 +49,11 @@ script:
   #     Schluessel, an dem alert_push und alert_clear die Meldung erkennen
   #   6 Zaehlung, versteckt: "Anzahl erstes_Auftreten behoben_um" (Epoche
   #     bzw. vorlaeufige Laufzeit wie unten, 0 = keine). Startet mit "1 0 0".
-  # Merker der Zeile (LVGL-Flags): USER_1 = wird gerade entfernt (on_remove),
-  # USER_2 = Warnung, USER_3 = Stoerung (keins = Info), USER_4 = behoben.
-  # HIDDEN setzt allein alert_refresh: behoben oder vom Filter ausgeblendet.
+  # Merker der Zeile (LVGL-Benutzermerker, lv_obj_set_user_flag/
+  # lv_obj_get_user_flag): 0 = wird gerade entfernt (on_remove),
+  # 1 = Warnung, 2 = Stoerung (keins = Info), 3 = behoben.
+  # Ausblenden (lv_obj_set_hidden) setzt allein alert_refresh: behoben oder
+  # vom Filter ausgeblendet.
   # Die Meldungszeile oben liest nur Kind 5, nie die Labels 2 und 3: Die
   # kuerzen mit long_mode DOT, und LVGL schreibt das "..." in den
   # Textpuffer. Auf einer nie gezeigten Seite haben sie keine Breite, der
@@ -101,7 +103,7 @@ script:
           const uint32_t n = lv_obj_get_child_count(list);
           for (uint32_t i = 0; i < n; i++) {
             lv_obj_t *entry = lv_obj_get_child(list, i);
-            if (lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_1) ||
+            if (lv_obj_get_user_flag(entry, 0) ||
                 strcmp(lv_label_get_text(lv_obj_get_child(entry, 5)), key.c_str()) != 0)
               continue;
             unsigned cnt = 1, first = 0, gone = 0;
@@ -120,7 +122,7 @@ script:
             }
             lv_label_set_text_fmt(lv_obj_get_child(entry, 6), "%u %u 0", cnt, first);
             lv_obj_set_user_data(entry, (void *) (uintptr_t) ts);
-            lv_obj_remove_flag(entry, LV_OBJ_FLAG_USER_4);
+            lv_obj_set_user_flag(entry, 3, false);
             lv_obj_remove_state(entry, LV_STATE_CHECKED);
             for (uint32_t k = 0; k < lv_obj_get_child_count(entry); k++)
               lv_obj_remove_state(lv_obj_get_child(entry, k), LV_STATE_CHECKED);
@@ -229,9 +231,9 @@ script:
             - lambda: |-
                 lv_obj_t *entry = lv_obj_get_child(id(alert_list), 0);
                 if (severity >= 2)
-                  lv_obj_add_flag(entry, LV_OBJ_FLAG_USER_3);
+                  lv_obj_set_user_flag(entry, 2, true);
                 else if (severity == 1)
-                  lv_obj_add_flag(entry, LV_OBJ_FLAG_USER_2);
+                  lv_obj_set_user_flag(entry, 1, true);
             - script.execute: alert_refresh
             # Hoechstens alert_max Zeilen. Heraus faellt die aelteste BEHOBENE
             # Zeile, sonst die aelteste quittierte; nur wenn beides fehlt, die
@@ -247,7 +249,7 @@ script:
                         lv_obj_t *list = id(alert_list);
                         const int32_t n = (int32_t) lv_obj_get_child_count(list);
                         for (int32_t i = n - 1; i >= 0; i--)
-                          if (lv_obj_has_flag(lv_obj_get_child(list, i), LV_OBJ_FLAG_USER_4))
+                          if (lv_obj_get_user_flag(lv_obj_get_child(list, i), 3))
                             return i;
                         for (int32_t i = n - 1; i >= 0; i--)
                           if (lv_obj_has_state(lv_obj_get_child(list, i), LV_STATE_CHECKED))
@@ -282,7 +284,7 @@ script:
       - script.execute: alert_refresh
 
   # Ursache behoben: Die Zeile verschwindet aus der Anzeige, bleibt aber
-  # versteckt in der Liste (Merker USER_4), damit ein Wiederauftreten in
+  # versteckt in der Liste (Merker 3), damit ein Wiederauftreten in
   # alert_push mitzaehlt. text leer = alle Meldungen dieses Geraets.
   # Aufrufer: pv_status (Wechselrichter wieder in Ordnung), sys_refresh
   # (Quelle liefert wieder), wx_warning (Warnung aufgehoben oder ersetzt);
@@ -304,7 +306,7 @@ script:
           const uint32_t n = lv_obj_get_child_count(list);
           for (uint32_t i = 0; i < n; i++) {
             lv_obj_t *entry = lv_obj_get_child(list, i);
-            if (lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_1) || lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_4))
+            if (lv_obj_get_user_flag(entry, 0) || lv_obj_get_user_flag(entry, 3))
               continue;
             const char *src = lv_label_get_text(lv_obj_get_child(entry, 5));
             if (text.empty() ? strncmp(src, prefix.c_str(), prefix.size()) != 0 : strcmp(src, key.c_str()) != 0)
@@ -312,7 +314,7 @@ script:
             unsigned cnt = 1, first = 0, gone = 0;
             sscanf(lv_label_get_text(lv_obj_get_child(entry, 6)), "%u %u %u", &cnt, &first, &gone);
             lv_label_set_text_fmt(lv_obj_get_child(entry, 6), "%u %u %u", cnt, first, (unsigned) ts);
-            lv_obj_add_flag(entry, LV_OBJ_FLAG_USER_4);
+            lv_obj_set_user_flag(entry, 3, true);
             any = true;
           }
           if (any)
@@ -325,7 +327,7 @@ script:
   # und Entfernen (on_add/on_remove der Liste), nach Auffrischen, Quittieren,
   # Beheben und Filtern, beim Tageswechsel und beim ersten gueltigen
   # Zeitpunkt nach dem Start (update_clock).
-  # Zeilen mit LV_OBJ_FLAG_USER_1 zaehlen nicht mehr: So markiert on_remove
+  # Zeilen mit Merker 0 zaehlen nicht mehr: So markiert on_remove
   # die Zeile, die LVGL gleich danach loescht (siehe alert_list).
   - id: alert_refresh
     then:
@@ -347,17 +349,17 @@ script:
           int worst_sev = -1;
           for (uint32_t i = 0; i < count; i++) {
             lv_obj_t *entry = lv_obj_get_child(list, i);
-            if (lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_1))
+            if (lv_obj_get_user_flag(entry, 0))
               continue;
-            const int sev = lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_3) ? 2
-                            : lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_2) ? 1 : 0;
-            const bool gone = lv_obj_has_flag(entry, LV_OBJ_FLAG_USER_4);
+            const int sev = lv_obj_get_user_flag(entry, 2) ? 2
+                            : lv_obj_get_user_flag(entry, 1) ? 1 : 0;
+            const bool gone = lv_obj_get_user_flag(entry, 3);
             const bool hide = gone || (filter >= 0 && sev != filter);
-            if (hide != lv_obj_has_flag(entry, LV_OBJ_FLAG_HIDDEN)) {
+            if (hide != lv_obj_is_hidden(entry)) {
               if (hide)
-                lv_obj_add_flag(entry, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_hidden(entry, true);
               else
-                lv_obj_remove_flag(entry, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_hidden(entry, false);
             }
             if (gone)
               continue;
@@ -454,9 +456,9 @@ script:
           lv_obj_set_style_text_color(id(lbl_alert), lv_color_hex(worst ? $col_ink : $col_ink2), 0);
           if (shown == 0) {
             id(lbl_set)(id(lbl_alerts_empty), n == 0 ? "Keine Meldungen" : "Keine Meldungen dieser Art");
-            lv_obj_remove_flag(id(lbl_alerts_empty), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(lbl_alerts_empty), false);
           } else {
-            lv_obj_add_flag(id(lbl_alerts_empty), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(lbl_alerts_empty), true);
           }
           // Leeren erst, wenn alles quittiert ist -- sonst gingen offene
           // Stoerungen ungelesen verloren.
@@ -697,14 +699,14 @@ lvgl:
             # Aufruf (list_index 0) -- hoechstens zwei alert_refresh statt
             # einem je Zeile.
             on_remove:
-              - lambda: 'lv_obj_add_flag(lv_obj_get_child(id(alert_list), list_index), LV_OBJ_FLAG_USER_1);'
+              - lambda: 'lv_obj_set_user_flag(lv_obj_get_child(id(alert_list), list_index), 0, true);'
               - if:
                   condition:
                     lambda: |-
                       lv_obj_t *list = id(alert_list);
                       const int n = (int) lv_obj_get_child_count(list);
                       const bool clearing = list_index + 1 < n &&
-                          lv_obj_has_flag(lv_obj_get_child(list, list_index + 1), LV_OBJ_FLAG_USER_1);
+                          lv_obj_get_user_flag(lv_obj_get_child(list, list_index + 1), 0);
                       return !clearing || list_index == 0;
                   then:
                     - script.execute: alert_refresh

@@ -247,14 +247,14 @@ script:
           else
             id(wx_sun_days) &= ~(1 << day);
           const bool sonne = id(wx_sun_days) != 0;
-          if (lv_obj_has_flag(r2[0], LV_OBJ_FLAG_HIDDEN) != sonne)
+          if (lv_obj_is_hidden(r2[0]) != sonne)
             return;  // steht schon so
           lv_obj_t *const sep[6] = {id(wx_dl_1), id(wx_dl_2), id(wx_dl_3), id(wx_dl_4), id(wx_dl_5), id(wx_dl_6)};
           for (int k = 0; k < 7; k++) {
             if (sonne)
-              lv_obj_clear_flag(r2[k], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(r2[k], false);
             else
-              lv_obj_add_flag(r2[k], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(r2[k], true);
             lv_obj_set_y(r3[k], sonne ? 258 : 232);
           }
           for (lv_obj_t *l : sep)
@@ -336,20 +336,20 @@ script:
           }
           lv_line_set_points(id(wx_line)->obj, pts, np);
           if (np < 2)
-            lv_obj_add_flag(id(wx_line)->obj, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(wx_line)->obj, true);
           else
-            lv_obj_clear_flag(id(wx_line)->obj, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(wx_line)->obj, false);
           // Regenbalken: 190..250 (60 px), Skala mindestens 2 mm
           lv_obj_t *const bar[12] = {id(wx_hr_00), id(wx_hr_01), id(wx_hr_02), id(wx_hr_03), id(wx_hr_04), id(wx_hr_05), id(wx_hr_06), id(wx_hr_07), id(wx_hr_08), id(wx_hr_09), id(wx_hr_10), id(wx_hr_11)};
           for (int i = 0; i < 12; i++) {
             if (!(seen & (1 << i)) || !std::isfinite(r[i]) || r[i] <= 0.0f) {
-              lv_obj_add_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(bar[i], true);
               continue;
             }
             const int h = std::max((int) lroundf(r[i] / rmax * 60.0f), 2);
             lv_obj_set_y(bar[i], 250 - h);
             lv_obj_set_height(bar[i], h);
-            lv_obj_clear_flag(bar[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(bar[i], false);
           }
           id(lbl_set)(id(wx_rscale), ("Regen bis " + id(fmt_num)(rmax, "%.1f", "-") + " mm").c_str());
 

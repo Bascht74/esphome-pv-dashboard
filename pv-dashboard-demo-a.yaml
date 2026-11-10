@@ -255,9 +255,9 @@ interval:
           int bewegt = 0, sichtbar = 0;
           for (int n = 0; n < 37; n++) {
             int i = (next + n) % 37;
-            if (!live[i]) { lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            if (!live[i]) { lv_obj_set_hidden(dots[i], true); continue; }
             if (QUER[i]) {
-              lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(dots[i], true);
               live[i] = ROOT[i];
               for (int s2 = 0; s2 < SCNT[i]; s2++) {
                 int t = SUCC[SOFF[i] + s2];
@@ -286,7 +286,7 @@ interval:
                 if (!live[t]) live[t] = true;
                 else if (dotsB[t] && !liveB[t]) { liveB[t] = true; posB[t] = 0; }
               }
-              if (!live[i]) { lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }
+              if (!live[i]) { lv_obj_set_hidden(dots[i], true); continue; }
             }
             float rest = pos[i];
             int16_t px = SX[OFF[i]], py = SY[OFF[i]];
@@ -301,7 +301,7 @@ interval:
               }
               rest -= SL[k];
             }
-            lv_obj_remove_flag(dots[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(dots[i], false);
             if (px != lx[i] || py != ly[i]) {
               lv_obj_set_pos(dots[i], px - 5, py - 5);
               lx[i] = px; ly[i] = py; bewegt++;
@@ -309,7 +309,7 @@ interval:
           }
           for (int i = 0; i < 37; i++) {
             if (!dotsB[i]) continue;
-            if (!liveB[i]) { lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            if (!liveB[i]) { lv_obj_set_hidden(dotsB[i], true); continue; }
             float w = WATT[i], umlauf;
             if (w <= 500.0f) umlauf = 16.0f / powf(fmaxf(w, 50.0f) / 50.0f, 0.30103f);
             else             umlauf = 8.0f / powf(w / 500.0f, 0.48945f);
@@ -328,7 +328,7 @@ interval:
                 if (!live[t]) live[t] = true;
                 else if (dotsB[t] && !liveB[t]) { liveB[t] = true; posB[t] = 0; }
               }
-              if (!liveB[i]) { lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }
+              if (!liveB[i]) { lv_obj_set_hidden(dotsB[i], true); continue; }
             }
             float rest = posB[i];
             int16_t px = SX[OFF[i]], py = SY[OFF[i]];
@@ -343,7 +343,7 @@ interval:
               }
               rest -= SL[k];
             }
-            lv_obj_remove_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(dotsB[i], false);
             if (px != lxB[i] || py != lyB[i]) {
               lv_obj_set_pos(dotsB[i], px - 5, py - 5);
               lxB[i] = px; lyB[i] = py; bewegt++;

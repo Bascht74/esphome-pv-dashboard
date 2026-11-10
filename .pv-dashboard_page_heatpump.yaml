@@ -108,9 +108,9 @@ script:
           auto &fmt = id(fmt_num);  // Dezimalkomma, .pv-dashboard_ui.yaml
           auto show = [](lv_obj_t *o, bool on) {
             if (on)
-              lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(o, false);
             else
-              lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(o, true);
           };
           auto txt = [](const std::string &s) -> const char * { return s.empty() ? "--" : s.c_str(); };
           id(lbl_set)(id(hp_outdoor), fmt(outdoor, "%.1f", "--,-").c_str());
@@ -197,9 +197,9 @@ script:
             lv_label_set_text_fmt(id(hp_filter), "%d", filter_days);
           lv_obj_set_style_text_color(id(hp_filter), filter_days >= 0 && filter_days <= 7 ? lv_color_hex($col_warn) : lv_color_hex($col_ink), 0);
           if (defrost)
-            lv_obj_clear_flag(id(hp_flags), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(hp_flags), false);
           else
-            lv_obj_add_flag(id(hp_flags), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(hp_flags), true);
 
 lvgl:
   pages:

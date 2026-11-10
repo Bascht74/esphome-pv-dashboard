@@ -100,9 +100,9 @@ script:
           const int bw = (kwp > 0.0f) ? (int) lroundf(std::min(fw / (kwp * 1000.0f), 1.0f) * 610.0f) : 0;
           lv_obj_set_width(id(gr_bar), std::max(bw, 0));
           if (bw <= 0)
-            lv_obj_add_flag(id(gr_bar), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(gr_bar), true);
           else
-            lv_obj_clear_flag(id(gr_bar), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(gr_bar), false);
           // An der Grenze (ab 98 %) gelb: dann regelt der Wechselrichter ab
           const bool at_limit = limit_w > 0.0f && fw >= 0.98f * limit_w;
           lv_obj_set_style_bg_color(id(gr_bar), at_limit ? lv_color_hex($col_warn) : lv_color_hex($col_feed), 0);

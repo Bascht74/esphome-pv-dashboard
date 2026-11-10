@@ -193,7 +193,7 @@ interval:
             return o;
           };
           auto box = [](lv_obj_t *l) { return lv_obj_get_parent(l); };
-          auto hid = [](lv_obj_t *o) { return (o != nullptr && lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) ? "1" : "0"; };
+          auto hid = [](lv_obj_t *o) { return (o != nullptr && lv_obj_is_hidden(o)) ? "1" : "0"; };
           auto txt = [&](lv_obj_t *l) { return "\"" + esc(lv_label_get_text(l)) + "\""; };
           // Texte auf nicht gezeigten Seiten kuerzt LONG_DOT zu "..." (Seite
           // ohne Layout); fuer die Probe einmal auf CLIP, dann steht der Text
@@ -208,13 +208,13 @@ interval:
               lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_CLIP);
             clip = true;
           }
-          // offene Systemmeldungen (USER_1 = freie Zeile, USER_4 = behoben)
+          // offene Systemmeldungen (Merker 0 = freie Zeile, Merker 3 = behoben)
           int sys_open = 0, link = 0;
           std::string alerts;   // offene Meldungen: ["Quelle: Text", Anzahl]
           lv_obj_t *list = id(alert_list);
           for (uint32_t i = 0; i < lv_obj_get_child_count(list); i++) {
             lv_obj_t *e = lv_obj_get_child(list, i);
-            if (lv_obj_has_flag(e, LV_OBJ_FLAG_USER_1) || lv_obj_has_flag(e, LV_OBJ_FLAG_USER_4))
+            if (lv_obj_get_user_flag(e, 0) || lv_obj_get_user_flag(e, 3))
               continue;
             const char *k = lv_label_get_text(lv_obj_get_child(e, 5));
             unsigned cnt = 1;
@@ -244,7 +244,7 @@ interval:
             int vis = 0, lines = 0;
             for (uint32_t i = 0; i < lv_obj_get_child_count(s); i++) {
               lv_obj_t *c = lv_obj_get_child(s, i);
-              if (lv_obj_has_flag(c, LV_OBJ_FLAG_HIDDEN))
+              if (lv_obj_is_hidden(c))
                 continue;
               vis++;
               if (lv_obj_check_type(c, &lv_line_class))
@@ -348,7 +348,7 @@ interval:
           {
             int tiles = 0;
             for (lv_obj_t *t : {id(fc_t0), id(fc_t1), id(fc_t2), id(fc_t3), id(fc_t4), id(fc_t5)})
-              tiles += lv_obj_has_flag(t, LV_OBJ_FLAG_HIDDEN) ? 0 : 1;
+              tiles += lv_obj_is_hidden(t) ? 0 : 1;
             auto zahl = [](const std::array<float, 24> &a) {
               int c = 0;
               for (float v : a)
@@ -382,7 +382,7 @@ interval:
             lv_obj_t *ch = lv_obj_get_child(id(fc_t0), 2);
             for (int b = 1; b <= 20; b++) {
               lv_obj_t *bar = lv_obj_get_child(ch, b);
-              if (!lv_obj_has_flag(bar, LV_OBJ_FLAG_HIDDEN) && lv_obj_get_style_bg_opa(bar, LV_PART_MAIN) == LV_OPA_50)
+              if (!lv_obj_is_hidden(bar) && lv_obj_get_style_bg_opa(bar, LV_PART_MAIN) == LV_OPA_50)
                 lauf_h = lv_obj_get_style_height(bar, LV_PART_MAIN);
             }
             j += ",\"lauf_h\":" + std::to_string(lauf_h) + "}";

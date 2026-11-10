@@ -322,7 +322,7 @@ lvgl:
                   on_boot:
                     - lambda: |-
                         lv_obj_t *tbl = id(tbl_storage)->obj;
-                        lv_obj_add_flag(tbl, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
+                        lv_obj_set_send_draw_task_events(tbl, true);
                         lv_obj_add_event_cb(tbl, [](lv_event_t *e) {
                           lv_draw_task_t *task = lv_event_get_draw_task(e);
                           if (lv_draw_task_get_type(task) != LV_DRAW_TASK_TYPE_LABEL)

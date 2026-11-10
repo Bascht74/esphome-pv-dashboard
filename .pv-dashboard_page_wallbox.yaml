@@ -158,9 +158,9 @@ script:
 
           // Sitzung
           if (charging)
-            lv_obj_clear_flag(c.bolt, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(c.bolt, false);
           else
-            lv_obj_add_flag(c.bolt, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(c.bolt, true);
           id(lbl_set)(c.power, fmt(power, "%.1f", "--,-").c_str());
           for (int i = 0; i < 3; i++)
             lv_obj_set_style_bg_color(c.ph[i], charging && i < phases ? green : lv_color_hex($col_line), 0);
@@ -189,9 +189,9 @@ script:
           // Hinter dem Ladestand der Rest bis zum Limit, gedaempft wie in evcc
           lv_bar_set_value(c.bar_limit, (int32_t) lroundf(std::max(s, l)), LV_ANIM_OFF);
           if (!std::isfinite(v_limit)) {
-            lv_obj_add_flag(c.marker, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(c.marker, true);
           } else {
-            lv_obj_clear_flag(c.marker, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(c.marker, false);
             // Marke 4 breit, mittig auf dem Limit; Balken 610 breit
             lv_obj_set_x(c.marker, (int32_t) lroundf(l / 100.0f * 606.0f));
           }

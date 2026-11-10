@@ -526,7 +526,7 @@ def yaml_bauen(d):
                 if (!live[t]) live[t] = true;
                 else if (dotsB[t] && !liveB[t]) {{ liveB[t] = true; posB[t] = 0; }}
               }}
-              if (!{LV}[i]) {{ lv_obj_add_flag({D}[i], LV_OBJ_FLAG_HIDDEN); continue; }}
+              if (!{LV}[i]) {{ lv_obj_set_hidden({D}[i], true); continue; }}
             }}
             float rest = {'rev ? total - pos[i] : pos[i]' if haupt else P + '[i]'};
             int16_t px = SX[OFF[i]], py = SY[OFF[i]];
@@ -541,7 +541,7 @@ def yaml_bauen(d):
               }}
               rest -= SL[k];
             }}
-            lv_obj_remove_flag({D}[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden({D}[i], false);
             if (px != {LX}[i] || py != {LY}[i]) {{
               lv_obj_set_pos({D}[i], px - {DOT//2}, py - {DOT//2});
               {LX}[i] = px; {LY}[i] = py; bewegt++;
@@ -621,8 +621,8 @@ def yaml_bauen(d):
             {lref} }};
             for (int k = 0; k < {nl}; k++) {{
               const bool v = (da & L_ALL[k]) == L_ALL[k] && (!L_A[k] || (da & L_A[k])) && (!L_B[k] || (da & L_B[k]));
-              if (v) {{ lvis |= 1ULL << k; lv_obj_remove_flag(lines[k], LV_OBJ_FLAG_HIDDEN); }}
-              else   {{ lvis &= ~(1ULL << k); lv_obj_add_flag(lines[k], LV_OBJ_FLAG_HIDDEN); }}
+              if (v) {{ lvis |= 1ULL << k; lv_obj_set_hidden(lines[k], false); }}
+              else   {{ lvis &= ~(1ULL << k); lv_obj_set_hidden(lines[k], true); }}
             }}
           }}
           // Leistung je Strecke aus ihrem Kanal; versteckte Strecken und
@@ -640,12 +640,12 @@ def yaml_bauen(d):
             // Negativ: rueckwaerts, endlos, ohne Ausloesen (Regel 9).
             const bool rev = WATT[i] < 0.0f;
             if (dots[i] && rev) live[i] = true;
-            if (!dots[i] || !live[i] || WATT[i] == 0.0f) {{ if (dots[i]) lv_obj_add_flag(dots[i], LV_OBJ_FLAG_HIDDEN); continue; }}
+            if (!dots[i] || !live[i] || WATT[i] == 0.0f) {{ if (dots[i]) lv_obj_set_hidden(dots[i], true); continue; }}
 {lauf("pos", "acc", "live", "lx", "ly", "dots", True)}
           }}
           for (int i = 0; i < {n}; i++) {{
             if (!dotsB[i]) continue;
-            if (!liveB[i] || WATT[i] <= 0.0f) {{ lv_obj_add_flag(dotsB[i], LV_OBJ_FLAG_HIDDEN); continue; }}{lauf("posB", "accB", "liveB", "lxB", "lyB", "dotsB", False)}
+            if (!liveB[i] || WATT[i] <= 0.0f) {{ lv_obj_set_hidden(dotsB[i], true); continue; }}{lauf("posB", "accB", "liveB", "lxB", "lyB", "dotsB", False)}
           }}
           next = (next + bewegt + 1) % {n};
           if (micros() - t_ein > id(diag)[9]) id(diag)[9] = micros() - t_ein;

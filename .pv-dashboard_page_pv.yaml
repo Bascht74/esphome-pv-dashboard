@@ -88,7 +88,7 @@ script:
           const uint32_t norm[4] = {$col_full, $col_solar, $col_solar, $col_solar};
           const bool was = id(pv_fault) & (1 << inv);
           id(pv_inv_temp)[inv] = temp;
-          lv_obj_clear_flag(dot[inv], LV_OBJ_FLAG_HIDDEN);
+          lv_obj_set_hidden(dot[inv], false);
           if (!ok) {
             id(pv_fault) |= (1 << inv);
             lv_obj_set_style_border_color(box[inv], lv_color_hex($col_crit), 0);

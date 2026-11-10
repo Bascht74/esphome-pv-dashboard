@@ -195,9 +195,9 @@ script:
           const int bw = std::min(48, (int) (slot * 0.35f));
           for (int i = 0; i < 31; i++) {
             if (i >= n) {
-              lv_obj_add_flag(bp[i], LV_OBJ_FLAG_HIDDEN);
-              lv_obj_add_flag(bc[i], LV_OBJ_FLAG_HIDDEN);
-              lv_obj_add_flag(bl[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(bp[i], true);
+              lv_obj_set_hidden(bc[i], true);
+              lv_obj_set_hidden(bl[i], true);
               continue;
             }
             const int cx = (int) lroundf(slot * i + slot / 2);
@@ -207,11 +207,11 @@ script:
             lv_obj_set_size(bp[i], bw, std::max(hp, 1));
             lv_obj_set_pos(bc[i], cx + 2, BASE - hc);
             lv_obj_set_size(bc[i], bw, std::max(hc, 1));
-            lv_obj_clear_flag(bp[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(bc[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(bp[i], false);
+            lv_obj_set_hidden(bc[i], false);
             lv_obj_set_x(bl[i], cx - 30);
             id(lbl_set)(bl[i], lab[i].c_str());
-            lv_obj_clear_flag(bl[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(bl[i], false);
           }
 
 lvgl:

@@ -148,9 +148,9 @@ script:
             lv_obj_set_x(seg[i], x);
             lv_obj_set_width(seg[i], sw);
             if (sw <= 0)
-              lv_obj_add_flag(seg[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(seg[i], true);
             else
-              lv_obj_clear_flag(seg[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(seg[i], false);
             x += sw;
             // Wert ab 50 px, Einheit ab 80 px (evcc: 40 / 60 bei kleinerer
             // Schrift); Einheit nach dem groessten
@@ -175,16 +175,16 @@ script:
           auto bracket = [&](lv_obj_t *br, lv_obj_t *ic, int &bx, float v) {
             const int bw = (int) lroundf(v / sum * W);
             if (bw < 16 || total <= 0.0f) {
-              lv_obj_add_flag(br, LV_OBJ_FLAG_HIDDEN);
-              lv_obj_add_flag(ic, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(br, true);
+              lv_obj_set_hidden(ic, true);
             } else {
-              lv_obj_clear_flag(br, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(br, false);
               lv_obj_set_x(br, bx);
               lv_obj_set_width(br, std::min(bw, W - bx));
               if (bw < 40) {
-                lv_obj_add_flag(ic, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_hidden(ic, true);
               } else {
-                lv_obj_clear_flag(ic, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_set_hidden(ic, false);
                 lv_obj_set_x(ic, bx + bw / 2 - 16);
               }
             }
@@ -277,9 +277,9 @@ script:
             lv_obj_set_x(sb[i], sx);
             lv_obj_set_width(sb[i], std::max(sw, 0));
             if (sw <= 0)
-              lv_obj_add_flag(sb[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(sb[i], true);
             else
-              lv_obj_clear_flag(sb[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(sb[i], false);
             sx += std::max(sw, 0);
           }
 
@@ -475,13 +475,13 @@ script:
             lv_obj_set_y(rest[i], BASE - th);
             lv_obj_set_height(rest[i], th - sh);
             if (sh <= 0)
-              lv_obj_add_flag(pv[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(pv[i], true);
             else
-              lv_obj_clear_flag(pv[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(pv[i], false);
             if (th - sh <= 0)
-              lv_obj_add_flag(rest[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(rest[i], true);
             else
-              lv_obj_clear_flag(rest[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(rest[i], false);
           }
           char b[32];
           snprintf(b, sizeof(b), "max %.1f kWh", peak);

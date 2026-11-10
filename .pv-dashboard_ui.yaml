@@ -555,9 +555,9 @@ script:
             if (o == nullptr)
               return;
             if (v)
-              lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(o, false);
             else
-              lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(o, true);
           };
           auto box = [](lv_obj_t *label) { return lv_obj_get_parent(label); };
           const bool bat_any = d & (7u << 12);

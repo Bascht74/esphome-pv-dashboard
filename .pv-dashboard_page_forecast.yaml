@@ -604,9 +604,9 @@ script:
             id(lbl_set)(id(fc_empty), HA && !id(fc_fc_da) ? "Prognose wird geladen …"
                                                           : "Keine Prognose je Dach.\nIn der Anlage ha_pv<N>_fc_d1 mit "
                                                             "dem Solcast-Sensor \"heute\" der Fläche belegen.");
-            lv_obj_clear_flag(id(fc_empty), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(fc_empty), false);
           } else {
-            lv_obj_add_flag(id(fc_empty), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(fc_empty), true);
           }
 
           // Hinweis Ist-Werte in der Legende Heute (fc_ist_text), nur fuer
@@ -683,11 +683,11 @@ script:
           id(lbl_set)(id(fc_scale_h), ("Skala " + num(sc, "%g", "--") + " kW").c_str());
           id(lbl_set)(id(fc_scale_v), ("Skala " + num(dsc, "%g", "--") + " kWh").c_str());
           if (vor) {
-            lv_obj_add_flag(id(fc_leg_h), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(id(fc_leg_v), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(fc_leg_h), true);
+            lv_obj_set_hidden(id(fc_leg_v), false);
           } else {
-            lv_obj_clear_flag(id(fc_leg_h), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(fc_leg_v), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_hidden(id(fc_leg_h), false);
+            lv_obj_set_hidden(id(fc_leg_v), true);
           }
 
           // Beschriftung der Tage 1..6 (morgen ..), von 12 Uhr aus gerechnet
@@ -707,9 +707,9 @@ script:
           static lv_point_precise_t pts[6][2][40];
           auto show = [](lv_obj_t *o, bool s) {
             if (s)
-              lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(o, false);
             else
-              lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_hidden(o, true);
           };
           for (int t = 0; t < 6; t++) {
             lv_obj_t *tile = T[t];
