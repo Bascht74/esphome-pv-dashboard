@@ -53,9 +53,10 @@ aus einem Vorschaulauf von `tools/flow_animation.py`. Sonst offen nennen.
 ## Bauen und Prüfen
 
 Kein `esphome` im PATH; jeder Aufruf mit vollem Pfad und aus dem Projektordner.
-Zielplattform ist ESPHome **2026.10.0b2** (Beta, `docs/05`); die Umgebung hebt
-`~/.venvs/esphome-beta/bin/pip install -U --pre esphome==2026.10.0b2`. Bis dahin
-enthält sie 2026.9.0 — vor dem Lauf mit `esphome version` prüfen.
+Zielplattform auf `dev` ist ESPHome **2026.11**, mindestens 2026.11.0b2 (`docs/05`; b1 bringt noch
+esp_hosted 3.0.10 und den Neustart von 2026.10), `main` bleibt bei 2026.10. Die Umgebung hebt
+`~/.venvs/esphome-beta/bin/pip install -U --pre "esphome>=2026.11.0b2"`, nach dem Release die
+stabile 2026.11.0 — vor dem Lauf mit `esphome version` prüfen.
 
 ```
 ~/.venvs/esphome-beta/bin/esphome run pv-dashboard-shots.yaml
