@@ -7,16 +7,17 @@ Am 11.09.2026 hat der Nutzer entschieden, das Dashboard direkt auf ESPHome
 der Release Notes 2026.8.x und 2026.9.0b1 bis b3. Neue 9.0-Funktionen dürfen
 direkt eingebaut werden.
 
-Im Repo steht `min_version: 2026.9.0` in `pv-dashboard.yaml` und in
+Im Repo steht `min_version` in `pv-dashboard.yaml` und in
 `pv-dashboard-sim.yaml`. `pv-dashboard-shots.yaml` erbt sie über das
-Simulator-Package. Die Demo-Konfigurationen (`pv-dashboard-demo*.yaml`) stehen
-seit dem 25.09.2026 ebenfalls auf `min_version: 2026.9.0`; `esphome config`
-läuft für alle drei mit 2026.9.0 durch (gebaut wurden sie dabei nicht).
+Simulator-Package. Die Demo-Konfigurationen (`pv-dashboard-demo*.yaml`) tragen
+sie seit dem 25.09.2026 ebenfalls. Bis zum Beta-Stand vom 10.11.2026 stand
+überall `2026.9.0`, seitdem `2026.11.0` (Abschnitt „ESPHome 2026.11“ unten).
 
 ## Device Builder und Bauumgebungen
 
-Wer baut, muss mit mindestens 2026.9.0 bauen, sonst bricht die Prüfung an der
-min_version ab. 2026.9.0 ist seit dem 16.09.2026 stabil; solange nur Betas
+Wer baut, muss mindestens mit der `min_version` bauen (seit dem 10.11.2026
+2026.11.0, vorher 2026.9.0), sonst bricht die Prüfung ab. 2026.9.0 ist seit dem
+16.09.2026 stabil; solange nur Betas
 verfügbar waren, hieß das für den Device Builder: Beta-Kanal einstellen.
 
 - Stand 12.09.2026: Der Device Builder brachte 2026.8.0 mit und baute remote in
@@ -174,12 +175,13 @@ is valid!" und gibt dabei **genau diese drei** aus (nachgemessen am 20.09.2026):
 
 - **BLE-Scan:** Ab 2026.9 warnt ESPHome, wenn Scan-Fenster und Scan-Intervall
   gleich groß sind. Die daraufhin gesenkten Werte stehen in Dokument 02.
-- **Screenshots:** `pv-dashboard-sim.yaml` setzt `min_version: 2026.9.0`, weil
-  es die Snapshot-Funktion der host-Plattform nutzt. `pv-dashboard-shots.yaml`
+- **Screenshots:** `pv-dashboard-sim.yaml` setzt eine eigene `min_version`
+  (zuerst 2026.9.0, weil es die Snapshot-Funktion der host-Plattform nutzt;
+  seit dem 10.11.2026 2026.11.0). `pv-dashboard-shots.yaml`
   hat **keine** eigene Angabe und erbt sie über das Simulator-Package. Unter den
   **drei aktiven** Konfigurationen gibt es eigene `min_version`-Zeilen also nur
-  in `pv-dashboard.yaml` und `pv-dashboard-sim.yaml`; die Demo-Dateien stehen
-  ebenfalls auf `2026.9.0` (siehe oben). Jede Datei hat höchstens eine, `grep -n
+  in `pv-dashboard.yaml` und `pv-dashboard-sim.yaml`; die Demo-Dateien tragen
+  dieselbe Version (siehe oben). Jede Datei hat höchstens eine, `grep -n
   min_version *.yaml` findet sie sofort — Zeilennummern altern, deshalb stehen
   hier keine.
 

@@ -88,8 +88,8 @@ braucht es das oben genannte Panel; ansehen lässt sich die Oberfläche auch ohn
 Hardware (nächster Abschnitt).
 
 1. **Klonen** und in den Projektordner wechseln — alle Befehle laufen von dort.
-2. **ESPHome ab 2026.9.0** bereitstellen; die Konfiguration verlangt
-   `min_version: 2026.9.0`. Der Rechner, der baut, braucht Internet: Die
+2. **ESPHome ab 2026.11.0** bereitstellen; die Konfiguration verlangt
+   `min_version: 2026.11.0`. Der Rechner, der baut, braucht Internet: Die
    Schriften kommen über `gfonts://`.
 3. **`secrets.yaml` anlegen.** `secrets.yaml.example` nennt die fünf Schlüssel,
    die die Konfiguration erwartet — kopieren und die eigenen Werte eintragen.
@@ -122,7 +122,7 @@ Hardware (nächster Abschnitt).
 
 ## Schnellstart: Simulator und Screenshots
 
-Beides braucht **ESPHome ab 2026.9.0** und läuft auf dem Rechner, ohne das Panel
+Beides braucht **ESPHome ab 2026.11.0** und läuft auf dem Rechner, ohne das Panel
 und ohne Flash-Zyklus. Aufgerufen wird aus dem Projektordner:
 
 ```
@@ -138,9 +138,8 @@ Zwei Dinge sind dabei nur die hiesige Arbeitsumgebung, kein Teil des Projekts:
 
 - **Der volle Pfad statt `esphome`.** Auf dem Rechner des Nutzers gibt es kein
   `esphome` im PATH; dort steht vor jedem Befehl
-  `~/.venvs/esphome-beta/bin/` — Zielplattform ist seit dem 09.10.2026 die
-  Beta 2026.10.0b2 (`~/.venvs/esphome-beta/bin/pip install -U --pre
-  esphome==2026.10.0b2`, siehe `docs/05`). Wer ein `esphome` im PATH hat, ruft
+  `~/.venvs/esphome-beta/bin/` — die Umgebung braucht mindestens ESPHome
+  2026.11.0 (siehe `docs/05`). Wer ein `esphome` im PATH hat, ruft
   einfach `esphome` auf. In `CLAUDE.md`, in den YAML-Köpfen und in `docs/03`
   steht durchgehend der volle Pfad, weil diese Texte für Sitzungen auf genau
   diesem Rechner geschrieben sind.
@@ -185,7 +184,7 @@ und Statistik, Sammelmeldung beim Trennen. Einzelheiten in `docs/03`, Abschnitt 
 
 Gebaut und geflasht wird über den **ESPHome Device Builder**, nicht lokal;
 Updates laufen per OTA, das Panel zeigt dabei ein eigenes Fortschrittspanel.
-Die Konfiguration verlangt `min_version: 2026.9.0`. Versionsstände und
+Die Konfiguration verlangt `min_version: 2026.11.0`. Versionsstände und
 Bauumgebungen stehen in `docs/05`, Board, Silizium und Toolchain in `docs/02`.
 
 `.esphome/`, `.device-builder*`, `.receiver_peers.json` und `secrets.yaml` sind

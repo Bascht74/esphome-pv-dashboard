@@ -8,10 +8,9 @@
 #   ~/.venvs/esphome-beta/bin/esphome run pv-dashboard-sim.yaml
 #
 # Der volle Pfad ist nur die hiesige Arbeitsumgebung: Auf diesem Rechner gibt
-# es kein "esphome" im PATH, und ~/.venvs/esphome-beta enthaelt die
-# Zielplattform ESPHome 2026.10.0b2 (Beta, docs/05); die min_version unten
-# bleibt 2026.9.0. Wer ein "esphome" im PATH
-# hat, ruft einfach "esphome run pv-dashboard-sim.yaml" auf.
+# es kein "esphome" im PATH. Die Umgebung braucht mindestens ESPHome
+# 2026.11.0, so verlangt es die min_version unten (docs/05). Wer ein
+# "esphome" im PATH hat, ruft einfach "esphome run pv-dashboard-sim.yaml" auf.
 #
 # F12 im Fenster speichert das aktuelle Bild als BMP (Name mit Zeitstempel)
 # unter .esphome/snapshots/pv-dashboard-sim/; die Umgebungsvariable
@@ -35,7 +34,7 @@ esphome:
   name: "${devicename}"
   friendly_name: "${upper_devicename}"
   comment: "${device_description}"
-  min_version: 2026.9.0
+  min_version: 2026.11.0
 
 host:
 

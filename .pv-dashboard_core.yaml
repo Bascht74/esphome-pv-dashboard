@@ -79,7 +79,6 @@ esp32_hosted:
   d1_pin: GPIO15
   d2_pin: GPIO16
   d3_pin: GPIO17
-  active_high: true
   # SDIO-Puffer ins PSRAM statt in den knappen internen RAM.
   use_psram: true
 
@@ -95,22 +94,30 @@ esp32_hosted:
 # bestehende SDIO-Strecke. Der C6 muss dafuer nicht ausgebaut werden.
 #
 # Es wird automatisch die hoechste Version gewaehlt, die zur einkompilierten
-# esp_hosted-Bibliothek passt (seit ESPHome 2026.8.0: 2.12.12).
+# esp_hosted-Bibliothek passt (ESPHome 2026.11: 3.1.0).
 #
 # Automatisch installieren (Wunsch 10.10.2026): Meldet die Pruefung ein
 # Update, steht es als Info in den Meldungen, und c6_auto_update spielt es
-# ein. Nachgelesen in 2026.10.0b2 (esp32_hosted_update.cpp, perform()):
+# ein. Nachgelesen in ESPHome 2026.11 (esp32_hosted_update.cpp, perform();
+# so seit 2026.11.0b2, esphome/esphome#22306):
 #   - perform() laeuft blockierend in einem loop()-Durchlauf: Firmware
-#     laden, per SDIO auf den C6 schreiben, aktivieren. Waehrenddessen
-#     zeichnet LVGL nicht, die Kugeln stehen.
+#     laden und per SDIO auf den C6 schreiben, der C6 prueft sie.
+#     Waehrenddessen zeichnet LVGL nicht, die Kugeln stehen.
 #   - Ohne "force" nur bei Zustand AVAILABLE -- genau den setzt die
 #     Pruefung, force ist also nicht noetig.
-#   - Erfolg: Zustand NO_UPDATE, eine Sekunde spaeter startet der P4 neu
-#     (App.safe_reboot). Die Meldungsliste liegt nur im RAM und ist danach
-#     leer; die naechste Pruefung findet die neue Version und meldet nichts.
-#   - Fehler: Zustand bleibt AVAILABLE, kein Neustart. Dann eine Warnung in
-#     die Meldungen; erneut versucht wird erst nach dem naechsten Neustart
-#     (on_update_available feuert nur beim Wechsel auf "verfuegbar").
+#   - Erfolg: Zustand NO_UPDATE. Eine Sekunde spaeter beendet der P4 seine
+#     Komponenten (App.safe_shutdown), schaltet den C6 auf die neue Firmware
+#     um (esp_hosted_slave_ota_activate, der C6 startet 500 ms spaeter neu)
+#     und startet selbst neu. Die Meldungsliste liegt nur im RAM und ist
+#     danach leer; die naechste Pruefung findet die neue Version und meldet
+#     nichts.
+#   - Fehler beim Laden, Schreiben oder Pruefen: Zustand bleibt AVAILABLE,
+#     kein Neustart. Dann eine Warnung in die Meldungen; erneut versucht
+#     wird erst nach dem naechsten Neustart (on_update_available feuert nur
+#     beim Wechsel auf "verfuegbar").
+#   - Fehler beim Umschalten: steht nur im Log ("Failed to activate OTA"),
+#     der P4 startet trotzdem neu, und der C6 laeuft weiter mit der alten
+#     Firmware. Die Pruefung meldet das Update danach wieder als verfuegbar.
 http_request:
   verify_ssl: false
 

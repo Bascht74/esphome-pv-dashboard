@@ -81,8 +81,10 @@ USB-UART-Port (Type-C, Beschriftung "UART").
 ## Funk: C6-Co-Prozessor
 
 `esp32_hosted` mit `variant: ESP32C6` über einen 4-Bit-SDIO-Bus: Reset GPIO54,
-CLK GPIO18, CMD GPIO19, D0–D3 GPIO14–GPIO17, `active_high: true`,
-`use_psram: true` (SDIO-Puffer ins PSRAM statt in den internen RAM).
+CLK GPIO18, CMD GPIO19, D0–D3 GPIO14–GPIO17,
+`use_psram: true` (SDIO-Puffer ins PSRAM statt in den internen RAM). Kein
+`active_high` mehr: ESPHome 2026.11 kündigt die Option ab und ignoriert sie
+(`true` warnt, `false` ist ein Fehler, mit 2027.5.0 fällt sie weg).
 
 Die Werksfirmware des C6 war zu alt: Beim ersten Boot meldete ESPHome
 `Co-processor not responding; BLE disabled.` — WLAN lief, die Abfrage der
@@ -91,7 +93,7 @@ Bluetooth-Firmwareversion blieb unbeantwortet. Dafür gibt es die Update-Entity
 `.../esp-hosted-firmware/manifest/esp32c6.json`, `update_interval: 6h`, dazu
 `http_request: verify_ssl: false`). Sie aktualisiert über die SDIO-Strecke,
 ohne Ausbau, und wählt die höchste Version, die zur einkompilierten
-esp_hosted-Bibliothek passt (seit 2026.8.0: 2.12.12). `on_update_available`
+esp_hosted-Bibliothek passt (ESPHome 2026.11: 3.1.0). `on_update_available`
 schiebt eine Info in die Meldungsliste.
 
 **Automatisch installieren (seit 10.10.2026, Wunsch des Nutzers).**
@@ -99,20 +101,26 @@ schiebt eine Info in die Meldungsliste.
 (`.pv-dashboard_core.yaml`, Update-Entity `id: c6_update`). Es wartet, bis
 WLAN und API verbunden sind und das Gerät mindestens 2 min läuft (höchstens
 30 min), prüft `update.is_available` und ruft `update.perform` auf. Im Quelltext
-von 2026.10.0b2 nachgelesen (`esp32_hosted/update/esp32_hosted_update.cpp`,
-`perform()`):
+von ESPHome 2026.11 nachgelesen (`esp32_hosted/update/esp32_hosted_update.cpp`,
+`perform()`; so seit 2026.11.0b2,
+[esphome/esphome#22306](https://github.com/esphome/esphome/pull/22306)):
 
-- `perform()` blockiert einen `loop()`-Durchlauf: Firmware laden, über SDIO auf
-  den C6 schreiben, aktivieren. Solange steht die Oberfläche.
+- `perform()` blockiert einen `loop()`-Durchlauf: Firmware laden und über SDIO
+  auf den C6 schreiben, der C6 prüft sie. Solange steht die Oberfläche.
 - `force` ist nicht nötig — ohne `force` installiert es bei Zustand
   `AVAILABLE`, und genau den setzt die Prüfung.
-- Erfolg: Zustand `NO_UPDATE`, eine Sekunde später startet der **P4** neu
-  (`App.safe_reboot()`). Die Meldungsliste liegt nur im RAM und ist danach
-  leer; die nächste Prüfung findet die neue Version und meldet nichts mehr.
-- Fehler: Zustand bleibt `AVAILABLE`, kein Neustart; dann kommt die Warnung
-  „Firmware-Update fehlgeschlagen“ in die Meldungen. Erneut versucht wird erst
-  nach dem nächsten Neustart, weil `on_update_available` nur beim Wechsel auf
-  „verfügbar“ auslöst.
+- Erfolg: Zustand `NO_UPDATE`. Eine Sekunde später beendet der **P4** seine
+  Komponenten (`App.safe_shutdown()`), schaltet den C6 auf die neue Firmware
+  um (`esp_hosted_slave_ota_activate()`, der C6 startet 500 ms später neu) und
+  startet selbst neu. Die Meldungsliste liegt nur im RAM und ist danach leer;
+  die nächste Prüfung findet die neue Version und meldet nichts mehr.
+- Fehler beim Laden, Schreiben oder Prüfen: Zustand bleibt `AVAILABLE`, kein
+  Neustart; dann kommt die Warnung „Firmware-Update fehlgeschlagen“ in die
+  Meldungen. Erneut versucht wird erst nach dem nächsten Neustart, weil
+  `on_update_available` nur beim Wechsel auf „verfügbar“ auslöst.
+- Fehler beim Umschalten: ESPHome schreibt ihn nur ins Log („Failed to
+  activate OTA“), der P4 startet trotzdem neu, und der C6 läuft weiter mit der
+  alten Firmware. Die Prüfung meldet das Update danach wieder als verfügbar.
 
 Im Log steht jeder Schritt („Co-Prozessor-Update: installiere …“, „…
 erfolgreich, Neustart in 1 s“ bzw. „… fehlgeschlagen“), dazu die Zeilen von
@@ -185,7 +193,7 @@ Einschränkungen und die geplante Konfiguration stehen in Dokument 06.
 Gebaut und geflasht wird über den **ESPHome Device Builder**, der dieses
 Verzeichnis verwaltet (Kopf der `.gitignore`) und remote baut — nicht lokal;
 Updates laufen per OTA, mit eigenem Fortschrittspanel. Welche Versionen die
-Bauumgebungen enthalten und was `min_version: 2026.9.0` dafür bedeutet, steht
+Bauumgebungen enthalten und was `min_version: 2026.11.0` dafür bedeutet, steht
 in Dokument 05.
 
 `.esphome/`, `.device-builder*`, `.receiver_peers.json` und `secrets.yaml` sind
@@ -200,5 +208,6 @@ enthält WLAN-, AP- und OTA-Passwort sowie den API-Schlüssel im Klartext.
 
 ---
 
-Stand: 20.09.2026 (Konfigurationsfakten 12.09.2026 oder älter; Versionsstände
-siehe Dokument 05). Geprüfter Commit: `c6a432f` (12.09.2026).
+Stand: 10.11.2026 (`active_high` entfernt, esp_hosted 3.1.0, Ablauf des
+C6-Updates nach 2026.11, `min_version` 2026.11.0); davor 20.09.2026 (Konfigurationsfakten 12.09.2026 oder älter;
+Versionsstände siehe Dokument 05). Geprüfter Commit: `c6a432f` (12.09.2026).

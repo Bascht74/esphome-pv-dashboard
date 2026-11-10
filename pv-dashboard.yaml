@@ -59,7 +59,7 @@ esphome:
   name: "${devicename}"
   friendly_name: "${upper_devicename}"
   comment: "${device_description}"
-  min_version: 2026.9.0
+  min_version: 2026.11.0
 
 packages:
   # Die Pakete kommen aus dem GitHub-Repo, nicht von der Platte. Ein einziger
