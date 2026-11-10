@@ -118,6 +118,11 @@ esp32_hosted:
 #   - Fehler beim Umschalten: steht nur im Log ("Failed to activate OTA"),
 #     der P4 startet trotzdem neu, und der C6 laeuft weiter mit der alten
 #     Firmware. Die Pruefung meldet das Update danach wieder als verfuegbar.
+#     Ohne Sperre spielte c6_auto_update es nach jedem Start erneut ein und
+#     startete neu. Deshalb merkt sich c6_auto_done die zuletzt fehlerfrei
+#     geschriebene Version ueber den Neustart; ist genau sie wieder
+#     verfuegbar, kommt die Warnung statt eines neuen Versuchs. Von Hand
+#     (Knopf in Home Assistant) laesst sie sich weiter einspielen.
 http_request:
   verify_ssl: false
 
@@ -181,20 +186,18 @@ script:
                       level: WARN
                       format: "Co-Prozessor-Update: keine Verbindung, verschoben bis zum naechsten Neustart"
                 else:
-                  - logger.log:
-                      level: INFO
-                      format: "Co-Prozessor-Update: installiere %s (bisher %s)"
-                      args: ['id(c6_update).update_info.latest_version.c_str()', 'id(c6_update).update_info.current_version.c_str()']
-                  # Blockiert bis zum Ende (siehe oben). Bei Erfolg startet
-                  # das Geraet danach von selbst neu.
-                  - update.perform: c6_update
                   - if:
+                      # Genau diese Version ist schon einmal fehlerfrei
+                      # geschrieben worden, der C6 meldet nach dem Neustart
+                      # aber weiter eine andere: Das Umschalten ist
+                      # gescheitert (siehe oben). Kein neuer Versuch.
                       condition:
-                        update.is_available: c6_update
+                        lambda: 'return id(c6_auto_done) == id(c6_update).update_info.latest_version;'
                       then:
                         - logger.log:
                             level: ERROR
-                            format: "Co-Prozessor-Update fehlgeschlagen, Details im Log oben (esp32_hosted.update)"
+                            format: "Co-Prozessor-Update: %s war schon geschrieben, der C6 meldet weiter %s; kein neuer automatischer Versuch"
+                            args: ['id(c6_update).update_info.latest_version.c_str()', 'id(c6_update).update_info.current_version.c_str()']
                         - script.execute:
                             id: alert_push
                             severity: 1
@@ -203,13 +206,35 @@ script:
                       else:
                         - logger.log:
                             level: INFO
-                            format: "Co-Prozessor-Update erfolgreich, Neustart in 1 s"
-                        # Info "verfuegbar" weg; die Liste ist nach dem
-                        # Neustart ohnehin leer.
-                        - script.execute:
-                            id: alert_clear
-                            device: "Co-Prozessor"
-                            text: ""
+                            format: "Co-Prozessor-Update: installiere %s (bisher %s)"
+                            args: ['id(c6_update).update_info.latest_version.c_str()', 'id(c6_update).update_info.current_version.c_str()']
+                        # Blockiert bis zum Ende (siehe oben). Bei Erfolg
+                        # startet das Geraet danach von selbst neu.
+                        - update.perform: c6_update
+                        - if:
+                            condition:
+                              update.is_available: c6_update
+                            then:
+                              - logger.log:
+                                  level: ERROR
+                                  format: "Co-Prozessor-Update fehlgeschlagen, Details im Log oben (esp32_hosted.update)"
+                              - script.execute:
+                                  id: alert_push
+                                  severity: 1
+                                  device: "Co-Prozessor"
+                                  text: "Firmware-Update fehlgeschlagen"
+                            else:
+                              # Fuer die Sperre oben merken.
+                              - lambda: 'id(c6_auto_done) = id(c6_update).update_info.latest_version;'
+                              - logger.log:
+                                  level: INFO
+                                  format: "Co-Prozessor-Update erfolgreich, Neustart in 1 s"
+                              # Info "verfuegbar" weg; die Liste ist nach dem
+                              # Neustart ohnehin leer.
+                              - script.execute:
+                                  id: alert_clear
+                                  device: "Co-Prozessor"
+                                  text: ""
 
 wifi:
   ssid: ${wifi_ssid}
@@ -241,6 +266,13 @@ globals:
     type: int
     restore_value: false
     initial_value: '-1'
+  # Version, die c6_auto_update zuletzt fehlerfrei auf den C6 geschrieben hat
+  # (Sperre gegen die Neustartschleife, Kommentar ueber http_request:). Der
+  # P4 sichert den Wert beim Beenden der Komponenten in den Flash, also noch
+  # bevor er den C6 umschaltet und neu startet.
+  - id: c6_auto_done
+    type: std::string
+    restore_value: true
 
 ota:
   - platform: esphome

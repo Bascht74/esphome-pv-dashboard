@@ -381,7 +381,7 @@ Statusleiste und Haus zeigen mit Absicht nur den Hausnetz-Kreis: Die Flächen 1 
 
 **`diag_hook`**, **`diag_window`** – Kern, Diagnose (Abschnitt „Diagnose“ unten).
 
-**`c6_auto_update`** – nur Gerät (`.pv-dashboard_core.yaml`), `mode: single`: spielt ein gemeldetes Co-Prozessor-Update ein (Dokument 02).
+**`c6_auto_update`** – nur Gerät (`.pv-dashboard_core.yaml`), `mode: single`: spielt ein gemeldetes Co-Prozessor-Update ein, dieselbe Version aber nur einmal fehlerfrei (global `c6_auto_done`, Dokument 02).
 
 ## Flussanimation
 

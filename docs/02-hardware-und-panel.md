@@ -121,10 +121,17 @@ von ESPHome 2026.11 nachgelesen (`esp32_hosted/update/esp32_hosted_update.cpp`,
 - Fehler beim Umschalten: ESPHome schreibt ihn nur ins Log („Failed to
   activate OTA“), der P4 startet trotzdem neu, und der C6 läuft weiter mit der
   alten Firmware. Die Prüfung meldet das Update danach wieder als verfügbar.
+  Damit daraus keine Schleife aus Einspielen und Neustart wird, merkt sich das
+  Global `c6_auto_done` die zuletzt fehlerfrei geschriebene Version über den
+  Neustart (`restore_value`; der P4 sichert sie beim Beenden der Komponenten,
+  bevor er den C6 umschaltet). Ist genau sie wieder verfügbar, kommt die
+  Warnung „Firmware-Update fehlgeschlagen“ statt eines neuen Versuchs. Von Hand
+  (Knopf in Home Assistant) lässt sie sich weiter einspielen.
 
 Im Log steht jeder Schritt („Co-Prozessor-Update: installiere …“, „…
-erfolgreich, Neustart in 1 s“ bzw. „… fehlgeschlagen“), dazu die Zeilen von
-`esp32_hosted.update`. Am Gerät erprobt ist der Ablauf noch nicht.
+erfolgreich, Neustart in 1 s“, „… fehlgeschlagen“ bzw. „… war schon
+geschrieben …“), dazu die Zeilen von `esp32_hosted.update`. Am Gerät erprobt
+ist der Ablauf noch nicht.
 
 ## Bluetooth LE
 
@@ -209,5 +216,6 @@ enthält WLAN-, AP- und OTA-Passwort sowie den API-Schlüssel im Klartext.
 ---
 
 Stand: 10.11.2026 (`active_high` entfernt, esp_hosted 3.1.0, Ablauf des
-C6-Updates nach 2026.11, `min_version` 2026.11.0); davor 20.09.2026 (Konfigurationsfakten 12.09.2026 oder älter;
+C6-Updates nach 2026.11 samt Sperre `c6_auto_done`, `min_version` 2026.11.0);
+davor 20.09.2026 (Konfigurationsfakten 12.09.2026 oder älter;
 Versionsstände siehe Dokument 05). Geprüfter Commit: `c6a432f` (12.09.2026).
