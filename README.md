@@ -112,7 +112,10 @@ Hardware (nächster Abschnitt).
    (nächster Abschnitt). Nach jeder Änderung an Beschriftungen oder Layout ist
    das Pflicht, siehe `docs/04`.
 7. **Bauen und flashen** über den ESPHome Device Builder, siehe
-   „Gerät bauen und flashen“.
+   „Gerät bauen und flashen“. `pv-dashboard.yaml` holt die Pakete dabei von
+   GitHub aus `main` (`ref: main`), schon beim Prüfen in Schritt 5. Für eine
+   Vorabversion (Release mit „b“ in der Version) `ref:` auf ihren Tag stellen,
+   sonst baut das Panel den Stand von `main`.
 
 8. **Home Assistant vorbereiten:** beim ESPHome-Gerät die Option „Allow the
    device to perform Home Assistant actions“ einschalten; zum Testen ohne die

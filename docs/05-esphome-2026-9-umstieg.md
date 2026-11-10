@@ -38,6 +38,8 @@ verfügbar waren, hieß das für den Device Builder: Beta-Kanal einstellen.
   Abschnitt „Beta 2026.10.0b2“ unten). Die lokale Umgebung hebt
   `~/.venvs/esphome-beta/bin/pip install -U --pre esphome==2026.10.0b2`; der
   Device Builder muss dafür auf dem Beta-Kanal stehen.
+- Stand 10.11.2026: Zielplattform auf `dev` ist ESPHome **2026.11** (siehe
+  Abschnitt „ESPHome 2026.11“ unten); `main` bleibt beim Stand für 2026.10.
 
 Die drei Umgebungen sind voneinander unabhängig. Vor dem Bauen oder Flashen
 prüfen, welche Version die jeweilige tatsächlich enthält.
@@ -239,9 +241,109 @@ das Dashboard berühren:
 stabile ein (`Version.parse("2026.10.0b2") <= Version.parse("2026.10.0")` ist
 `False`): `min_version: 2026.10.0b2` würde die stabile 2026.10.0 ablehnen.
 
+## ESPHome 2026.11
+
+Am 10.11.2026 hat der Nutzer entschieden, das Dashboard auf `dev` auf
+ESPHome 2026.11 zu heben und als Beta-Release zu veröffentlichen.
+`main` bleibt beim Stand für die stabile 2026.10. Geprüft wurde mit einer
+eigenen Umgebung mit ESPHome 2026.12.0-dev (Stand vom 10.11.2026); was das
+Dashboard davon nutzt, ist dort gleich wie in 2026.11.0b3: esp_hosted 3.1.0
+und LVGL 9.6.0 (2026.10.2: esp_hosted 2.12.13, LVGL 9.5.0).
+
+- **`active_high` entfernt.** Die esp_hosted-3.x-Bibliothek hält die
+  Reset-Leitung immer high und zieht sie zum Reset kurz auf low. ESPHome
+  2026.11 kündigt die Option deshalb ab: `true` warnt, `false` ist ein Fehler,
+  mit 2027.5.0 fällt sie weg
+  ([esphome/esphome#21394](https://github.com/esphome/esphome/pull/21394)).
+  In 2026.10 war sie Pflicht.
+- **LVGL 9.6.0** kündigt `lv_obj_add_flag`, `lv_obj_remove_flag`,
+  `lv_obj_clear_flag` und `lv_obj_has_flag` ab. Alle 94 Aufrufe (Pakete,
+  `pv-dashboard-demo-a.yaml`, `tests/ha-test.yaml`, `tools/flow_animation.py`)
+  nutzen jetzt die Funktionen je Merker. Sie setzen dieselben Bits
+  (nachgelesen in `src/core/lv_obj.c` von LVGL 9.6.0):
+
+  | vorher | jetzt |
+  | --- | --- |
+  | `lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN)` | `lv_obj_set_hidden(o, true)` |
+  | `lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN)` | `lv_obj_set_hidden(o, false)` |
+  | `lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)` | `lv_obj_is_hidden(o)` |
+  | `lv_obj_add_flag(o, LV_OBJ_FLAG_USER_n)` | `lv_obj_set_user_flag(o, n-1, true)` |
+  | `lv_obj_remove_flag(o, LV_OBJ_FLAG_USER_n)` | `lv_obj_set_user_flag(o, n-1, false)` |
+  | `lv_obj_has_flag(o, LV_OBJ_FLAG_USER_n)` | `lv_obj_get_user_flag(o, n-1)` |
+  | `lv_obj_add_flag(o, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS)` | `lv_obj_set_send_draw_task_events(o, true)` |
+
+  Die Benutzermerker zählt LVGL ab 0: `USER_1` ist Merker 0. Die neuen
+  Funktionen gibt es erst in LVGL 9.6, mit 2026.10 baut der Stand nicht.
+- **`min_version: 2026.11.0`** in `pv-dashboard.yaml`, `pv-dashboard-sim.yaml`
+  und den drei Demo-Dateien. Die Betas 2026.11.0bX bestehen die Prüfung
+  (ESPHome ordnet Vorabversionen hinter die stabile ein, siehe oben). Am
+  Gerät gilt der Ablauf des C6-Updates aus Dokument 02 aber erst ab
+  2026.11.0b2: b1 bringt noch esp_hosted 3.0.10 und den Neustart von 2026.10.
+- **Remote-Package.** `pv-dashboard.yaml` lädt die Pakete weiter aus `main`.
+  Wer die Beta am Gerät baut, stellt `ref:` in der eigenen `pv-dashboard.yaml`
+  auf `dev` oder auf den Tag der Beta. Ohne den Wechsel nimmt ESPHome 2026.11
+  die Pakete von `main` an, den Stand für 2026.10, und warnt zusätzlich nur
+  wegen `active_high`; unten links auf der Übersicht steht dann dessen
+  Version.
+- **C6-Firmware.** `c6_update` wählt aus dem Manifest die höchste Version, die
+  nicht neuer ist als die einkompilierte Bibliothek, mit 2026.11 also 3.1.0.
+  Meldet der C6 eine andere Version, spielt `c6_auto_update` sie ein, danach
+  startet das Panel neu (Ablauf und Sperre `c6_auto_done` in Dokument 02).
+  Upstream hat das Update von der vorherigen Firmware auf 3.0.10 auf diesem
+  Weg an einem M5Stack Tab5 getestet
+  ([#21394](https://github.com/esphome/esphome/pull/21394)); an diesem Panel
+  ist es nicht geprüft.
+- **Kein Weg zurück mit ESPHome 2026.10.** Espressif nennt für esp-hosted-mcu
+  3.x diese Paarungen (`docs/migration.md` im Tag v3.1.0): Host 3.x mit
+  Koprozessor 3.x unterstützt; Host 3.x mit Koprozessor 0.0.6+ (streaming),
+  1.x oder 2.x rückwärtskompatibel; Host unter 3.x mit Koprozessor 3.x **nicht
+  unterstützt**, erst den Host heben. ESPHome 2026.10.x bringt esp_hosted
+  2.12.13 mit. Läuft der C6 einmal auf 3.x, wird das Panel deshalb nur noch
+  mit ESPHome 2026.11 oder neuer gebaut (vor dem Release über den Beta- oder
+  dev-Kanal). `main`, gebaut mit einer stabilen 2026.10.x, ist kein Rückweg.
+  Bekommt das Panel dann keine Funkverbindung, hilft nur Flashen über USB: Es
+  hat keinen eigenen Access Point, und `safe_mode` bestätigt eine neue
+  Firmware nach einer Minute Laufzeit (`boot_is_good_after`), ein Rückfall
+  auf die alte Firmware greift dann nicht mehr.
+- **Vor dem ersten Flashen der Beta** in Home Assistant bei der
+  Update-Entität „Co-Prozessor-Firmware“ die installierte Version ablesen.
+  Weiter nur bei einer Version, die laut der Tabelle oben zu einem 3.x-Host
+  passt: 0.0.6 oder neuer (streaming), 1.x, 2.x oder schon 3.x.
+- **Keine eingebettete C6-Firmware** (`type: embedded`). Espressif
+  veröffentlicht für esp-hosted-mcu keine fertigen Images (keine
+  GitHub-Releases, nur Tags). Das einzige fertige 3.1.0-Image ist ESPHomes
+  eigenes, und dessen App-Beschreibung trägt die Version „1“. Der eingebettete
+  Modus vergleicht genau diesen Text mit der Version, die der C6 meldet
+  („3.1.0“): Das Update bliebe immer „verfügbar“. Ohne die Sperre
+  `c6_auto_done` spielte `c6_auto_update` es bei jedem Start erneut ein, mit
+  ihr stünde nach jedem Start die Warnung „Firmware-Update fehlgeschlagen“ in
+  den Meldungen.
+
+**Prüfungen am 10.11.2026** (auf dem Mac, der P4-Bau in einem Linux-Container):
+
+- `python -m unittest discover tests`: 45 Tests, alle grün.
+- `tests/ha_probe.py --shots`: 115 von 115 Prüfungen bestanden.
+- `esphome config` der geräteeigenen Pakete über eine Hilfskonfiguration mit
+  Platzhalterwerten und `.pv-dashboard_anlage.yaml.example`: gültig, mit den
+  Warnungen aus „Akzeptierte Warnungen“; die `active_high`-Warnung ist weg.
+  `pv-dashboard-demo.yaml`, `-demo-a`, `-demo-b`, `-sim` und `-shots`: gültig.
+- `compile pv-dashboard-demo-a.yaml` läuft durch.
+- Bildlauf: alle 20 Bilder, pixelgenau gegen einen Lauf des alten Stands mit
+  derselben ESPHome-Version verglichen. Sie unterscheiden sich nur an
+  zeitabhängigen Stellen (Uhr, Zeitangaben) und bei den Flusspunkten. Die 75
+  Warnungen zu den abgekündigten Flag-Funktionen sind weg.
+- Bau für den ESP32-P4 (Hilfskonfiguration, ESP-IDF 6.0.2): läuft durch, RAM
+  31,9 % (182.645 von 572.368 Byte), Flash 15,2 % (2.512.782 von
+  16.515.072 Byte). Zwei Compiler-Warnungen zeigen auf das YAML:
+  `lv_list_create` ist in LVGL 9.6 abgekündigt (ESPHomes Code für das
+  `list`-Widget der Meldungsseite), und `snprintf` für die Meldungszeit könnte
+  laut Compiler kürzen (Puffer 16 Zeichen; echte Datumswerte brauchen 13, der
+  Code ist unverändert).
+- Am Gerät ist der Stand nicht gelaufen.
+
 ---
 
-Stand: 10.10.2026 (Audio entfernt, Testplan entfallen); davor 09.10.2026 (Beta 2026.10.0b2 geprüft, `transparency_key` geklärt); davor 25.09.2026 (Demo-Konfigurationen auf 2026.9.0, `transparency_key` als
+Stand: 10.11.2026 (ESPHome 2026.11 auf `dev`, geprüft auf Commit `d7f6ee9`); davor 10.10.2026 (Audio entfernt, Testplan entfallen); davor 09.10.2026 (Beta 2026.10.0b2 geprüft, `transparency_key` geklärt); davor 25.09.2026 (Demo-Konfigurationen auf 2026.9.0, `transparency_key` als
 offen markiert); davor 20.09.2026 (#19177 in 2026.9.0 enthalten, in der Bauumgebung
 `esphome-2026.9.0` nachgeprüft; `~/.venvs/esphome-beta` an dem Tag auf 2026.9.0
-gehoben). Geprüfter Stand: Commit `0e2bd3d` (25.09.2026).
+gehoben). Geprüfter Stand davor: Commit `0e2bd3d` (25.09.2026).

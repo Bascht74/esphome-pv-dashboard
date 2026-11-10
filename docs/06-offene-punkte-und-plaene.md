@@ -92,7 +92,10 @@ darunter. „Vertagt" heißt: entschieden, aber bewusst später — nicht ungefr
       ansehen (Dokument 03, „Diagnose“); vor allem, ob „LVGL-Fläche max“ nach
       `LV_INV_BUF_SIZE` 128 noch den vollen Schirm (1.024.000 px) zeigt.
 - [ ] **Co-Prozessor-Update automatisch** — beim ersten Mal im Log verfolgen
-      (Dokument 02, „Funk: C6-Co-Prozessor“).
+      (Dokument 02, „Funk: C6-Co-Prozessor“). Mit ESPHome 2026.11 geht der C6
+      auf 3.1.0: vorher die installierte Version der Update-Entität ablesen
+      (Dokument 05, „ESPHome 2026.11“), `ref:` in `pv-dashboard.yaml` auf den
+      Tag der Beta stellen und im Log auf „Failed to activate OTA“ achten.
 
 **Entscheidungen, die noch niemand getroffen hat**
 
@@ -768,7 +771,7 @@ Prognose und Wetter sind seit dem 25.09.2026 gebaut (oben).
 
 ---
 
-Stand: 10.10.2026 (Seite Prognose je Dachfläche, offene Punkte dazu unter „Prognose und Wetter“; Audio entfernt, ruhiger Start, Diagnose und Analyse „Ruckeln der Kugeln“, Co-Prozessor-Update automatisch, `refresh: always`); davor 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
+Stand: 10.11.2026 (Gerätetest des Co-Prozessor-Updates um ESPHome 2026.11 ergänzt); davor 10.10.2026 (Seite Prognose je Dachfläche, offene Punkte dazu unter „Prognose und Wetter“; Audio entfernt, ruhiger Start, Diagnose und Analyse „Ruckeln der Kugeln“, Co-Prozessor-Update automatisch, `refresh: always`); davor 09.10.2026 (Faktor `ha_<name>_faktor` je Zahlenwert); davor 25.09.2026, spätabends (Wallbox-Modus vom Panel aus steuerbar); davor 25.09.2026, abends (Referenz-Entitäten statt Anker, „nicht belegt“ per `none`, Tests in `tests/`); davor 25.09.2026, später Tag (Datenweg von Home Assistant mit Dummy-Paket, Übersicht speisbar, offene Punkte dazu unter „Echte Daten anbinden“); davor 25.09.2026 (Doku abgeglichen: Fabrikate, acht Quellen und Sammelmeldung bei fehlender HA-Verbindung, offene 9.0-Punkte als eigener Abschnitt; Meldungen zusammengefasst und nur noch bestehende angezeigt, Seiten Prognose und Wetter, 60-%-Frage im Gesetz nachgelesen,
 Seiten Netz und Statistik, Systemstatus, Wechselrichter-Status,
 Geldrechnung, Nilan auf das klassische Bedienteil umgestellt, Rechtslage
 recherchiert); davor 24.09.2026 (Detailseiten Wallboxen, Wärmepumpe und Haus gebaut, danach nach evcc
